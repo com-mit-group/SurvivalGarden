@@ -36,12 +36,24 @@ describe('assertValid', () => {
   });
 
   it('throws readable error paths for nested contracts', () => {
-    expect(() => assertValid('bed', { id: 'bed-1', name: 'Bed 1', areaSqFt: -1 })).toThrowError(
-      SchemaValidationError,
-    );
+    expect(() =>
+      assertValid('bed', {
+        bedId: 'bed-1',
+        gardenId: 'garden-1',
+        name: 'Bed 1',
+        createdAt: 'not-a-date',
+        updatedAt: '2024-01-01T00:00:00Z',
+      }),
+    ).toThrowError(SchemaValidationError);
 
     try {
-      assertValid('bed', { id: 'bed-1', name: 'Bed 1', areaSqFt: -1 });
+      assertValid('bed', {
+        bedId: 'bed-1',
+        gardenId: 'garden-1',
+        name: 'Bed 1',
+        createdAt: 'not-a-date',
+        updatedAt: '2024-01-01T00:00:00Z',
+      });
     } catch (error) {
       const validationError = error as SchemaValidationError;
       expect(validationError.schemaName).toBe('bed');
@@ -49,8 +61,8 @@ describe('assertValid', () => {
         expect.arrayContaining([
           expect.objectContaining({
             schemaName: 'bed',
-            path: '/areaSqFt',
-            keyword: 'minimum',
+            path: '/createdAt',
+            keyword: 'pattern',
           }),
         ]),
       );
