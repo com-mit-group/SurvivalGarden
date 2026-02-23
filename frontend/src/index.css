@@ -4,14 +4,93 @@
   background: #f9fafb;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
 }
 
-main {
+#root {
   min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.app-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: center;
+  background: #ffffff;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.app-content {
   display: grid;
   place-content: center;
   text-align: center;
-  gap: 0.75rem;
+  padding: 1.5rem 1rem 5.5rem;
+}
+
+.app-content p {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.tab-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.25rem;
+  padding: 0.5rem max(0.5rem, env(safe-area-inset-left)) calc(0.5rem + env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-right));
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.tab-nav a {
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-decoration: none;
+  border-radius: 0.5rem;
+}
+
+.tab-nav a.active {
+  color: #111827;
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .app-shell {
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .tab-nav {
+    position: static;
+    border-top: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .app-content {
+    padding: 2rem 1rem;
+  }
 }
