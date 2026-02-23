@@ -49,7 +49,8 @@ describe('crop.schema.json', () => {
   });
 
   it('rejects payloads missing required fields', () => {
-    const { rules: _rules, ...payload } = validPayload;
+    const payload = { ...validPayload };
+    delete payload.rules;
 
     expect(validate(payload)).toBe(false);
   });
