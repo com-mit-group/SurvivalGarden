@@ -1,1 +1,41 @@
-export {};
+import type { AppState } from '../contracts';
+import { assertValid } from './validation';
+
+export {
+  SchemaValidationError,
+  type SchemaName,
+  type SchemaTypeMap,
+  type ValidationIssue,
+  assertValid,
+} from './validation';
+
+export const parseImportedAppState = (rawPayload: string): AppState => {
+  const parsed: unknown = JSON.parse(rawPayload);
+  return assertValid('appState', parsed);
+};
+
+export const serializeAppStateForExport = (appState: unknown): string => {
+  const validState = assertValid('appState', appState);
+  return JSON.stringify(validState);
+};
+
+export const loadAppStateFromStorage = (
+  storage: Pick<Storage, 'getItem'>,
+  key: string,
+): AppState | null => {
+  const value = storage.getItem(key);
+
+  if (value === null) {
+    return null;
+  }
+
+  return parseImportedAppState(value);
+};
+
+export const saveAppStateToStorage = (
+  storage: Pick<Storage, 'setItem'>,
+  key: string,
+  appState: unknown,
+): void => {
+  storage.setItem(key, serializeAppStateForExport(appState));
+};
