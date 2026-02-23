@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import Ajv from 'ajv';
+import Ajv2020 from 'ajv/dist/2020';
 import bedSchema from './bed.schema.json';
 
 describe('bed.schema.json', () => {
-  const ajv = new Ajv({ strict: true });
+  const ajv = new Ajv2020({ strict: true });
   const validate = ajv.compile(bedSchema);
 
   it('accepts a valid Bed payload', () => {
