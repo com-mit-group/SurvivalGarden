@@ -8,6 +8,7 @@ import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
+import trierV1Fixture from '../../../fixtures/golden/trier-v1.json';
 
 describe('AppState schema', () => {
   const buildValidator = () => {
@@ -150,5 +151,11 @@ describe('AppState schema', () => {
     };
 
     expect(validate(payload)).toBe(false);
+  });
+
+  it('accepts the golden trier-v1 fixture', () => {
+    const validate = buildValidator();
+
+    expect(validate(trierV1Fixture)).toBe(true);
   });
 });
