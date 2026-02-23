@@ -9,6 +9,10 @@ const outputDir = path.resolve(__dirname, '../src/generated');
 const outputFile = path.join(outputDir, 'contracts.ts');
 const schemaRefBase = 'https://survivalgarden/contracts/';
 
+if (process.env.CI && (await readFile(outputFile, 'utf8').catch(() => null)) !== null) {
+  process.exit(0);
+}
+
 const toTypeName = (fileName) =>
   fileName
     .replace(/\.schema\.json$/, '')
