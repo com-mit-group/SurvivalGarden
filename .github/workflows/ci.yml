@@ -33,5 +33,10 @@ jobs:
       - name: Typecheck
         run: pnpm --filter frontend typecheck
 
+      - name: Verify generated contract types
+        run: |
+          pnpm --filter frontend gen:types
+          git diff --exit-code
+
       - name: Test
         run: pnpm --filter frontend test
