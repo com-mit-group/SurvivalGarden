@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/app-state.schema.json",
+  "title": "AppState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "beds",
+    "crops",
+    "cropPlans",
+    "tasks",
+    "seedInventoryItems",
+    "settings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "beds": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/bed.schema.json"
+      }
+    },
+    "crops": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/crop.schema.json"
+      }
+    },
+    "cropPlans": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/crop-plan.schema.json"
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/task.schema.json"
+      }
+    },
+    "seedInventoryItems": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/seed-inventory-item.schema.json"
+      }
+    },
+    "settings": {
+      "$ref": "https://survivalgarden/contracts/settings.schema.json"
+    }
+  }
+}

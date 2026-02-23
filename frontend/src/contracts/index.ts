@@ -1,3 +1,4 @@
+import appStateSchema from './app-state.schema.json';
 import bedSchema from './bed.schema.json';
 import cropPlanSchema from './crop-plan.schema.json';
 import cropSchema from './crop.schema.json';
@@ -6,6 +7,7 @@ import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 
 export {
+  appStateSchema,
   bedSchema,
   cropPlanSchema,
   cropSchema,
