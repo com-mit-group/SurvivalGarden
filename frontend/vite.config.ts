@@ -11,5 +11,8 @@ export default defineConfig({
       '/data': resolve(__dirname, 'src/data'),
       '/app': resolve(__dirname, 'src/app')
     }
+  },
+  test: {
+    environment: 'jsdom'
   }
 });
