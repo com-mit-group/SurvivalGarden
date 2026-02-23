@@ -8,7 +8,50 @@ import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
-import trierV1Fixture from '../../../fixtures/golden/trier-v1.json';
+
+const goldenFixtures = import.meta.glob('../../../fixtures/golden/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, AppState>;
+const fixturePaths = Object.keys(goldenFixtures).sort();
+
+const stableSortValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stableSortValue(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+        .map(([key, nestedValue]) => [key, stableSortValue(nestedValue)]),
+    );
+  }
+
+  return value;
+};
+
+const toCanonicalJson = (value: unknown): string => `${JSON.stringify(stableSortValue(value), null, 2)}\n`;
+
+const formatAjvErrors = (errors: unknown): string => {
+  if (!Array.isArray(errors) || errors.length === 0) {
+    return 'Unknown schema validation error';
+  }
+
+  return errors
+    .map((error) => {
+      const instancePath =
+        error && typeof error === 'object' && 'instancePath' in error
+          ? String(error.instancePath || '/')
+          : '/';
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'invalid';
+      const params =
+        error && typeof error === 'object' && 'params' in error ? JSON.stringify(error.params) : '{}';
+
+      return `path=${instancePath} message=${message} details=${params}`;
+    })
+    .join('\n');
+};
 
 describe('AppState schema', () => {
   const buildValidator = () => {
@@ -153,9 +196,35 @@ describe('AppState schema', () => {
     expect(validate(payload)).toBe(false);
   });
 
-  it('accepts the golden trier-v1 fixture', () => {
+  it('accepts all golden fixtures', () => {
     const validate = buildValidator();
 
-    expect(validate(trierV1Fixture)).toBe(true);
+    expect(fixturePaths.length).toBeGreaterThan(0);
+
+    for (const fixturePath of fixturePaths) {
+      const fixture = goldenFixtures[fixturePath];
+      const fixtureName = fixturePath.replace('../../../fixtures/golden/', '');
+      const isValid = validate(fixture);
+
+      expect(
+        isValid,
+        `Fixture ${fixtureName} failed schema validation:\n${formatAjvErrors(validate.errors)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps golden fixtures key-sorted for stable diffs', () => {
+    for (const fixturePath of fixturePaths) {
+      const fixture = goldenFixtures[fixturePath];
+      const canonicalFixture = toCanonicalJson(fixture);
+      const fixtureName = fixturePath.replace('../../../fixtures/golden/', '');
+      const fixtureJson = `${JSON.stringify(fixture, null, 2)}\n`;
+
+      expect(
+        fixtureJson,
+        `Fixture ${fixtureName} is not canonical JSON (sorted keys, 2-space indent, trailing newline).\n` +
+          `Run: node -e "const fs=require('fs');const p='${fixturePath.replace(/'/g, "\\'")}';const j=JSON.parse(fs.readFileSync(p,'utf8'));const s=(v)=>Array.isArray(v)?v.map(s):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,val])=>[k,s(val)])):v;fs.writeFileSync(p,JSON.stringify(s(j),null,2)+'\\n');"`,
+      ).toBe(canonicalFixture);
+    }
   });
 });
