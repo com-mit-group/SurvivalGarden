@@ -15,3 +15,6 @@ export {
   settingsSchema,
   taskSchema,
 };
+
+// Generated contract types are read-only. Regenerate with `pnpm --filter frontend gen:types`.
+export type * from '../generated/contracts';

@@ -14,7 +14,8 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint-staged": "lint-staged",
-    "prepare": "husky ../.husky"
+    "prepare": "husky ../.husky",
+    "gen:types": "node ./scripts/generate-contract-types.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -52,6 +53,7 @@
     "vitest": "^2.1.4",
     "jsdom": "^25.0.1",
     "@testing-library/react": "^16.0.1",
-    "@testing-library/jest-dom": "^6.6.3"
+    "@testing-library/jest-dom": "^6.6.3",
+    "json-schema-to-typescript": "^15.0.4"
   }
 }

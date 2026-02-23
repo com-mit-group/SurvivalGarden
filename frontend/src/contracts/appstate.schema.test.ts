@@ -7,6 +7,7 @@ import cropSchema from './crop.schema.json';
 import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
+import type { AppState } from '../generated/contracts';
 
 describe('AppState schema', () => {
   const buildValidator = () => {
@@ -22,7 +23,7 @@ describe('AppState schema', () => {
 
   it('accepts a valid AppState payload', () => {
     const validate = buildValidator();
-    const payload = {
+    const payload: AppState = {
       schemaVersion: 1,
       beds: [
         {
