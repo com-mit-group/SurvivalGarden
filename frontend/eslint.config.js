@@ -39,4 +39,33 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['src/domain/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'react', message: 'Domain code must not depend on React.' },
+            { name: 'react-router', message: 'Domain code must not depend on routing libraries.' },
+            {
+              name: 'react-router-dom',
+              message: 'Domain code must not depend on routing libraries.',
+            },
+            { name: 'idb', message: 'Domain code must not depend on browser persistence adapters.' },
+          ],
+          patterns: ['react/*', 'react-router/*', 'react-router-dom/*'],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        { name: 'window', message: 'Domain code must not access browser globals.' },
+        { name: 'document', message: 'Domain code must not access browser globals.' },
+        { name: 'localStorage', message: 'Domain code must not access browser globals.' },
+        { name: 'sessionStorage', message: 'Domain code must not access browser globals.' },
+        { name: 'navigator', message: 'Domain code must not access browser globals.' },
+        { name: 'location', message: 'Domain code must not access browser globals.' },
+      ],
+    },
+  },
 );
