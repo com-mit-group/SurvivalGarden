@@ -130,7 +130,7 @@ describe('AppState schema', () => {
 
   it('rejects AppState payload with invalid schemaVersion', () => {
     const validate = buildValidator();
-    const payload: AppState = {
+    const payload = {
       beds: [],
       crops: [],
       cropPlans: [],
