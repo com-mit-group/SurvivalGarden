@@ -1,6 +1,13 @@
+declare global {
+  interface ImportMeta {
+    glob: (
+      pattern: string,
+      options?: { eager?: boolean; import?: string },
+    ) => Record<string, unknown>;
+  }
+}
+
 import { describe, expect, it } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
 import Ajv2020 from 'ajv/dist/2020';
 import appStateSchema from './app-state.schema.json';
 import bedSchema from './bed.schema.json';
@@ -11,12 +18,11 @@ import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
 
-const fixtureDir = path.resolve(import.meta.dirname, '../../../fixtures/golden');
-const fixturePaths = fs
-  .readdirSync(fixtureDir)
-  .filter((entry) => entry.endsWith('.json'))
-  .sort()
-  .map((entry) => path.join(fixtureDir, entry));
+const goldenFixtures = import.meta.glob('../../../fixtures/golden/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, AppState>;
+const fixturePaths = Object.keys(goldenFixtures).sort();
 
 const stableSortValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -205,9 +211,8 @@ describe('AppState schema', () => {
     expect(fixturePaths.length).toBeGreaterThan(0);
 
     for (const fixturePath of fixturePaths) {
-      const fixtureText = fs.readFileSync(fixturePath, 'utf8');
-      const fixture = JSON.parse(fixtureText) as AppState;
-      const fixtureName = path.relative(fixtureDir, fixturePath);
+      const fixture = goldenFixtures[fixturePath];
+      const fixtureName = fixturePath.replace('../../../fixtures/golden/', '');
       const isValid = validate(fixture);
 
       expect(
@@ -219,13 +224,13 @@ describe('AppState schema', () => {
 
   it('keeps golden fixtures key-sorted for stable diffs', () => {
     for (const fixturePath of fixturePaths) {
-      const fixtureText = fs.readFileSync(fixturePath, 'utf8');
-      const parsedFixture = JSON.parse(fixtureText);
-      const canonicalFixture = toCanonicalJson(parsedFixture);
-      const fixtureName = path.relative(fixtureDir, fixturePath);
+      const fixture = goldenFixtures[fixturePath];
+      const canonicalFixture = toCanonicalJson(fixture);
+      const fixtureName = fixturePath.replace('../../../fixtures/golden/', '');
+      const fixtureJson = `${JSON.stringify(fixture, null, 2)}\n`;
 
       expect(
-        fixtureText,
+        fixtureJson,
         `Fixture ${fixtureName} is not canonical JSON (sorted keys, 2-space indent, trailing newline).\n` +
           `Run: node -e "const fs=require('fs');const p='${fixturePath.replace(/'/g, "\\'")}';const j=JSON.parse(fs.readFileSync(p,'utf8'));const s=(v)=>Array.isArray(v)?v.map(s):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,val])=>[k,s(val)])):v;fs.writeFileSync(p,JSON.stringify(s(j),null,2)+'\\n');"`,
       ).toBe(canonicalFixture);
