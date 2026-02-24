@@ -17,3 +17,9 @@ Deterministic IDs in golden fixtures use fixed prefixes with zero-padded sequenc
 - Settings: `settings_001`
 
 The current Bed schema has no dedicated area field, so approximate m² allocations are documented in each bed's `notes` field.
+
+## Import/export roundtrip boundaries
+
+Import/export is treated as lossless for all schema-defined `AppState` fields after canonical JSON normalization (stable key ordering before deep comparison).
+
+Photo/blob payload data is intentionally excluded from roundtrip guarantees. If photo metadata fields exist in schema, metadata must survive export → import → export, while blob payload paths (currently documented as `/photos/*/blob` and `/photos/*/blobBase64`) are excluded-by-design.
