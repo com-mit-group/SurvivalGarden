@@ -4,6 +4,13 @@
 
 `frontend/src/contracts/app-state.schema.json` defines the import/export `AppState` envelope and requires a numeric `schemaVersion` (integer, minimum `1`) for migration gating between persisted schema revisions.
 
+## Identifier & key strategy
+
+- Use UUID v4 IDs (`crypto.randomUUID`) for user-authored entities created at runtime.
+- Use deterministic task `sourceKey` values for generated tasks via stable inputs: `batchId + date + cropId + bedId + type`.
+- Never assign random IDs/keys to generated tasks; generated task identity must remain idempotent across regenerations.
+- Golden fixture IDs like `task_001` remain deterministic test data and do not replace runtime UUID policy for user-authored entities.
+
 ## Golden dataset conventions
 
 `fixtures/golden/trier-v1.json` is the stable AppState reference fixture for workflow/idempotence checks.
