@@ -99,7 +99,7 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const openRequest = indexedDB.open(APP_STATE_DB_NAME, APP_STATE_DB_VERSION);
 
-    openRequest.onupgradeneeded = () => {
+    openRequest.onupgradeneeded = (event) => {
       const database = openRequest.result;
       const { transaction } = openRequest;
 
@@ -111,7 +111,7 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
         database.createObjectStore(APP_STATE_STORE);
       }
 
-      if (openRequest.oldVersion < 2) {
+      if (event.oldVersion < 2) {
         migrateV1ToV2(database, transaction);
       }
     };
