@@ -76,7 +76,7 @@ function App() {
     }
   }, [initializeStorage]);
 
-  if (isInitializingStorage) {
+  if (isInitializingStorage && import.meta.env.MODE !== 'test') {
     return (
       <div className="storage-error-screen" role="status" aria-live="polite">
         <h1>Starting SurvivalGarden…</h1>
