@@ -5,6 +5,9 @@ import {
   parseImportedAppState,
   serializeAppStateForExport,
   saveAppStateToStorage,
+  getBedFromAppState,
+  listBedsFromAppState,
+  upsertBedInAppState,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -26,6 +29,35 @@ const pathMatches = (path: string, pattern: string): boolean => {
   return patternParts.every(
     (patternPart, index) => patternPart === pathSegmentWildcard || patternPart === pathParts[index],
   );
+};
+
+
+const validBed = {
+  bedId: 'bed-1',
+  gardenId: 'garden-1',
+  name: 'Bed 1',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-02T00:00:00Z',
+};
+
+const validAppState = {
+  schemaVersion: 1,
+  beds: [validBed],
+  crops: [],
+  cropPlans: [],
+  tasks: [],
+  seedInventoryItems: [],
+  settings: {
+    settingsId: 'settings-1',
+    locale: 'de-DE',
+    timezone: 'Europe/Berlin',
+    units: {
+      temperature: 'celsius',
+      yield: 'metric',
+    },
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+  },
 };
 
 const canonicalizeForComparison = (value: unknown, path = '/'): unknown => {
@@ -154,5 +186,24 @@ describe('data boundary validation', () => {
     const imported = parseImportedAppState(exported);
 
     expect(canonicalizeForComparison(imported)).toEqual(canonicalizeForComparison(JSON.parse(exported)));
+  });
+});
+
+
+describe('bed repository boundary helpers', () => {
+  it('rejects invalid bed payloads on create/update via upsert', () => {
+    expect(() => upsertBedInAppState(validAppState, null)).toThrowError(SchemaValidationError);
+    expect(() =>
+      upsertBedInAppState(validAppState, {
+        ...validBed,
+        createdAt: 'invalid-date',
+      }),
+    ).toThrowError(SchemaValidationError);
+  });
+
+  it('returns typed beds from read paths and normalizes missing records to null', () => {
+    expect(getBedFromAppState(validAppState, validBed.bedId)).toEqual(validBed);
+    expect(getBedFromAppState(validAppState, 'missing-bed')).toBeNull();
+    expect(listBedsFromAppState(validAppState)).toEqual([validBed]);
   });
 });
