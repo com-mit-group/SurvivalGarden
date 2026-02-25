@@ -1,6 +1,21 @@
 import type { AppState } from '../contracts';
 import { assertValid } from './validation';
 
+export type {
+  AppStateRepository,
+  BedRepository,
+  CropPlanRepository,
+  CropRepository,
+  CrudRepository,
+  ListQuery,
+  ListableRepository,
+  SeedInventoryRepository,
+  SettingsRepository,
+  TaskRepository,
+  Unsubscribe,
+  WatchableRepository,
+} from './repos/interfaces';
+
 export {
   SchemaValidationError,
   type SchemaName,
@@ -14,7 +29,7 @@ export const parseImportedAppState = (rawPayload: string): AppState => {
   return assertValid('appState', parsed);
 };
 
-export const serializeAppStateForExport = (appState: unknown): string => {
+export const serializeAppStateForExport = (appState: AppState): string => {
   const validState = assertValid('appState', appState);
   return JSON.stringify(validState);
 };
@@ -35,7 +50,7 @@ export const loadAppStateFromStorage = (
 export const saveAppStateToStorage = (
   storage: Pick<Storage, 'setItem'>,
   key: string,
-  appState: unknown,
+  appState: AppState,
 ): void => {
   storage.setItem(key, serializeAppStateForExport(appState));
 };
