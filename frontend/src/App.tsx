@@ -42,6 +42,7 @@ const resetLocalData = async (): Promise<void> => {
 function App() {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [isInitializingStorage, setIsInitializingStorage] = useState(true);
+  const isTestEnvironment = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
 
   const initializeStorage = useCallback(async () => {
     setIsInitializingStorage(true);
@@ -76,7 +77,7 @@ function App() {
     }
   }, [initializeStorage]);
 
-  if (isInitializingStorage && import.meta.env.MODE !== 'test') {
+  if (isInitializingStorage && !isTestEnvironment) {
     return (
       <div className="storage-error-screen" role="status" aria-live="polite">
         <h1>Starting SurvivalGarden…</h1>
