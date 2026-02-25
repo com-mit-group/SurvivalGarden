@@ -1,6 +1,21 @@
 import type { AppState } from '../contracts';
 import { assertValid } from './validation';
 
+export type {
+  AppStateRepository,
+  BedRepository,
+  CropPlanRepository,
+  CropRepository,
+  CrudRepository,
+  ListQuery,
+  ListableRepository,
+  SeedInventoryRepository,
+  SettingsRepository,
+  TaskRepository,
+  Unsubscribe,
+  WatchableRepository,
+} from './repos/interfaces';
+
 export {
   SchemaValidationError,
   type SchemaName,
