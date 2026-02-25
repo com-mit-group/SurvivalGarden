@@ -29,7 +29,7 @@ export const parseImportedAppState = (rawPayload: string): AppState => {
   return assertValid('appState', parsed);
 };
 
-export const serializeAppStateForExport = (appState: AppState): string => {
+export const serializeAppStateForExport = (appState: unknown): string => {
   const validState = assertValid('appState', appState);
   return JSON.stringify(validState);
 };
@@ -50,7 +50,7 @@ export const loadAppStateFromStorage = (
 export const saveAppStateToStorage = (
   storage: Pick<Storage, 'setItem'>,
   key: string,
-  appState: AppState,
+  appState: unknown,
 ): void => {
   storage.setItem(key, serializeAppStateForExport(appState));
 };
