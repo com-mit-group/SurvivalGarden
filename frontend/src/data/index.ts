@@ -1,11 +1,19 @@
 import type { AppState } from '../contracts';
 import { assertValid } from './validation';
 
+export {
+  getBedFromAppState,
+  listBedsFromAppState,
+  removeBedFromAppState,
+  upsertBedInAppState,
+} from './repos/bedRepository';
+
 const APP_STATE_DB_NAME = 'survival-garden';
-const APP_STATE_DB_VERSION = 2;
+const APP_STATE_DB_VERSION = 3;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
 const META_STORE = 'meta';
+const BED_INDEX_STORE = 'bedsById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
 
 export type {
@@ -91,6 +99,12 @@ const migrateV1ToV2 = (database: IDBDatabase, transaction: IDBTransaction): void
   metaStore.put(2, SCHEMA_VERSION_KEY);
 };
 
+const migrateV2ToV3 = (database: IDBDatabase): void => {
+  if (!database.objectStoreNames.contains(BED_INDEX_STORE)) {
+    database.createObjectStore(BED_INDEX_STORE, { keyPath: 'bedId' });
+  }
+};
+
 const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
@@ -113,6 +127,10 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 
       if (event.oldVersion < 2) {
         migrateV1ToV2(database, transaction);
+      }
+
+      if (event.oldVersion < 3) {
+        migrateV2ToV3(database);
       }
     };
 
@@ -169,10 +187,21 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
 
   try {
     const validState = assertValid('appState', appState);
-    const transaction = database.transaction([APP_STATE_STORE, META_STORE], 'readwrite');
+    const transaction = database.transaction([APP_STATE_STORE, META_STORE, BED_INDEX_STORE], 'readwrite');
 
     transaction.objectStore(APP_STATE_STORE).put(validState, APP_STATE_RECORD_KEY);
     transaction.objectStore(META_STORE).put(validState.schemaVersion, SCHEMA_VERSION_KEY);
+
+    const bedStore = transaction.objectStore(BED_INDEX_STORE);
+    const existingBedKeys = await requestToPromise(bedStore.getAllKeys());
+
+    for (const key of existingBedKeys) {
+      bedStore.delete(key);
+    }
+
+    for (const bed of validState.beds) {
+      bedStore.put(assertValid('bed', bed ?? {}));
+    }
 
     await transactionDone(transaction);
   } finally {
