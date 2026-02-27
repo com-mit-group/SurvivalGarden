@@ -510,4 +510,26 @@ describe('generated task upsert boundary helper', () => {
     expect(afterSecondPass.tasks).toHaveLength(1);
     expect(afterSecondPass.tasks[0]).toEqual(secondGeneratedDuplicate);
   });
+
+  it('uses last generated status for duplicate sourceKey entries in one batch when no task exists yet', () => {
+    const firstGenerated = {
+      ...validTask,
+      id: 'task-gen-1',
+      status: 'pending',
+    };
+
+    const secondGeneratedDuplicate = {
+      ...validTask,
+      id: 'task-gen-2',
+      checklist: [{ step: 'Late refresh' }],
+      status: 'done',
+    };
+
+    const merged = upsertGeneratedTasksInAppState(validAppState, [
+      firstGenerated,
+      secondGeneratedDuplicate,
+    ]);
+
+    expect(merged.tasks).toEqual([secondGeneratedDuplicate]);
+  });
 });

@@ -65,11 +65,12 @@ export const upsertGeneratedTasksInAppState = (
   generatedTasks: unknown[],
 ): AppState => {
   const state = assertValid('appState', appState);
+  const existingTasksBySourceKey = new Map(state.tasks.map((task) => [task.sourceKey, task]));
   const mergedTasksBySourceKey = new Map(state.tasks.map((task) => [task.sourceKey, task]));
 
   for (const generatedTask of generatedTasks) {
     const validGeneratedTask = assertValid('task', generatedTask);
-    const existingTask = mergedTasksBySourceKey.get(validGeneratedTask.sourceKey);
+    const existingTask = existingTasksBySourceKey.get(validGeneratedTask.sourceKey);
 
     mergedTasksBySourceKey.set(
       validGeneratedTask.sourceKey,
