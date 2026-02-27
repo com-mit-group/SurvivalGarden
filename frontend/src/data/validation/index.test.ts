@@ -25,6 +25,13 @@ import {
   upsertTaskInAppState,
   removeTaskFromAppState,
   upsertGeneratedTasksInAppState,
+  getSeedInventoryItemFromAppState,
+  listSeedInventoryItemsFromAppState,
+  upsertSeedInventoryItemInAppState,
+  removeSeedInventoryItemFromAppState,
+  getSettingsFromAppState,
+  saveSettingsInAppState,
+  getSettingsOrDefault,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -176,6 +183,17 @@ const validTask = {
   batchId: 'batch-1',
   checklist: [{ step: 'Water thoroughly' }],
   status: 'done',
+};
+
+const validSeedInventoryItem = {
+  seedInventoryItemId: 'seed-item-1',
+  cropId: 'crop-1',
+  variety: 'Nantes',
+  quantity: 120,
+  unit: 'seeds',
+  status: 'available',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-02T00:00:00Z',
 };
 
 const validAppState = {
@@ -531,5 +549,58 @@ describe('generated task upsert boundary helper', () => {
     ]);
 
     expect(merged.tasks).toEqual([secondGeneratedDuplicate]);
+  });
+});
+
+describe('seed inventory repository boundary helpers', () => {
+  it('supports seed inventory read/upsert/remove and list filters', () => {
+    const withSeedItem = upsertSeedInventoryItemInAppState(validAppState, validSeedInventoryItem);
+
+    expect(
+      getSeedInventoryItemFromAppState(withSeedItem, validSeedInventoryItem.seedInventoryItemId),
+    ).toEqual(validSeedInventoryItem);
+    expect(getSeedInventoryItemFromAppState(withSeedItem, 'missing-seed-item')).toBeNull();
+
+    expect(listSeedInventoryItemsFromAppState(withSeedItem, { filter: { cropId: 'crop-1' } })).toEqual([
+      validSeedInventoryItem,
+    ]);
+    expect(
+      listSeedInventoryItemsFromAppState(withSeedItem, { filter: { status: 'available' } }),
+    ).toEqual([validSeedInventoryItem]);
+
+    const removed = removeSeedInventoryItemFromAppState(
+      withSeedItem,
+      validSeedInventoryItem.seedInventoryItemId,
+    );
+
+    expect(
+      getSeedInventoryItemFromAppState(removed, validSeedInventoryItem.seedInventoryItemId),
+    ).toBeNull();
+  });
+});
+
+describe('settings repository boundary helpers', () => {
+  it('supports settings get/save paths', () => {
+    expect(getSettingsFromAppState(validAppState)).toEqual(validAppState.settings);
+
+    const saved = saveSettingsInAppState(validAppState, {
+      ...validAppState.settings,
+      locale: 'en-US',
+      updatedAt: '2024-02-01T00:00:00Z',
+    });
+
+    expect(saved.settings).toEqual({
+      ...validAppState.settings,
+      locale: 'en-US',
+      updatedAt: '2024-02-01T00:00:00Z',
+    });
+  });
+
+  it('returns schema-valid defaults when settings are absent or invalid', () => {
+    const fallbackForMissing = getSettingsOrDefault(undefined);
+    const fallbackForInvalid = getSettingsOrDefault({ locale: 'bad' });
+
+    expect(assertValid('settings', fallbackForMissing)).toEqual(fallbackForMissing);
+    expect(assertValid('settings', fallbackForInvalid)).toEqual(fallbackForInvalid);
   });
 });
