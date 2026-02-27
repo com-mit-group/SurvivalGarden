@@ -1,5 +1,6 @@
 import type { AppState } from '../contracts';
 import { assertValid } from './validation';
+import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
   getBedFromAppState,
@@ -55,6 +56,8 @@ const CROP_INDEX_STORE = 'cropsById';
 const CROP_PLAN_INDEX_STORE = 'cropPlansById';
 const BATCH_INDEX_STORE = 'batchesById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
+
+const GOLDEN_DATASET = assertValid('appState', goldenDatasetFixture);
 
 export type {
   AppStateRepository,
@@ -228,6 +231,38 @@ export const initializeAppStateStorage = async (): Promise<void> => {
   } finally {
     database.close();
   }
+
+  await seedAppStateIfEmpty();
+};
+
+const isEmptyAppState = (appState: AppState | null): boolean =>
+  !appState || (appState.beds.length === 0 && appState.crops.length === 0 && appState.cropPlans.length === 0);
+
+const seedAppStateIfEmpty = async (): Promise<void> => {
+  const currentState = await loadAppStateFromIndexedDb();
+
+  if (!isEmptyAppState(currentState)) {
+    return;
+  }
+
+  await saveAppStateToIndexedDb(GOLDEN_DATASET);
+};
+
+export const resetToGoldenDataset = async (): Promise<void> => {
+  if (typeof indexedDB === 'undefined') {
+    throw new AppStateStorageError('IndexedDB is not available in this environment.');
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const deleteRequest = indexedDB.deleteDatabase(APP_STATE_DB_NAME);
+
+    deleteRequest.onsuccess = () => resolve();
+    deleteRequest.onerror = () => reject(new AppStateStorageError('Failed to reset local data storage.'));
+    deleteRequest.onblocked = () =>
+      reject(new AppStateStorageError('Close other SurvivalGarden tabs and try reset again.'));
+  });
+
+  await initializeAppStateStorage();
 };
 
 export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
