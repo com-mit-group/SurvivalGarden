@@ -19,19 +19,28 @@ export {
   removeCropPlanFromAppState,
   upsertCropPlanInAppState,
 } from './repos/cropPlanRepository';
+export {
+  getBatchFromAppState,
+  listBatchesFromAppState,
+  removeBatchFromAppState,
+  upsertBatchInAppState,
+} from './repos/batchRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
-const APP_STATE_DB_VERSION = 4;
+const APP_STATE_DB_VERSION = 5;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
 const META_STORE = 'meta';
 const BED_INDEX_STORE = 'bedsById';
 const CROP_INDEX_STORE = 'cropsById';
 const CROP_PLAN_INDEX_STORE = 'cropPlansById';
+const BATCH_INDEX_STORE = 'batchesById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
 
 export type {
   AppStateRepository,
+  BatchListFilter,
+  BatchRepository,
   BedRepository,
   CropPlanRepository,
   CropRepository,
@@ -129,6 +138,12 @@ const migrateV3ToV4 = (database: IDBDatabase): void => {
   }
 };
 
+const migrateV4ToV5 = (database: IDBDatabase): void => {
+  if (!database.objectStoreNames.contains(BATCH_INDEX_STORE)) {
+    database.createObjectStore(BATCH_INDEX_STORE, { keyPath: 'batchId' });
+  }
+};
+
 const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
@@ -159,6 +174,10 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 
       if (event.oldVersion < 4) {
         migrateV3ToV4(database);
+      }
+
+      if (event.oldVersion < 5) {
+        migrateV4ToV5(database);
       }
     };
 
@@ -216,7 +235,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
   try {
     const validState = assertValid('appState', appState);
     const transaction = database.transaction(
-      [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE],
+      [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE, BATCH_INDEX_STORE],
       'readwrite',
     );
 
@@ -254,6 +273,17 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
 
     for (const cropPlan of validState.cropPlans) {
       cropPlanStore.put(assertValid('cropPlan', cropPlan ?? {}));
+    }
+
+    const batchStore = transaction.objectStore(BATCH_INDEX_STORE);
+    const existingBatchKeys = await requestToPromise(batchStore.getAllKeys());
+
+    for (const key of existingBatchKeys) {
+      batchStore.delete(key);
+    }
+
+    for (const batch of validState.batches) {
+      batchStore.put(assertValid('batch', batch ?? {}));
     }
 
     await transactionDone(transaction);

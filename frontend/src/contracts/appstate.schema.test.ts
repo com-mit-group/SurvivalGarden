@@ -10,6 +10,7 @@ declare global {
 import { describe, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020';
 import appStateSchema from './app-state.schema.json';
+import batchSchema from './batch.schema.json';
 import bedSchema from './bed.schema.json';
 import cropPlanSchema from './crop-plan.schema.json';
 import cropSchema from './crop.schema.json';
@@ -65,6 +66,7 @@ const formatAjvErrors = (errors: unknown): string => {
 describe('AppState schema', () => {
   const buildValidator = () => {
     const ajv = new Ajv2020({ strict: true });
+    ajv.addSchema(batchSchema);
     ajv.addSchema(bedSchema);
     ajv.addSchema(cropSchema);
     ajv.addSchema(cropPlanSchema);
@@ -140,6 +142,16 @@ describe('AppState schema', () => {
           },
         },
       ],
+      batches: [
+        {
+          batchId: 'batch_001',
+          cropId: 'crop_tomato',
+          startedAt: '2026-03-01T00:00:00Z',
+          stage: 'sowing',
+          stageEvents: [{ stage: 'sowing', occurredAt: '2026-03-01T00:00:00Z' }],
+          assignments: [{ bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z' }],
+        },
+      ],
       tasks: [
         {
           id: 'task_001',
@@ -187,6 +199,7 @@ describe('AppState schema', () => {
       beds: [],
       crops: [],
       cropPlans: [],
+      batches: [],
       tasks: [],
       seedInventoryItems: [],
       settings: {

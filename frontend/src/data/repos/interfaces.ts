@@ -1,5 +1,6 @@
 import type {
   AppState,
+  Batch,
   Bed,
   Crop,
   CropPlan,
@@ -40,6 +41,17 @@ export type CropRepository = CrudRepository<Crop, Crop['cropId']> & ListableRepo
 
 export type CropPlanRepository = CrudRepository<CropPlan, CropPlan['planId']> &
   ListableRepository<CropPlan, Pick<CropPlan, 'cropId' | 'seasonYear'>>;
+
+export type BatchListFilter = {
+  stage: Batch['stage'];
+  cropId: Batch['cropId'];
+  bedId: string;
+  startedAtFrom: string;
+  startedAtTo: string;
+};
+
+export type BatchRepository = CrudRepository<Batch, Batch['batchId']> &
+  ListableRepository<Batch, BatchListFilter>;
 
 export type TaskRepository = CrudRepository<Task, Task['id']> &
   ListableRepository<Task, Pick<Task, 'date' | 'status'>>;

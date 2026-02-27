@@ -9,6 +9,7 @@
     "beds",
     "crops",
     "cropPlans",
+    "batches",
     "tasks",
     "seedInventoryItems",
     "settings"
@@ -34,6 +35,12 @@
       "type": "array",
       "items": {
         "$ref": "https://survivalgarden/contracts/crop-plan.schema.json"
+      }
+    },
+    "batches": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/batch.schema.json"
       }
     },
     "tasks": {

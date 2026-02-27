@@ -3,6 +3,26 @@
  * Regenerate with `pnpm --filter frontend gen:types`.
  */
 
+
+export interface BatchStageEvent {
+  stage: string;
+  occurredAt: string;
+}
+
+export interface BatchAssignment {
+  bedId: string;
+  assignedAt: string;
+}
+
+export interface Batch {
+  batchId: string;
+  cropId: string;
+  startedAt: string;
+  stage: string;
+  stageEvents: BatchStageEvent[];
+  assignments: BatchAssignment[];
+}
+
 export interface Bed {
   bedId: string;
   gardenId: string;
@@ -121,6 +141,7 @@ export interface AppState {
   beds: Bed[];
   crops: Crop[];
   cropPlans: CropPlan[];
+  batches: Batch[];
   tasks: Task[];
   seedInventoryItems: SeedInventoryItem[];
   settings: Settings;

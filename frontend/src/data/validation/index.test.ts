@@ -16,6 +16,10 @@ import {
   listCropPlansFromAppState,
   upsertCropPlanInAppState,
   removeCropPlanFromAppState,
+  getBatchFromAppState,
+  listBatchesFromAppState,
+  upsertBatchInAppState,
+  removeBatchFromAppState,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -148,11 +152,21 @@ const validCropPlan = {
   notes: 'Main spring bed',
 };
 
+const validBatch = {
+  batchId: 'batch-1',
+  cropId: 'crop-1',
+  startedAt: '2024-03-01T00:00:00Z',
+  stage: 'sowing',
+  stageEvents: [{ stage: 'sowing', occurredAt: '2024-03-01T00:00:00Z' }],
+  assignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
+};
+
 const validAppState = {
   schemaVersion: 1,
   beds: [validBed],
   crops: [validCrop],
   cropPlans: [validCropPlan],
+  batches: [validBatch],
   tasks: [],
   seedInventoryItems: [],
   settings: {
@@ -355,5 +369,52 @@ describe('crop plan repository boundary helpers', () => {
   it('supports MVP empty cropPlans arrays without throwing', () => {
     const appStateWithNoPlans = { ...validAppState, cropPlans: [] };
     expect(listCropPlansFromAppState(appStateWithNoPlans)).toEqual([]);
+  });
+});
+
+
+describe('batch repository boundary helpers', () => {
+  it('rejects invalid stageEvents and assignments via schema validation', () => {
+    expect(() =>
+      upsertBatchInAppState(validAppState, {
+        ...validBatch,
+        stageEvents: [{ stage: '', occurredAt: '2024-03-01T00:00:00Z' }],
+      }),
+    ).toThrowError(SchemaValidationError);
+
+    expect(() =>
+      upsertBatchInAppState(validAppState, {
+        ...validBatch,
+        assignments: [{ bedId: '', assignedAt: '2024-03-01T00:00:00Z' }],
+      }),
+    ).toThrowError(SchemaValidationError);
+  });
+
+  it('supports batch read/update/remove and list filters', () => {
+    const secondBatch = {
+      batchId: 'batch-2',
+      cropId: 'crop-1',
+      startedAt: '2024-04-15T00:00:00Z',
+      stage: 'transplant',
+      stageEvents: [{ stage: 'transplant', occurredAt: '2024-04-15T00:00:00Z' }],
+      assignments: [{ bedId: 'bed-2', assignedAt: '2024-04-15T00:00:00Z' }],
+    };
+
+    const withSecondBatch = upsertBatchInAppState(validAppState, secondBatch);
+
+    expect(getBatchFromAppState(withSecondBatch, validBatch.batchId)).toEqual(validBatch);
+    expect(getBatchFromAppState(withSecondBatch, 'missing-batch')).toBeNull();
+
+    expect(listBatchesFromAppState(withSecondBatch, { filter: { stage: 'sowing' } })).toEqual([validBatch]);
+    expect(listBatchesFromAppState(withSecondBatch, { filter: { cropId: 'crop-1' } })).toHaveLength(2);
+    expect(listBatchesFromAppState(withSecondBatch, { filter: { bedId: 'bed-2' } })).toEqual([secondBatch]);
+    expect(
+      listBatchesFromAppState(withSecondBatch, {
+        filter: { startedAtFrom: '2024-04-01T00:00:00Z', startedAtTo: '2024-04-30T23:59:59Z' },
+      }),
+    ).toEqual([secondBatch]);
+
+    const removed = removeBatchFromAppState(withSecondBatch, secondBatch.batchId);
+    expect(getBatchFromAppState(removed, secondBatch.batchId)).toBeNull();
   });
 });

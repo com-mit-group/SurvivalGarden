@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/batch.schema.json",
+  "title": "Batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "batchId",
+    "cropId",
+    "startedAt",
+    "stage",
+    "stageEvents",
+    "assignments"
+  ],
+  "properties": {
+    "batchId": {
+      "$ref": "#/$defs/id"
+    },
+    "cropId": {
+      "$ref": "#/$defs/id"
+    },
+    "startedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "stageEvents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "occurredAt"],
+        "properties": {
+          "stage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "occurredAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+          }
+        }
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bedId", "assignedAt"],
+        "properties": {
+          "bedId": {
+            "$ref": "#/$defs/id"
+          },
+          "assignedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}
