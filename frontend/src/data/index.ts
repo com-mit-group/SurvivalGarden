@@ -25,6 +25,18 @@ export {
   removeBatchFromAppState,
   upsertBatchInAppState,
 } from './repos/batchRepository';
+
+export {
+  getSeedInventoryItemFromAppState,
+  listSeedInventoryItemsFromAppState,
+  removeSeedInventoryItemFromAppState,
+  upsertSeedInventoryItemInAppState,
+} from './repos/seedInventoryRepository';
+export {
+  getSettingsFromAppState,
+  getSettingsOrDefault,
+  saveSettingsInAppState,
+} from './repos/settingsRepository';
 export {
   getTaskFromAppState,
   listTasksFromAppState,
