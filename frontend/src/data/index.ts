@@ -7,8 +7,18 @@ export {
   removeBedFromAppState,
   upsertBedInAppState,
 } from './repos/bedRepository';
-export { getCropFromAppState, listCropsFromAppState } from './repos/cropRepository';
-export { getCropPlanFromAppState, listCropPlansFromAppState } from './repos/cropPlanRepository';
+export {
+  getCropFromAppState,
+  listCropsFromAppState,
+  removeCropFromAppState,
+  upsertCropInAppState,
+} from './repos/cropRepository';
+export {
+  getCropPlanFromAppState,
+  listCropPlansFromAppState,
+  removeCropPlanFromAppState,
+  upsertCropPlanInAppState,
+} from './repos/cropPlanRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
 const APP_STATE_DB_VERSION = 4;

@@ -10,8 +10,12 @@ import {
   upsertBedInAppState,
   getCropFromAppState,
   listCropsFromAppState,
+  upsertCropInAppState,
+  removeCropFromAppState,
   getCropPlanFromAppState,
   listCropPlansFromAppState,
+  upsertCropPlanInAppState,
+  removeCropPlanFromAppState,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -319,6 +323,16 @@ describe('crop repository boundary helpers', () => {
     expect(getCropFromAppState(validAppState, 'missing-crop')).toBeNull();
     expect(listCropsFromAppState(validAppState)).toEqual([validCrop]);
   });
+
+  it('supports upsert and remove paths for crops', () => {
+    const updated = { ...validCrop, name: 'Updated Carrot' };
+    const upserted = upsertCropInAppState(validAppState, updated);
+
+    expect(getCropFromAppState(upserted, validCrop.cropId)).toEqual(updated);
+
+    const removed = removeCropFromAppState(upserted, validCrop.cropId);
+    expect(getCropFromAppState(removed, validCrop.cropId)).toBeNull();
+  });
 });
 
 describe('crop plan repository boundary helpers', () => {
@@ -326,6 +340,16 @@ describe('crop plan repository boundary helpers', () => {
     expect(getCropPlanFromAppState(validAppState, validCropPlan.planId)).toEqual(validCropPlan);
     expect(getCropPlanFromAppState(validAppState, 'missing-plan')).toBeNull();
     expect(listCropPlansFromAppState(validAppState)).toEqual([validCropPlan]);
+  });
+
+  it('supports upsert and remove paths for crop plans', () => {
+    const updated = { ...validCropPlan, notes: 'Updated notes' };
+    const upserted = upsertCropPlanInAppState(validAppState, updated);
+
+    expect(getCropPlanFromAppState(upserted, validCropPlan.planId)).toEqual(updated);
+
+    const removed = removeCropPlanFromAppState(upserted, validCropPlan.planId);
+    expect(getCropPlanFromAppState(removed, validCropPlan.planId)).toBeNull();
   });
 
   it('supports MVP empty cropPlans arrays without throwing', () => {
