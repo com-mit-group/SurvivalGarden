@@ -93,6 +93,34 @@ export const saveAppStateToStorage = (
   storage.setItem(key, serializeAppStateForExport(appState));
 };
 
+export const upsertGeneratedTasksInAppState = (
+  appState: unknown,
+  generatedTasks: unknown[],
+): AppState => {
+  const validState = assertValid('appState', appState);
+  const mergedTasksBySourceKey = new Map(validState.tasks.map((task) => [task.sourceKey, task]));
+
+  for (const generatedTask of generatedTasks) {
+    const validGeneratedTask = assertValid('task', generatedTask);
+    const existingTask = mergedTasksBySourceKey.get(validGeneratedTask.sourceKey);
+
+    mergedTasksBySourceKey.set(
+      validGeneratedTask.sourceKey,
+      existingTask
+        ? {
+            ...validGeneratedTask,
+            status: existingTask.status,
+          }
+        : validGeneratedTask,
+    );
+  }
+
+  return {
+    ...validState,
+    tasks: [...mergedTasksBySourceKey.values()],
+  };
+};
+
 export class AppStateStorageError extends Error {
   constructor(message: string) {
     super(message);
