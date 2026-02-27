@@ -20,6 +20,10 @@ import {
   listBatchesFromAppState,
   upsertBatchInAppState,
   removeBatchFromAppState,
+  getTaskFromAppState,
+  listTasksFromAppState,
+  upsertTaskInAppState,
+  removeTaskFromAppState,
   upsertGeneratedTasksInAppState,
 } from '..';
 
@@ -429,6 +433,33 @@ describe('batch repository boundary helpers', () => {
 
     const removed = removeBatchFromAppState(withSecondBatch, secondBatch.batchId);
     expect(getBatchFromAppState(removed, secondBatch.batchId)).toBeNull();
+  });
+});
+
+describe('task repository boundary helpers', () => {
+  it('supports task read/upsert/remove and list filters', () => {
+    const appStateWithTask = {
+      ...validAppState,
+      tasks: [validTask],
+    };
+
+    expect(getTaskFromAppState(appStateWithTask, validTask.id)).toEqual(validTask);
+    expect(getTaskFromAppState(appStateWithTask, 'missing-task')).toBeNull();
+
+    const updatedTask = {
+      ...validTask,
+      status: 'pending',
+      checklist: [{ step: 'Water tonight' }],
+    };
+
+    const upserted = upsertTaskInAppState(appStateWithTask, updatedTask);
+
+    expect(getTaskFromAppState(upserted, validTask.id)).toEqual(updatedTask);
+    expect(listTasksFromAppState(upserted, { filter: { status: 'pending' } })).toEqual([updatedTask]);
+    expect(listTasksFromAppState(upserted, { filter: { date: '2026-03-01' } })).toEqual([updatedTask]);
+
+    const removed = removeTaskFromAppState(upserted, updatedTask.id);
+    expect(getTaskFromAppState(removed, updatedTask.id)).toBeNull();
   });
 });
 

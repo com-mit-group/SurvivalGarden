@@ -25,6 +25,13 @@ export {
   removeBatchFromAppState,
   upsertBatchInAppState,
 } from './repos/batchRepository';
+export {
+  getTaskFromAppState,
+  listTasksFromAppState,
+  removeTaskFromAppState,
+  upsertGeneratedTasksInAppState,
+  upsertTaskInAppState,
+} from './repos/taskRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
 const APP_STATE_DB_VERSION = 5;
@@ -91,34 +98,6 @@ export const saveAppStateToStorage = (
   appState: unknown,
 ): void => {
   storage.setItem(key, serializeAppStateForExport(appState));
-};
-
-export const upsertGeneratedTasksInAppState = (
-  appState: unknown,
-  generatedTasks: unknown[],
-): AppState => {
-  const validState = assertValid('appState', appState);
-  const mergedTasksBySourceKey = new Map(validState.tasks.map((task) => [task.sourceKey, task]));
-
-  for (const generatedTask of generatedTasks) {
-    const validGeneratedTask = assertValid('task', generatedTask);
-    const existingTask = mergedTasksBySourceKey.get(validGeneratedTask.sourceKey);
-
-    mergedTasksBySourceKey.set(
-      validGeneratedTask.sourceKey,
-      existingTask
-        ? {
-            ...validGeneratedTask,
-            status: existingTask.status,
-          }
-        : validGeneratedTask,
-    );
-  }
-
-  return {
-    ...validState,
-    tasks: [...mergedTasksBySourceKey.values()],
-  };
 };
 
 export class AppStateStorageError extends Error {
