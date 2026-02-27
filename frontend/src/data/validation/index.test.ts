@@ -20,6 +20,11 @@ import {
   listBatchesFromAppState,
   upsertBatchInAppState,
   removeBatchFromAppState,
+  getTaskFromAppState,
+  listTasksFromAppState,
+  upsertTaskInAppState,
+  removeTaskFromAppState,
+  upsertGeneratedTasksInAppState,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -159,6 +164,18 @@ const validBatch = {
   stage: 'sowing',
   stageEvents: [{ stage: 'sowing', occurredAt: '2024-03-01T00:00:00Z' }],
   assignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
+};
+
+const validTask = {
+  id: 'task-1',
+  sourceKey: 'batch_2026-03-01_crop_tomato_bed_001_water',
+  date: '2026-03-01',
+  type: 'water',
+  cropId: 'crop-1',
+  bedId: 'bed-1',
+  batchId: 'batch-1',
+  checklist: [{ step: 'Water thoroughly' }],
+  status: 'done',
 };
 
 const validAppState = {
@@ -416,5 +433,103 @@ describe('batch repository boundary helpers', () => {
 
     const removed = removeBatchFromAppState(withSecondBatch, secondBatch.batchId);
     expect(getBatchFromAppState(removed, secondBatch.batchId)).toBeNull();
+  });
+});
+
+describe('task repository boundary helpers', () => {
+  it('supports task read/upsert/remove and list filters', () => {
+    const appStateWithTask = {
+      ...validAppState,
+      tasks: [validTask],
+    };
+
+    expect(getTaskFromAppState(appStateWithTask, validTask.id)).toEqual(validTask);
+    expect(getTaskFromAppState(appStateWithTask, 'missing-task')).toBeNull();
+
+    const updatedTask = {
+      ...validTask,
+      status: 'pending',
+      checklist: [{ step: 'Water tonight' }],
+    };
+
+    const upserted = upsertTaskInAppState(appStateWithTask, updatedTask);
+
+    expect(getTaskFromAppState(upserted, validTask.id)).toEqual(updatedTask);
+    expect(listTasksFromAppState(upserted, { filter: { status: 'pending' } })).toEqual([updatedTask]);
+    expect(listTasksFromAppState(upserted, { filter: { date: '2026-03-01' } })).toEqual([updatedTask]);
+
+    const removed = removeTaskFromAppState(upserted, updatedTask.id);
+    expect(getTaskFromAppState(removed, updatedTask.id)).toBeNull();
+  });
+});
+
+describe('generated task upsert boundary helper', () => {
+  it('preserves existing status while updating regenerated task fields', () => {
+    const appStateWithTask = {
+      ...validAppState,
+      tasks: [validTask],
+    };
+
+    const regeneratedTask = {
+      ...validTask,
+      id: 'task-2',
+      date: '2026-03-08',
+      checklist: [{ step: 'Water and mulch' }],
+      status: 'pending',
+    };
+
+    const merged = upsertGeneratedTasksInAppState(appStateWithTask, [regeneratedTask]);
+
+    expect(merged.tasks).toEqual([
+      {
+        ...regeneratedTask,
+        status: 'done',
+      },
+    ]);
+  });
+
+  it('remains idempotent by sourceKey across repeated generation batches', () => {
+    const firstGenerated = {
+      ...validTask,
+      id: 'task-gen-1',
+      date: '2026-03-01',
+      status: 'pending',
+    };
+
+    const secondGeneratedDuplicate = {
+      ...validTask,
+      id: 'task-gen-2',
+      date: '2026-03-15',
+      checklist: [{ step: 'Water deeply' }],
+      status: 'pending',
+    };
+
+    const afterFirstPass = upsertGeneratedTasksInAppState(validAppState, [firstGenerated]);
+    const afterSecondPass = upsertGeneratedTasksInAppState(afterFirstPass, [secondGeneratedDuplicate]);
+
+    expect(afterSecondPass.tasks).toHaveLength(1);
+    expect(afterSecondPass.tasks[0]).toEqual(secondGeneratedDuplicate);
+  });
+
+  it('uses last generated status for duplicate sourceKey entries in one batch when no task exists yet', () => {
+    const firstGenerated = {
+      ...validTask,
+      id: 'task-gen-1',
+      status: 'pending',
+    };
+
+    const secondGeneratedDuplicate = {
+      ...validTask,
+      id: 'task-gen-2',
+      checklist: [{ step: 'Late refresh' }],
+      status: 'done',
+    };
+
+    const merged = upsertGeneratedTasksInAppState(validAppState, [
+      firstGenerated,
+      secondGeneratedDuplicate,
+    ]);
+
+    expect(merged.tasks).toEqual([secondGeneratedDuplicate]);
   });
 });

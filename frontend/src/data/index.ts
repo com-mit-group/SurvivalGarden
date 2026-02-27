@@ -25,6 +25,13 @@ export {
   removeBatchFromAppState,
   upsertBatchInAppState,
 } from './repos/batchRepository';
+export {
+  getTaskFromAppState,
+  listTasksFromAppState,
+  removeTaskFromAppState,
+  upsertGeneratedTasksInAppState,
+  upsertTaskInAppState,
+} from './repos/taskRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
 const APP_STATE_DB_VERSION = 5;
