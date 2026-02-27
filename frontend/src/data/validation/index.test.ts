@@ -8,6 +8,14 @@ import {
   getBedFromAppState,
   listBedsFromAppState,
   upsertBedInAppState,
+  getCropFromAppState,
+  listCropsFromAppState,
+  upsertCropInAppState,
+  removeCropFromAppState,
+  getCropPlanFromAppState,
+  listCropPlansFromAppState,
+  upsertCropPlanInAppState,
+  removeCropPlanFromAppState,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -40,11 +48,111 @@ const validBed = {
   updatedAt: '2024-01-02T00:00:00Z',
 };
 
+
+const validCrop = {
+  cropId: 'crop-1',
+  name: 'Carrot',
+  category: 'root',
+  companionsGood: ['onion'],
+  companionsAvoid: ['dill'],
+  rules: {
+    sowing: {
+      sequence: 1,
+      windows: [
+        {
+          startMonth: 3,
+          startWeek: 2,
+          endMonth: 4,
+          endWeek: 3,
+        },
+      ],
+      notes: 'Direct sow',
+    },
+    transplant: {
+      sequence: 2,
+      windows: [
+        {
+          startMonth: 4,
+          startWeek: 4,
+          endMonth: 5,
+          endWeek: 2,
+        },
+      ],
+      notes: 'Thin as needed',
+    },
+    harvest: {
+      sequence: 3,
+      windows: [
+        {
+          startMonth: 6,
+          startWeek: 1,
+          endMonth: 9,
+          endWeek: 4,
+        },
+      ],
+      notes: 'Pull when ready',
+    },
+    storage: {
+      sequence: 4,
+      windows: [
+        {
+          startMonth: 9,
+          startWeek: 1,
+          endMonth: 12,
+          endWeek: 4,
+        },
+      ],
+      notes: 'Cool and humid',
+    },
+  },
+  nutritionProfile: [
+    {
+      nutrient: 'fiber',
+      value: 2.8,
+      unit: 'g',
+      source: 'USDA',
+      assumptions: 'raw',
+    },
+  ],
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-02T00:00:00Z',
+};
+
+const validCropPlan = {
+  planId: 'plan-1',
+  cropId: 'crop-1',
+  bedId: 'bed-1',
+  seasonYear: 2024,
+  plannedWindows: {
+    sowing: [
+      {
+        startMonth: 3,
+        startWeek: 2,
+        endMonth: 4,
+        endWeek: 3,
+      },
+    ],
+    harvest: [
+      {
+        startMonth: 6,
+        startWeek: 1,
+        endMonth: 9,
+        endWeek: 4,
+      },
+    ],
+  },
+  expectedYield: {
+    amount: 12,
+    unit: 'kg',
+  },
+  notes: 'Main spring bed',
+};
+
 const validAppState = {
   schemaVersion: 1,
   beds: [validBed],
-  crops: [],
-  cropPlans: [],
+  crops: [validCrop],
+  cropPlans: [validCropPlan],
   tasks: [],
   seedInventoryItems: [],
   settings: {
@@ -205,5 +313,47 @@ describe('bed repository boundary helpers', () => {
     expect(getBedFromAppState(validAppState, validBed.bedId)).toEqual(validBed);
     expect(getBedFromAppState(validAppState, 'missing-bed')).toBeNull();
     expect(listBedsFromAppState(validAppState)).toEqual([validBed]);
+  });
+});
+
+
+describe('crop repository boundary helpers', () => {
+  it('returns typed crops from read paths and normalizes missing records to null', () => {
+    expect(getCropFromAppState(validAppState, validCrop.cropId)).toEqual(validCrop);
+    expect(getCropFromAppState(validAppState, 'missing-crop')).toBeNull();
+    expect(listCropsFromAppState(validAppState)).toEqual([validCrop]);
+  });
+
+  it('supports upsert and remove paths for crops', () => {
+    const updated = { ...validCrop, name: 'Updated Carrot' };
+    const upserted = upsertCropInAppState(validAppState, updated);
+
+    expect(getCropFromAppState(upserted, validCrop.cropId)).toEqual(updated);
+
+    const removed = removeCropFromAppState(upserted, validCrop.cropId);
+    expect(getCropFromAppState(removed, validCrop.cropId)).toBeNull();
+  });
+});
+
+describe('crop plan repository boundary helpers', () => {
+  it('returns typed crop plans from read paths and normalizes missing records to null', () => {
+    expect(getCropPlanFromAppState(validAppState, validCropPlan.planId)).toEqual(validCropPlan);
+    expect(getCropPlanFromAppState(validAppState, 'missing-plan')).toBeNull();
+    expect(listCropPlansFromAppState(validAppState)).toEqual([validCropPlan]);
+  });
+
+  it('supports upsert and remove paths for crop plans', () => {
+    const updated = { ...validCropPlan, notes: 'Updated notes' };
+    const upserted = upsertCropPlanInAppState(validAppState, updated);
+
+    expect(getCropPlanFromAppState(upserted, validCropPlan.planId)).toEqual(updated);
+
+    const removed = removeCropPlanFromAppState(upserted, validCropPlan.planId);
+    expect(getCropPlanFromAppState(removed, validCropPlan.planId)).toBeNull();
+  });
+
+  it('supports MVP empty cropPlans arrays without throwing', () => {
+    const appStateWithNoPlans = { ...validAppState, cropPlans: [] };
+    expect(listCropPlansFromAppState(appStateWithNoPlans)).toEqual([]);
   });
 });

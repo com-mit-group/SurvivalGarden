@@ -7,13 +7,27 @@ export {
   removeBedFromAppState,
   upsertBedInAppState,
 } from './repos/bedRepository';
+export {
+  getCropFromAppState,
+  listCropsFromAppState,
+  removeCropFromAppState,
+  upsertCropInAppState,
+} from './repos/cropRepository';
+export {
+  getCropPlanFromAppState,
+  listCropPlansFromAppState,
+  removeCropPlanFromAppState,
+  upsertCropPlanInAppState,
+} from './repos/cropPlanRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
-const APP_STATE_DB_VERSION = 3;
+const APP_STATE_DB_VERSION = 4;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
 const META_STORE = 'meta';
 const BED_INDEX_STORE = 'bedsById';
+const CROP_INDEX_STORE = 'cropsById';
+const CROP_PLAN_INDEX_STORE = 'cropPlansById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
 
 export type {
@@ -105,6 +119,16 @@ const migrateV2ToV3 = (database: IDBDatabase): void => {
   }
 };
 
+const migrateV3ToV4 = (database: IDBDatabase): void => {
+  if (!database.objectStoreNames.contains(CROP_INDEX_STORE)) {
+    database.createObjectStore(CROP_INDEX_STORE, { keyPath: 'cropId' });
+  }
+
+  if (!database.objectStoreNames.contains(CROP_PLAN_INDEX_STORE)) {
+    database.createObjectStore(CROP_PLAN_INDEX_STORE, { keyPath: 'planId' });
+  }
+};
+
 const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
@@ -131,6 +155,10 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 
       if (event.oldVersion < 3) {
         migrateV2ToV3(database);
+      }
+
+      if (event.oldVersion < 4) {
+        migrateV3ToV4(database);
       }
     };
 
@@ -187,7 +215,10 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
 
   try {
     const validState = assertValid('appState', appState);
-    const transaction = database.transaction([APP_STATE_STORE, META_STORE, BED_INDEX_STORE], 'readwrite');
+    const transaction = database.transaction(
+      [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE],
+      'readwrite',
+    );
 
     transaction.objectStore(APP_STATE_STORE).put(validState, APP_STATE_RECORD_KEY);
     transaction.objectStore(META_STORE).put(validState.schemaVersion, SCHEMA_VERSION_KEY);
@@ -201,6 +232,28 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
 
     for (const bed of validState.beds) {
       bedStore.put(assertValid('bed', bed ?? {}));
+    }
+
+    const cropStore = transaction.objectStore(CROP_INDEX_STORE);
+    const existingCropKeys = await requestToPromise(cropStore.getAllKeys());
+
+    for (const key of existingCropKeys) {
+      cropStore.delete(key);
+    }
+
+    for (const crop of validState.crops) {
+      cropStore.put(assertValid('crop', crop ?? {}));
+    }
+
+    const cropPlanStore = transaction.objectStore(CROP_PLAN_INDEX_STORE);
+    const existingCropPlanKeys = await requestToPromise(cropPlanStore.getAllKeys());
+
+    for (const key of existingCropPlanKeys) {
+      cropPlanStore.delete(key);
+    }
+
+    for (const cropPlan of validState.cropPlans) {
+      cropPlanStore.put(assertValid('cropPlan', cropPlan ?? {}));
     }
 
     await transactionDone(transaction);
