@@ -536,6 +536,14 @@ body {
   font-size: 0.8rem;
 }
 
+.batch-next-action-row select {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  background: #fff;
+}
+
 .batch-next-action-row button {
   border: 1px solid #c7d2fe;
   border-radius: 0.45rem;
@@ -558,6 +566,31 @@ body {
   background: #fef3c7;
   color: #92400e;
   font-size: 0.78rem;
+}
+
+.bed-detail-batch-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.bed-detail-batch-action-toggle {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #1f2937;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.bed-detail-batch-action-panel {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 0.45rem;
 }
 
 .batch-photo-upload-row {
