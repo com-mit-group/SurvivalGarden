@@ -32,6 +32,13 @@ import {
   getSettingsFromAppState,
   saveSettingsInAppState,
   getSettingsOrDefault,
+  savePhotoBlobToIndexedDb,
+  loadPhotoBlobFromIndexedDb,
+  deletePhotoBlobFromIndexedDb,
+  saveAppStateToIndexedDb,
+  loadAppStateFromIndexedDb,
+  resetToGoldenDataset,
+  AppStateStorageError,
 } from '..';
 
 const goldenFixtures = import.meta.glob('../../../../fixtures/golden/*.json', {
@@ -171,6 +178,7 @@ const validBatch = {
   stage: 'sowing',
   stageEvents: [{ stage: 'sowing', occurredAt: '2024-03-01T00:00:00Z' }],
   assignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
+  photos: [{ id: 'photo-1', storageRef: 'photo-1', contentType: 'image/jpeg' }],
 };
 
 const validTask = {
@@ -346,6 +354,74 @@ describe('data boundary validation', () => {
   });
 });
 
+
+
+
+describe('indexeddb photo blob storage', () => {
+  it('persists and reloads photo blobs via dedicated object store', async () => {
+    await resetToGoldenDataset();
+
+    const photoBlob = new Blob(['image-bytes'], { type: 'image/jpeg' });
+    await savePhotoBlobToIndexedDb('photo-1', photoBlob);
+
+    const loadedBlob = await loadPhotoBlobFromIndexedDb('photo-1');
+    expect(loadedBlob).toBeInstanceOf(Blob);
+    expect(loadedBlob?.size).toBe(photoBlob.size);
+    expect(loadedBlob?.type).toBe(photoBlob.type);
+
+    await deletePhotoBlobFromIndexedDb('photo-1');
+    await expect(loadPhotoBlobFromIndexedDb('photo-1')).resolves.toBeNull();
+  });
+
+  it('keeps export metadata-only without inline blob payload bytes', async () => {
+    const state = {
+      ...validAppState,
+      batches: [
+        {
+          ...validBatch,
+          photos: [{ id: 'photo-2', storageRef: 'photo-2', filename: 'sample.jpg' }],
+        },
+      ],
+    };
+
+    await saveAppStateToIndexedDb(state);
+    const loaded = await loadAppStateFromIndexedDb();
+
+    expect(loaded?.batches[0]?.photos?.[0]).toEqual({ id: 'photo-2', storageRef: 'photo-2', filename: 'sample.jpg' });
+    expect(JSON.stringify(loaded)).not.toContain('blobBase64');
+    expect(JSON.stringify(loaded)).not.toContain('image-bytes');
+  });
+
+  it('maps quota failures to AppStateStorageError with quota warning', async () => {
+    const quotaError = Object.assign(new Error('Quota exceeded'), { name: 'QuotaExceededError' });
+    const originalIndexedDB = globalThis.indexedDB;
+
+    const open = vi.fn(() => {
+      const request = {} as IDBOpenDBRequest;
+      queueMicrotask(() => {
+        (request as { error?: DOMException }).error = quotaError as DOMException;
+        request.onerror?.(new Event('error'));
+      });
+      return request;
+    });
+
+    vi.stubGlobal('indexedDB', { open });
+
+    try {
+      await saveAppStateToIndexedDb(validAppState);
+      throw new Error('Expected saveAppStateToIndexedDb to throw for quota failure');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppStateStorageError);
+      expect((error as Error).message.toLowerCase()).toContain('quota');
+    } finally {
+      if (originalIndexedDB) {
+        vi.stubGlobal('indexedDB', originalIndexedDB);
+      } else {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+});
 
 describe('bed repository boundary helpers', () => {
   it('rejects invalid bed payloads on create/update via upsert', () => {

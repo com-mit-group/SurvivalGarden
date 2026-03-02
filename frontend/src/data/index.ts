@@ -47,7 +47,7 @@ export {
 } from './repos/taskRepository';
 
 const APP_STATE_DB_NAME = 'survival-garden';
-const APP_STATE_DB_VERSION = 5;
+const APP_STATE_DB_VERSION = 6;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
 const META_STORE = 'meta';
@@ -55,6 +55,7 @@ const BED_INDEX_STORE = 'bedsById';
 const CROP_INDEX_STORE = 'cropsById';
 const CROP_PLAN_INDEX_STORE = 'cropPlansById';
 const BATCH_INDEX_STORE = 'batchesById';
+const PHOTO_BLOB_STORE = 'photoBlobsById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
 
 const GOLDEN_DATASET = assertValid('appState', goldenDatasetFixture);
@@ -166,6 +167,36 @@ const migrateV4ToV5 = (database: IDBDatabase): void => {
   }
 };
 
+const migrateV5ToV6 = (database: IDBDatabase): void => {
+  if (!database.objectStoreNames.contains(PHOTO_BLOB_STORE)) {
+    database.createObjectStore(PHOTO_BLOB_STORE);
+  }
+};
+
+const isQuotaExceededError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const domExceptionLike = error as { name?: string; message?: string; code?: number };
+  return (
+    domExceptionLike.name === 'QuotaExceededError' ||
+    domExceptionLike.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    domExceptionLike.code === 22 ||
+    domExceptionLike.code === 1014 ||
+    (typeof domExceptionLike.message === 'string' && domExceptionLike.message.toLowerCase().includes('quota'))
+  );
+};
+
+const toStorageWriteError = (error: unknown, fallbackMessage: string): AppStateStorageError => {
+  if (isQuotaExceededError(error)) {
+    return new AppStateStorageError('Local storage quota exceeded while saving data. Free up browser storage and try again.');
+  }
+
+  const message = error instanceof Error && error.message ? `${fallbackMessage}: ${error.message}` : fallbackMessage;
+  return new AppStateStorageError(message);
+};
+
 const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
@@ -200,6 +231,10 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 
       if (event.oldVersion < 5) {
         migrateV4ToV5(database);
+      }
+
+      if (event.oldVersion < 6) {
+        migrateV5ToV6(database);
       }
     };
 
@@ -340,6 +375,47 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
       batchStore.put(assertValid('batch', batch ?? {}));
     }
 
+    await transactionDone(transaction);
+  } catch (error) {
+    throw toStorageWriteError(error, 'Failed to save app state to local data storage');
+  } finally {
+    database.close();
+  }
+};
+
+export const savePhotoBlobToIndexedDb = async (photoId: string, blob: Blob): Promise<void> => {
+  const database = await openAppStateDatabase();
+
+  try {
+    const transaction = database.transaction([PHOTO_BLOB_STORE], 'readwrite');
+    transaction.objectStore(PHOTO_BLOB_STORE).put(blob, photoId);
+    await transactionDone(transaction);
+  } catch (error) {
+    throw toStorageWriteError(error, `Failed to save photo blob '${photoId}'`);
+  } finally {
+    database.close();
+  }
+};
+
+export const loadPhotoBlobFromIndexedDb = async (photoId: string): Promise<Blob | null> => {
+  const database = await openAppStateDatabase();
+
+  try {
+    const transaction = database.transaction([PHOTO_BLOB_STORE], 'readonly');
+    const stored = await requestToPromise(transaction.objectStore(PHOTO_BLOB_STORE).get(photoId));
+    await transactionDone(transaction);
+    return stored instanceof Blob ? stored : null;
+  } finally {
+    database.close();
+  }
+};
+
+export const deletePhotoBlobFromIndexedDb = async (photoId: string): Promise<void> => {
+  const database = await openAppStateDatabase();
+
+  try {
+    const transaction = database.transaction([PHOTO_BLOB_STORE], 'readwrite');
+    transaction.objectStore(PHOTO_BLOB_STORE).delete(photoId);
     await transactionDone(transaction);
   } finally {
     database.close();
