@@ -21,6 +21,7 @@ export {
   upsertCropPlanInAppState,
 } from './repos/cropPlanRepository';
 export {
+  getActiveBedAssignment,
   getBatchFromAppState,
   listBatchesFromAppState,
   removeBatchFromAppState,
