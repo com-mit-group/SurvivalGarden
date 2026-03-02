@@ -10,9 +10,79 @@ type BatchAssignmentWithRange = Batch['assignments'][number] & {
   toDate?: string | null;
 };
 
+type AssignBatchMeta = {
+  move?: boolean;
+};
+
 const getAssignmentFromDate = (assignment: BatchAssignmentWithRange): string => assignment.fromDate ?? assignment.assignedAt;
 
 const getAssignmentToDate = (assignment: BatchAssignmentWithRange): string | null => assignment.toDate ?? null;
+
+const isDateWithinAssignmentWindow = (assignment: BatchAssignmentWithRange, onDate: string): boolean => {
+  const fromDate = getAssignmentFromDate(assignment);
+  const toDate = getAssignmentToDate(assignment);
+
+  if (fromDate > onDate) {
+    return false;
+  }
+
+  if (toDate && toDate < onDate) {
+    return false;
+  }
+
+  return true;
+};
+
+const assignmentsOverlap = (
+  left: BatchAssignmentWithRange,
+  rightFromDate: string,
+  rightToDate: string | null,
+): boolean => {
+  const leftFromDate = getAssignmentFromDate(left);
+  const leftToDate = getAssignmentToDate(left);
+  const leftToBoundary = leftToDate ?? '9999-12-31T23:59:59.999Z';
+  const rightToBoundary = rightToDate ?? '9999-12-31T23:59:59.999Z';
+
+  return leftFromDate <= rightToBoundary && rightFromDate <= leftToBoundary;
+};
+
+export const assignBatchToBed = (
+  batch: Batch,
+  bedId: string,
+  fromDate: string,
+  meta?: AssignBatchMeta,
+): Batch => {
+  const validBatch = assertValid('batch', normalizeBatchCandidate(batch));
+  const assignments = validBatch.assignments as BatchAssignmentWithRange[];
+  const incomingToDate: string | null = null;
+
+  const hasSameBedActiveAssignment = assignments.some(
+    (assignment) => assignment.bedId === bedId && isDateWithinAssignmentWindow(assignment, fromDate),
+  );
+
+  if (hasSameBedActiveAssignment) {
+    return validBatch;
+  }
+
+  if (!meta?.move) {
+    const hasOverlapConflict = assignments.some((assignment) => assignmentsOverlap(assignment, fromDate, incomingToDate));
+
+    if (hasOverlapConflict) {
+      throw new Error('batch_assignment_overlap');
+    }
+  }
+
+  const nextAssignment = {
+    bedId,
+    assignedAt: fromDate,
+    fromDate,
+  } as Batch['assignments'][number];
+
+  return assertValid('batch', {
+    ...validBatch,
+    assignments: [...validBatch.assignments, nextAssignment],
+  });
+};
 
 export const getActiveBedAssignment = (
   batch: Batch,
@@ -21,16 +91,11 @@ export const getActiveBedAssignment = (
   let activeAssignment: BatchAssignmentWithRange | null = null;
 
   for (const assignment of batch.assignments as BatchAssignmentWithRange[]) {
+    if (!isDateWithinAssignmentWindow(assignment, onDate)) {
+      continue;
+    }
+
     const fromDate = getAssignmentFromDate(assignment);
-    const toDate = getAssignmentToDate(assignment);
-
-    if (fromDate > onDate) {
-      continue;
-    }
-
-    if (toDate && toDate < onDate) {
-      continue;
-    }
 
     if (!activeAssignment || getAssignmentFromDate(activeAssignment) <= fromDate) {
       activeAssignment = assignment;
