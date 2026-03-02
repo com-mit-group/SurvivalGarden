@@ -357,7 +357,9 @@ describe('data boundary validation', () => {
 
 
 
-describe('indexeddb photo blob storage', () => {
+const describeIndexedDb = typeof indexedDB === 'undefined' ? describe.skip : describe;
+
+describeIndexedDb('indexeddb photo blob storage', () => {
   it('persists and reloads photo blobs via dedicated object store', async () => {
     await resetToGoldenDataset();
 
