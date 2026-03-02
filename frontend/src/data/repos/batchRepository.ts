@@ -151,6 +151,28 @@ export const moveBatch = (
   };
 };
 
+export const removeBatchFromBed = (batch: Batch, endDate: string): Batch => {
+  const activeAssignment = getActiveBedAssignment(batch, endDate);
+
+  if (!activeAssignment) {
+    return batch;
+  }
+
+  return {
+    ...batch,
+    assignments: (batch.assignments as BatchAssignmentWithRange[]).map((assignment) => {
+      if (assignment !== activeAssignment) {
+        return assignment;
+      }
+
+      return {
+        ...assignment,
+        toDate: endDate,
+      };
+    }) as Batch['assignments'],
+  };
+};
+
 const getDerivedBedId = (batch: Batch, onDate: string): string | null => getActiveBedAssignment(batch, onDate)?.bedId ?? null;
 
 export const getBatchFromAppState = (

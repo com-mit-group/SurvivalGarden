@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch } from '../../contracts';
-import { assignBatchToBed, getActiveBedAssignment, moveBatch } from './batchRepository';
+import { assignBatchToBed, getActiveBedAssignment, moveBatch, removeBatchFromBed } from './batchRepository';
 
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
@@ -189,5 +189,43 @@ describe('moveBatch', () => {
     ]);
 
     expect(() => moveBatch(batch, 'bed-2', '2026-01-09T00:00:00Z')).toThrowError('batch_assignment_no_active');
+  });
+});
+
+
+describe('removeBatchFromBed', () => {
+  it('closes active assignment and leaves no active assignment after end date', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    const updated = removeBatchFromBed(batch, '2026-01-15T00:00:00Z');
+
+    expect(updated.assignments).toHaveLength(1);
+    expect(updated.assignments[0]).toMatchObject({
+      bedId: 'bed-1',
+      toDate: '2026-01-15T00:00:00Z',
+    });
+    expect(getActiveBedAssignment(updated, '2026-01-15T00:00:01Z')).toBeNull();
+  });
+
+  it('returns unchanged batch when already unassigned at end date', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+        toDate: '2026-01-05T00:00:00Z',
+      },
+    ]);
+
+    const updated = removeBatchFromBed(batch, '2026-01-10T00:00:00Z');
+
+    expect(updated).toBe(batch);
+    expect(getActiveBedAssignment(updated, '2026-01-10T00:00:01Z')).toBeNull();
   });
 });

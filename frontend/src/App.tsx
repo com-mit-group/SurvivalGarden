@@ -14,6 +14,7 @@ import {
   upsertBatchInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
+  removeBatchFromBed,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
 
@@ -742,6 +743,9 @@ function BatchDetailPage() {
   const [cropName, setCropName] = useState<string | null>(null);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
+  const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
+  const [removeFromBedMessage, setRemoveFromBedMessage] = useState<string | null>(null);
+  const [isSavingRemoveFromBed, setIsSavingRemoveFromBed] = useState(false);
   const [isSavingStageAction, setIsSavingStageAction] = useState(false);
   const [photoActionMessage, setPhotoActionMessage] = useState<string | null>(null);
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
@@ -786,6 +790,8 @@ function BatchDetailPage() {
         ended: dateDefault,
       });
       setStageActionMessage(null);
+      setRemoveFromBedDate(dateDefault);
+      setRemoveFromBedMessage(null);
       setPhotoActionMessage(null);
       setExpandedPhotoIds({});
       setIsLoading(false);
@@ -914,6 +920,42 @@ function BatchDetailPage() {
       setStageActionMessage(message);
     } finally {
       setIsSavingStageAction(false);
+    }
+  };
+
+
+  const handleRemoveFromBed = async () => {
+    if (!batch || !batchId) {
+      return;
+    }
+
+    if (!removeFromBedDate) {
+      setRemoveFromBedMessage('Enter a valid date and time before removing from bed.');
+      return;
+    }
+
+    const endDate = new Date(removeFromBedDate).toISOString();
+    const nextBatch = removeBatchFromBed(batch, endDate);
+
+    setIsSavingRemoveFromBed(true);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setRemoveFromBedMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(refreshedBatch);
+      setRemoveFromBedMessage(nextBatch === batch ? 'Batch is already unassigned for that date.' : 'Batch removed from bed.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to remove batch from bed.';
+      setRemoveFromBedMessage(message);
+    } finally {
+      setIsSavingRemoveFromBed(false);
     }
   };
 
@@ -1167,6 +1209,18 @@ function BatchDetailPage() {
       <article className="batch-detail-card">
         <h3>Bed assignments</h3>
         <p className="batch-detail-current-bed">Current: {getDerivedBedId(batch) ?? 'Unassigned'}</p>
+        <div className="batch-next-action-row">
+          <span className="batch-detail-pill">remove</span>
+          <input
+            type="datetime-local"
+            value={removeFromBedDate}
+            onChange={(event) => setRemoveFromBedDate(event.target.value)}
+          />
+          <button type="button" onClick={() => void handleRemoveFromBed()} disabled={isSavingRemoveFromBed}>
+            Remove from bed
+          </button>
+        </div>
+        {removeFromBedMessage ? <p className="batch-stage-warning">{removeFromBedMessage}</p> : null}
         {assignmentHistory.length === 0 ? (
           <p className="batch-detail-empty">No bed assignment history.</p>
         ) : (
