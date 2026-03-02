@@ -6,11 +6,24 @@ import {
   initializeAppStateStorage,
   listBatchesFromAppState,
   loadAppStateFromIndexedDb,
+  loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
+  savePhotoBlobToIndexedDb,
   upsertBatchInAppState,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
+
+type BatchPhoto = {
+  id: string;
+  storageRef: string;
+  capturedAt?: string;
+  contentType?: string;
+  filename?: string;
+  caption?: string;
+};
+
+type BatchWithPhotos = Batch & { photos?: BatchPhoto[] };
 
 function BedsPage() {
   return <p>Beds</p>;
@@ -516,6 +529,10 @@ function BatchDetailPage() {
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [isSavingStageAction, setIsSavingStageAction] = useState(false);
+  const [photoActionMessage, setPhotoActionMessage] = useState<string | null>(null);
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+  const [expandedPhotoIds, setExpandedPhotoIds] = useState<Record<string, boolean>>({});
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -555,6 +572,8 @@ function BatchDetailPage() {
         ended: dateDefault,
       });
       setStageActionMessage(null);
+      setPhotoActionMessage(null);
+      setExpandedPhotoIds({});
       setIsLoading(false);
     };
 
@@ -593,6 +612,32 @@ function BatchDetailPage() {
     }
 
     return ['transplant', 'harvest', 'failed', 'ended'].filter((stage) => canTransition(batch.stage, stage));
+  }, [batch]);
+
+  const orderedPhotos = useMemo(() => {
+    if (!batch) {
+      return [];
+    }
+
+    const photos = ((batch as BatchWithPhotos).photos ?? []).map((photo, index) => ({ photo, index }));
+    return photos
+      .sort((left, right) => {
+        const leftTime = left.photo.capturedAt ? Date.parse(left.photo.capturedAt) : NaN;
+        const rightTime = right.photo.capturedAt ? Date.parse(right.photo.capturedAt) : NaN;
+        const leftValid = Number.isFinite(leftTime);
+        const rightValid = Number.isFinite(rightTime);
+
+        if (leftValid && rightValid && leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+
+        if (leftValid !== rightValid) {
+          return leftValid ? -1 : 1;
+        }
+
+        return left.index - right.index;
+      })
+      .map(({ photo }) => photo);
   }, [batch]);
 
   const latestStageEventAt = useMemo(() => {
@@ -657,6 +702,143 @@ function BatchDetailPage() {
       setIsSavingStageAction(false);
     }
   };
+
+  const saveBatchPhotos = async (nextPhotos: BatchPhoto[]) => {
+    if (!batchId || !batch) {
+      return;
+    }
+
+    const appState = await loadAppStateFromIndexedDb();
+    if (!appState) {
+      setPhotoActionMessage('Unable to save because local app state is unavailable.');
+      return;
+    }
+
+    const nextBatch: BatchWithPhotos = { ...(batch as BatchWithPhotos), photos: nextPhotos };
+    const nextState = upsertBatchInAppState(appState, nextBatch as Batch);
+    await saveAppStateToIndexedDb(nextState);
+    const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+    setBatch(refreshedBatch);
+  };
+
+  const handlePhotoUpload = async (event: FormEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    if (!file || !batch) {
+      return;
+    }
+
+    const fileNameLower = file.name.toLowerCase();
+    const mimeLower = file.type.toLowerCase();
+    const looksLikeImage = mimeLower.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(file.name);
+
+    if (!looksLikeImage) {
+      setPhotoActionMessage('Please choose an image file.');
+      input.value = '';
+      return;
+    }
+
+    const photoId = `photo-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    const isLikelyUnsupported = mimeLower.includes('heic') || mimeLower.includes('heif') || /\.(heic|heif)$/i.test(fileNameLower);
+    const nextPhoto: BatchPhoto = {
+      id: photoId,
+      storageRef: photoId,
+      contentType: file.type || undefined,
+      filename: file.name,
+      capturedAt: new Date().toISOString(),
+      caption: file.name,
+    };
+
+    setIsSavingPhoto(true);
+    try {
+      await savePhotoBlobToIndexedDb(photoId, file);
+      const nextPhotos = [...((batch as BatchWithPhotos).photos ?? []), nextPhoto];
+      await saveBatchPhotos(nextPhotos);
+      setPhotoActionMessage(
+        isLikelyUnsupported
+          ? 'Photo saved. HEIC/HEIF preview may be unavailable in this browser.'
+          : 'Photo saved.',
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save photo.';
+      setPhotoActionMessage(message);
+    } finally {
+      input.value = '';
+      setIsSavingPhoto(false);
+    }
+  };
+
+  const handleCaptionChange = async (photoId: string, caption: string) => {
+    if (!batch) {
+      return;
+    }
+
+    const currentPhotos = (batch as BatchWithPhotos).photos ?? [];
+    const nextPhotos = currentPhotos.map((photo) => (photo.id === photoId ? { ...photo, caption } : photo));
+    try {
+      await saveBatchPhotos(nextPhotos);
+      setPhotoActionMessage(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save caption.';
+      setPhotoActionMessage(message);
+    }
+  };
+
+  const togglePhotoExpanded = (photoId: string, expanded: boolean) => {
+    setExpandedPhotoIds((current) => ({ ...current, [photoId]: expanded }));
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPreviews = async () => {
+      for (const photo of orderedPhotos) {
+        if (!expandedPhotoIds[photo.id] || photoPreviewUrls[photo.id]) {
+          continue;
+        }
+
+        const contentTypeLower = (photo.contentType ?? '').toLowerCase();
+        const fileNameLower = (photo.filename ?? '').toLowerCase();
+        const unsupported = contentTypeLower.includes('heic') || contentTypeLower.includes('heif') || /\.(heic|heif)$/i.test(fileNameLower);
+        if (unsupported) {
+          continue;
+        }
+
+        const blob = await loadPhotoBlobFromIndexedDb(photo.storageRef);
+        if (!blob || isCancelled) {
+          continue;
+        }
+
+        const url = URL.createObjectURL(blob);
+        if (isCancelled) {
+          URL.revokeObjectURL(url);
+          continue;
+        }
+
+        setPhotoPreviewUrls((current) => {
+          if (current[photo.id]) {
+            URL.revokeObjectURL(url);
+            return current;
+          }
+          return { ...current, [photo.id]: url };
+        });
+      }
+    };
+
+    void loadPreviews();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [orderedPhotos, expandedPhotoIds, photoPreviewUrls]);
+
+  useEffect(
+    () => () => {
+      Object.values(photoPreviewUrls).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [photoPreviewUrls],
+  );
 
   if (isLoading) {
     return <p className="batch-detail-empty">Loading batch…</p>;
@@ -781,6 +963,67 @@ function BatchDetailPage() {
                 <span>{new Date(assignment.assignedAt).toLocaleString()}</span>
               </li>
             ))}
+          </ol>
+        )}
+      </article>
+
+      <article className="batch-detail-card">
+        <h3>Photos</h3>
+        <label className="batch-photo-upload-row">
+          <span>Add photo</span>
+          <input type="file" accept="image/*,.heic,.heif" onChange={(event) => void handlePhotoUpload(event)} disabled={isSavingPhoto} />
+        </label>
+        {photoActionMessage ? <p className="batch-photo-message">{photoActionMessage}</p> : null}
+        {orderedPhotos.length === 0 ? (
+          <p className="batch-detail-empty">No photos yet.</p>
+        ) : (
+          <ol className="batch-photo-list">
+            {orderedPhotos.map((photo, index) => {
+              const contentTypeLower = (photo.contentType ?? '').toLowerCase();
+              const fileNameLower = (photo.filename ?? '').toLowerCase();
+              const unsupported = contentTypeLower.includes('heic') || contentTypeLower.includes('heif') || /\.(heic|heif)$/i.test(fileNameLower);
+              const previewUrl = photoPreviewUrls[photo.id];
+
+              return (
+                <li key={photo.id} className="batch-photo-item">
+                  <details onToggle={(event) => togglePhotoExpanded(photo.id, event.currentTarget.open)}>
+                    <summary>
+                      <span>{photo.filename ?? `Photo ${index + 1}`}</span>
+                      <span>{photo.capturedAt ? new Date(photo.capturedAt).toLocaleString() : 'No date'}</span>
+                    </summary>
+                    <div className="batch-photo-content">
+                      {unsupported ? (
+                        <p className="batch-photo-unsupported">Preview unavailable for HEIC/HEIF on this browser.</p>
+                      ) : previewUrl ? (
+                        <img src={previewUrl} alt={photo.caption || photo.filename || `Batch photo ${index + 1}`} loading="lazy" />
+                      ) : (
+                        <p className="batch-detail-empty">Expand to load preview…</p>
+                      )}
+                      <label>
+                        Caption
+                        <input
+                          type="text"
+                          value={photo.caption ?? ''}
+                          onChange={(event) => {
+                            const caption = event.target.value;
+                            setBatch((current) => {
+                              if (!current) {
+                                return current;
+                              }
+                              const currentPhotos = ((current as BatchWithPhotos).photos ?? []).map((candidate) =>
+                                candidate.id === photo.id ? { ...candidate, caption } : candidate,
+                              );
+                              return { ...(current as BatchWithPhotos), photos: currentPhotos } as Batch;
+                            });
+                          }}
+                          onBlur={(event) => void handleCaptionChange(photo.id, event.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
           </ol>
         )}
       </article>
