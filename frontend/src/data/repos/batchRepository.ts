@@ -75,7 +75,7 @@ export const upsertBatchInAppState = (appState: unknown, batch: unknown): AppSta
   const existingIndex = state.batches.findIndex((entry) => entry.batchId === validBatch.batchId);
 
   if (existingIndex >= 0) {
-    const existingBatch = state.batches[existingIndex];
+    const existingBatch = state.batches[existingIndex]!;
 
     if (existingBatch.stage !== validBatch.stage) {
       const latestStageEvent = validBatch.stageEvents[validBatch.stageEvents.length - 1];
