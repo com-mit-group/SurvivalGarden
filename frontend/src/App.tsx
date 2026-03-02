@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { AppStateStorageError, initializeAppStateStorage } from './data';
+import { initializeAppStateStorage, resetToGoldenDataset } from './data';
 
 function BedsPage() {
   return <p>Beds</p>;
@@ -18,30 +18,31 @@ function NutritionPage() {
   return <p>Nutrition</p>;
 }
 
-function DataPage() {
-  return <p>Data</p>;
-}
-
-const STORAGE_DB_NAME = 'survival-garden';
-
-const resetLocalData = async (): Promise<void> => {
-  if (typeof indexedDB === 'undefined') {
-    throw new AppStateStorageError('IndexedDB is not available in this environment.');
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const deleteRequest = indexedDB.deleteDatabase(STORAGE_DB_NAME);
-
-    deleteRequest.onsuccess = () => resolve();
-    deleteRequest.onerror = () => reject(new AppStateStorageError('Failed to reset local data storage.'));
-    deleteRequest.onblocked = () =>
-      reject(new AppStateStorageError('Close other SurvivalGarden tabs and try reset again.'));
-  });
+type DataPageProps = {
+  showDevResetButton: boolean;
+  onResetToGoldenDataset: () => void;
 };
+
+function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
+  return (
+    <>
+      <p>Data</p>
+      {showDevResetButton ? (
+        <button type="button" onClick={onResetToGoldenDataset}>
+          Reset to golden dataset
+        </button>
+      ) : null}
+    </>
+  );
+}
 
 function App() {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [isInitializingStorage, setIsInitializingStorage] = useState(true);
+  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const isDevResetEnabled =
+    env?.VITE_ENABLE_DEV_RESET === 'true' || processEnv?.VITE_ENABLE_DEV_RESET === 'true';
   const isTestEnvironment = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
 
   const initializeStorage = useCallback(async () => {
@@ -67,7 +68,7 @@ function App() {
     setIsInitializingStorage(true);
 
     try {
-      await resetLocalData();
+      await resetToGoldenDataset();
       await initializeStorage();
     } catch (error) {
       const message =
@@ -97,7 +98,7 @@ function App() {
             Retry
           </button>
           <button type="button" onClick={() => void handleReset()}>
-            Reset local data
+            Reset to golden dataset
           </button>
         </div>
       </div>
@@ -117,7 +118,17 @@ function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
-          <Route path="/data" element={<DataPage />} />
+          <Route
+            path="/data"
+            element={
+              <DataPage
+                showDevResetButton={isDevResetEnabled}
+                onResetToGoldenDataset={() => {
+                  void handleReset();
+                }}
+              />
+            }
+          />
           <Route path="*" element={<Navigate to="/beds" replace />} />
         </Routes>
       </main>
