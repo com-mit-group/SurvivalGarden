@@ -15,6 +15,7 @@ import {
   upsertBedInAppState,
   getActiveBedAssignment,
   assignBatchToBed,
+  moveBatch,
   removeBatchFromBed,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
@@ -95,6 +96,7 @@ function BedsPage() {
 function BedDetailPage() {
   const { bedId } = useParams();
   const [bed, setBed] = useState<Bed | null>(null);
+  const [allBeds, setAllBeds] = useState<Bed[]>([]);
   const [notes, setNotes] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [candidateBatches, setCandidateBatches] = useState<Batch[]>([]);
@@ -106,12 +108,22 @@ function BedDetailPage() {
   const [includeEndedFailed, setIncludeEndedFailed] = useState(false);
   const [isAssigningBatch, setIsAssigningBatch] = useState(false);
   const [assignBatchMessage, setAssignBatchMessage] = useState<string | null>(null);
+  const [expandedActionBatchId, setExpandedActionBatchId] = useState<string | null>(null);
+  const [moveTargetBedByBatchId, setMoveTargetBedByBatchId] = useState<Record<string, string>>({});
+  const [moveDateByBatchId, setMoveDateByBatchId] = useState<Record<string, string>>({});
+  const [moveMetaByBatchId, setMoveMetaByBatchId] = useState<Record<string, string>>({});
+  const [moveMessageByBatchId, setMoveMessageByBatchId] = useState<Record<string, string>>({});
+  const [removeDateByBatchId, setRemoveDateByBatchId] = useState<Record<string, string>>({});
+  const [removeConfirmByBatchId, setRemoveConfirmByBatchId] = useState<Record<string, boolean>>({});
+  const [removeMessageByBatchId, setRemoveMessageByBatchId] = useState<Record<string, string>>({});
+  const [savingActionBatchId, setSavingActionBatchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       if (!bedId) {
         setBed(null);
+        setAllBeds([]);
         setBatches([]);
         setCandidateBatches([]);
         setIsLoading(false);
@@ -121,6 +133,7 @@ function BedDetailPage() {
       const appState = await loadAppStateFromIndexedDb();
       if (!appState) {
         setBed(null);
+        setAllBeds([]);
         setBatches([]);
         setCandidateBatches([]);
         setCropNames({});
@@ -142,6 +155,7 @@ function BedDetailPage() {
       const todayIso = new Date().toISOString();
 
       const nextBed = listBedsFromAppState(appState).find((candidate) => candidate.bedId === bedId) ?? null;
+      const nextAllBeds = listBedsFromAppState(appState).sort((left, right) => left.bedId.localeCompare(right.bedId));
       const allBatches = listBatchesFromAppState(appState);
       const relatedBatches = allBatches
         .filter((batch) => getActiveBedAssignment(batch, todayIso)?.bedId === bedId)
@@ -157,6 +171,7 @@ function BedDetailPage() {
         .sort((left, right) => left.batchId.localeCompare(right.batchId));
 
       setBed(nextBed);
+      setAllBeds(nextAllBeds);
       setNotes(nextBed?.notes ?? '');
       setBatches(relatedBatches);
       setCandidateBatches(eligibleBatches);
@@ -166,6 +181,35 @@ function BedDetailPage() {
 
     void load();
   }, [bedId, includeEndedFailed]);
+
+  const refreshBedBatches = useCallback(
+    (nextState: Awaited<ReturnType<typeof loadAppStateFromIndexedDb>>) => {
+      if (!nextState || !bedId) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const nextAllBatches = listBatchesFromAppState(nextState);
+      const nextBatches = nextAllBatches
+        .filter((batch) => getActiveBedAssignment(batch, nowIso)?.bedId === bedId)
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+      const nextCandidates = nextAllBatches
+        .filter((batch) => {
+          if (!includeEndedFailed && (batch.stage === 'ended' || batch.stage === 'failed')) {
+            return false;
+          }
+
+          return !getActiveBedAssignment(batch, nowIso);
+        })
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+
+      setBatches(nextBatches);
+      setCandidateBatches(nextCandidates);
+      setAssignBatchId((current) => (current && nextCandidates.some((batch) => batch.batchId === current) ? current : nextCandidates[0]?.batchId ?? ''));
+      setAllBeds(listBedsFromAppState(nextState).sort((left, right) => left.bedId.localeCompare(right.bedId)));
+    },
+    [bedId, includeEndedFailed],
+  );
 
   const handleAssignBatch = async () => {
     if (!bedId || !assignBatchId) {
@@ -198,23 +242,7 @@ function BedDetailPage() {
       const nextState = upsertBatchInAppState(appState, updatedBatch);
       await saveAppStateToIndexedDb(nextState);
 
-      const nowIso = new Date().toISOString();
-      const nextBatches = listBatchesFromAppState(nextState)
-        .filter((batch) => getActiveBedAssignment(batch, nowIso)?.bedId === bedId)
-        .sort((left, right) => left.batchId.localeCompare(right.batchId));
-      const nextCandidates = listBatchesFromAppState(nextState)
-        .filter((batch) => {
-          if (!includeEndedFailed && (batch.stage === 'ended' || batch.stage === 'failed')) {
-            return false;
-          }
-
-          return !getActiveBedAssignment(batch, nowIso);
-        })
-        .sort((left, right) => left.batchId.localeCompare(right.batchId));
-
-      setBatches(nextBatches);
-      setCandidateBatches(nextCandidates);
-      setAssignBatchId(nextCandidates[0]?.batchId ?? '');
+      refreshBedBatches(nextState);
       setAssignDate(getLocalDateTimeDefault());
       setAssignMeta('');
       setAssignBatchMessage(assignMeta ? `Batch assigned to ${bedId}. Meta: ${assignMeta}` : `Batch assigned to ${bedId}.`);
@@ -226,6 +254,112 @@ function BedDetailPage() {
       }
     } finally {
       setIsAssigningBatch(false);
+    }
+  };
+
+  const handleMoveBatchFromBed = async (batch: Batch) => {
+    const moveDateInput = moveDateByBatchId[batch.batchId] ?? getLocalDateTimeDefault();
+    const targetBedId = moveTargetBedByBatchId[batch.batchId] ?? '';
+
+    if (!targetBedId) {
+      setMoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Select a target bed.' }));
+      return;
+    }
+
+    if (!moveDateInput) {
+      setMoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Enter a valid move date and time.' }));
+      return;
+    }
+
+    setSavingActionBatchId(batch.batchId);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setMoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Unable to save because local app state is unavailable.' }));
+        return;
+      }
+
+      const existingBatch = appState.batches.find((candidate) => candidate.batchId === batch.batchId);
+      if (!existingBatch) {
+        setMoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Batch was not found.' }));
+        return;
+      }
+
+      const moveDate = new Date(moveDateInput).toISOString();
+      const movedBatch = moveBatch(existingBatch, targetBedId, moveDate, moveMetaByBatchId[batch.batchId]);
+      const nextState = upsertBatchInAppState(appState, movedBatch);
+      await saveAppStateToIndexedDb(nextState);
+      refreshBedBatches(nextState);
+      setMoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
+      setMoveMetaByBatchId((current) => ({ ...current, [batch.batchId]: '' }));
+      setMoveMessageByBatchId((current) => ({
+        ...current,
+        [batch.batchId]: moveMetaByBatchId[batch.batchId]
+          ? `Moved to ${targetBedId}. Meta: ${moveMetaByBatchId[batch.batchId]}`
+          : `Moved to ${targetBedId}.`,
+      }));
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error && error.message === 'batch_assignment_no_active'
+          ? 'Move failed: batch has no active assignment at the selected date.'
+          : error instanceof Error && error.message === 'batch_assignment_move_before_start'
+            ? 'Move failed: move date is before the current assignment start.'
+            : error instanceof Error
+              ? error.message
+              : 'Failed to move batch.';
+      setMoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: nextMessage }));
+    } finally {
+      setSavingActionBatchId(null);
+    }
+  };
+
+  const handleRemoveBatchFromBed = async (batch: Batch) => {
+    const isConfirmed = removeConfirmByBatchId[batch.batchId] ?? false;
+    if (!isConfirmed) {
+      setRemoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Check confirm before removing this batch from bed.' }));
+      return;
+    }
+
+    const removeDateInput = removeDateByBatchId[batch.batchId] ?? getLocalDateTimeDefault();
+    if (!removeDateInput) {
+      setRemoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Enter a valid removal date and time.' }));
+      return;
+    }
+
+    setSavingActionBatchId(batch.batchId);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setRemoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Unable to save because local app state is unavailable.' }));
+        return;
+      }
+
+      const existingBatch = appState.batches.find((candidate) => candidate.batchId === batch.batchId);
+      if (!existingBatch) {
+        setRemoveMessageByBatchId((current) => ({ ...current, [batch.batchId]: 'Batch was not found.' }));
+        return;
+      }
+
+      const endDate = new Date(removeDateInput).toISOString();
+      const nextBatch = removeBatchFromBed(existingBatch, endDate);
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      refreshBedBatches(nextState);
+      setRemoveConfirmByBatchId((current) => ({ ...current, [batch.batchId]: false }));
+      setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
+      setRemoveMessageByBatchId((current) => ({
+        ...current,
+        [batch.batchId]: nextBatch === existingBatch ? 'Batch is already unassigned for that date.' : 'Batch removed from bed.',
+      }));
+    } catch (error) {
+      setRemoveMessageByBatchId((current) => ({
+        ...current,
+        [batch.batchId]: error instanceof Error ? error.message : 'Failed to remove batch from bed.',
+      }));
+    } finally {
+      setSavingActionBatchId(null);
     }
   };
 
@@ -321,14 +455,95 @@ function BedDetailPage() {
           <ul className="bed-detail-batch-list">
             {batches.map((batch) => (
               <li key={batch.batchId}>
-                <Link to={`/batches/${batch.batchId}`}>
-                  {formatCropOptionLabel({
-                    cropId: batch.cropId,
-                    name: cropNames[batch.cropId],
-                    scientificName: cropScientificNames[batch.cropId],
-                  }) || batch.cropId || batch.batchId}
-                </Link>
-                <span className="batch-stage-badge">{batch.stage}</span>
+                <div className="bed-detail-batch-head">
+                  <Link to={`/batches/${batch.batchId}`}>
+                    {formatCropOptionLabel({
+                      cropId: batch.cropId,
+                      name: cropNames[batch.cropId],
+                      scientificName: cropScientificNames[batch.cropId],
+                    }) || batch.cropId || batch.batchId}
+                  </Link>
+                  <span className="batch-stage-badge">{batch.stage}</span>
+                  <button
+                    type="button"
+                    className="bed-detail-batch-action-toggle"
+                    onClick={() => {
+                      const nextExpandedId = expandedActionBatchId === batch.batchId ? null : batch.batchId;
+                      setExpandedActionBatchId(nextExpandedId);
+                      if (nextExpandedId !== batch.batchId) {
+                        return;
+                      }
+
+                      const targetBeds = allBeds.filter((candidateBed) => candidateBed.bedId !== bedId);
+                      setMoveTargetBedByBatchId((current) => ({ ...current, [batch.batchId]: current[batch.batchId] ?? targetBeds[0]?.bedId ?? '' }));
+                      setMoveDateByBatchId((current) => ({ ...current, [batch.batchId]: current[batch.batchId] ?? getLocalDateTimeDefault() }));
+                      setMoveMetaByBatchId((current) => ({ ...current, [batch.batchId]: current[batch.batchId] ?? '' }));
+                      setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: current[batch.batchId] ?? getLocalDateTimeDefault() }));
+                    }}
+                  >
+                    {expandedActionBatchId === batch.batchId ? 'Hide actions' : 'Manage'}
+                  </button>
+                </div>
+                {expandedActionBatchId === batch.batchId ? (
+                  <div className="bed-detail-batch-action-panel">
+                    <div className="batch-next-action-row">
+                      <span className="batch-detail-pill">move</span>
+                      <select
+                        value={moveTargetBedByBatchId[batch.batchId] ?? ''}
+                        onChange={(event) => setMoveTargetBedByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
+                        disabled={allBeds.filter((candidateBed) => candidateBed.bedId !== bedId).length === 0}
+                      >
+                        {allBeds.filter((candidateBed) => candidateBed.bedId !== bedId).length === 0 ? <option value="">No other beds</option> : null}
+                        {allBeds
+                          .filter((candidateBed) => candidateBed.bedId !== bedId)
+                          .map((candidateBed) => (
+                            <option key={candidateBed.bedId} value={candidateBed.bedId}>
+                              {candidateBed.name} ({candidateBed.bedId})
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        type="datetime-local"
+                        value={moveDateByBatchId[batch.batchId] ?? ''}
+                        onChange={(event) => setMoveDateByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
+                      />
+                      <input
+                        type="text"
+                        value={moveMetaByBatchId[batch.batchId] ?? ''}
+                        onChange={(event) => setMoveMetaByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
+                        placeholder="Position / meta (optional)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleMoveBatchFromBed(batch)}
+                        disabled={savingActionBatchId === batch.batchId || allBeds.filter((candidateBed) => candidateBed.bedId !== bedId).length === 0}
+                      >
+                        Move
+                      </button>
+                    </div>
+                    {moveMessageByBatchId[batch.batchId] ? <p className="batch-stage-warning">{moveMessageByBatchId[batch.batchId]}</p> : null}
+                    <div className="batch-next-action-row">
+                      <span className="batch-detail-pill">remove</span>
+                      <label className="bed-detail-meta">
+                        <input
+                          type="checkbox"
+                          checked={removeConfirmByBatchId[batch.batchId] ?? false}
+                          onChange={(event) => setRemoveConfirmByBatchId((current) => ({ ...current, [batch.batchId]: event.target.checked }))}
+                        />{' '}
+                        Confirm
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={removeDateByBatchId[batch.batchId] ?? ''}
+                        onChange={(event) => setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
+                      />
+                      <button type="button" onClick={() => void handleRemoveBatchFromBed(batch)} disabled={savingActionBatchId === batch.batchId}>
+                        Remove
+                      </button>
+                    </div>
+                    {removeMessageByBatchId[batch.batchId] ? <p className="batch-stage-warning">{removeMessageByBatchId[batch.batchId]}</p> : null}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
