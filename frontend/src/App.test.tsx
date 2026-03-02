@@ -8,6 +8,9 @@ import { initializeAppStateStorage, resetToGoldenDataset } from './data';
 vi.mock('./data', () => ({
   initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
   resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
+  loadAppStateFromIndexedDb: vi.fn().mockResolvedValue(null),
+  listBedsFromAppState: vi.fn().mockReturnValue([]),
+  listBatchesFromAppState: vi.fn().mockReturnValue([]),
 }));
 
 describe('App', () => {
