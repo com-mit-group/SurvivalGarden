@@ -45,6 +45,34 @@ export interface CropRuleSection {
   notes?: string;
 }
 
+export type CropTaskType =
+  | 'pre_sow'
+  | 'pot_up'
+  | 'harden_off'
+  | 'transplant'
+  | 'direct_sow'
+  | 'harvest'
+  | 'preserve';
+
+export interface CropTaskRuleDateRangeWindow {
+  startDate: string;
+  endDate: string;
+}
+
+export interface CropTaskRuleMonthWeekWindow {
+  month: number;
+  weekIndex: number;
+}
+
+export type CropTaskRuleWindow = CropTaskRuleDateRangeWindow | CropTaskRuleMonthWeekWindow;
+
+export interface CropTaskRuleSection {
+  taskType: CropTaskType;
+  sequence: number;
+  windows: CropTaskRuleWindow[];
+  notes?: string;
+}
+
 export interface CropNutritionItem {
   nutrient: string;
   value: number;
@@ -65,6 +93,7 @@ export interface Crop {
     harvest: CropRuleSection;
     storage: CropRuleSection;
   };
+  taskRules?: CropTaskRuleSection[];
   nutritionProfile: CropNutritionItem[];
   createdAt: string;
   updatedAt: string;
