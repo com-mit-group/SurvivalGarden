@@ -287,7 +287,7 @@ function BedDetailPage() {
       }
 
       const moveDate = new Date(moveDateInput).toISOString();
-      const movedBatch = moveBatch(existingBatch, targetBedId, moveDate, moveMetaByBatchId[batch.batchId]);
+      const movedBatch = moveBatch(existingBatch, targetBedId, moveDate);
       const nextState = upsertBatchInAppState(appState, movedBatch);
       await saveAppStateToIndexedDb(nextState);
       refreshBedBatches(nextState);
