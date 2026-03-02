@@ -25,6 +25,7 @@ import {
   upsertTaskInAppState,
   removeTaskFromAppState,
   upsertGeneratedTasksInAppState,
+  generateOperationalTasks,
   generatePlannedTasks,
   getSeedInventoryItemFromAppState,
   listSeedInventoryItemsFromAppState,
@@ -636,6 +637,49 @@ describe('planned task generation', () => {
   });
 });
 
+
+
+describe('operational task generation', () => {
+  it('generates deterministic batch-linked tasks from stage timelines using latest active cycle anchors', () => {
+    const fixture = goldenFixtures['../../../../fixtures/golden/trier-v1.json'] as Record<string, unknown>;
+
+    const withBatches = {
+      ...fixture,
+      batches: [
+        {
+          batchId: 'batch-alpha',
+          cropId: 'tomato',
+          startedAt: '2026-03-01T00:00:00Z',
+          stage: 'transplant',
+          stageEvents: [
+            { stage: 'pre_sown', occurredAt: '2026-03-01T00:00:00Z' },
+            { stage: 'germinated', occurredAt: '2026-03-10T00:00:00Z' },
+            { stage: 'transplant', occurredAt: '2026-05-01T00:00:00Z' },
+            { stage: 'transplant', occurredAt: '2026-05-15T00:00:00Z' },
+          ],
+          assignments: [{ bedId: 'bed_001', assignedAt: '2026-05-15T00:00:00Z' }],
+        },
+      ],
+    };
+
+    const first = generateOperationalTasks(withBatches);
+    const second = generateOperationalTasks(withBatches);
+
+    expect(first).toEqual(second);
+    expect(first).not.toHaveLength(0);
+    expect(first.every((task) => task.batchId === 'batch-alpha')).toBe(true);
+    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+
+    const hardenOffTasks = first.filter((task) => task.type === 'harden-off');
+    expect(hardenOffTasks).toHaveLength(2);
+    expect(hardenOffTasks.every((task) => task.sourceKey.includes('2026-05-15t00:00:00z'))).toBe(true);
+
+    const transplantAnchorTasks = first.filter((task) =>
+      ['harden-off', 'bed-assignment', 'harvest-reminder'].includes(task.type),
+    );
+    expect(transplantAnchorTasks.every((task) => task.sourceKey.includes('2026-05-15t00:00:00z'))).toBe(true);
+  });
+});
 describe('generated task upsert boundary helper', () => {
   it('preserves existing status while updating regenerated task fields', () => {
     const appStateWithTask = {

@@ -104,6 +104,39 @@ const buildPlannedTaskSourceKey = (
 
 const toTaskType = (taskType: string): string => taskType.replace(/_/g, '-');
 
+const toIsoDate = (isoDateTime: string): string => isoDateTime.slice(0, 10);
+
+const addDays = (isoDate: string, days: number): string => {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const sortStageEvents = (events: AppState['batches'][number]['stageEvents']) =>
+  events
+    .map((event, index) => ({ ...event, index }))
+    .sort((left, right) =>
+      left.occurredAt === right.occurredAt
+        ? left.index - right.index
+        : left.occurredAt.localeCompare(right.occurredAt),
+    );
+
+const selectLatestStageEvent = (
+  events: AppState['batches'][number]['stageEvents'],
+  ...stageNames: string[]
+) => {
+  const normalizedStageNames = new Set(stageNames.map((stageName) => stageName.toLowerCase()));
+  const matchingEvents = sortStageEvents(events).filter((event) => normalizedStageNames.has(event.stage.toLowerCase()));
+  return matchingEvents.length > 0 ? matchingEvents[matchingEvents.length - 1] : null;
+};
+
+const buildOperationalTaskSourceKey = (
+  batchId: string,
+  taskType: string,
+  anchorOccurredAt: string,
+  stageEventIndex: number,
+): string => ['batch', batchId, taskType, anchorOccurredAt, stageEventIndex].join('_').toLowerCase();
+
 export const generatePlannedTasks = (appState: unknown, year: number): Task[] => {
   const state = assertValid('appState', appState);
   const cropsById = new Map(state.crops.map((crop) => [crop.cropId, crop]));
@@ -183,6 +216,74 @@ export const generatePlannedTasks = (appState: unknown, year: number): Task[] =>
   }
 
   return plannedTasks.sort((left, right) =>
+    left.date === right.date
+      ? left.sourceKey.localeCompare(right.sourceKey)
+      : left.date.localeCompare(right.date),
+  );
+};
+
+export const generateOperationalTasks = (appState: unknown): Task[] => {
+  const state = assertValid('appState', appState);
+  const cropsById = new Map(state.crops.map((crop) => [crop.cropId, crop]));
+  const generatedTasks: Task[] = [];
+
+  for (const batch of state.batches) {
+    const latestAssignment = batch.assignments.length > 0 ? batch.assignments[batch.assignments.length - 1] : null;
+    const bedId = latestAssignment?.bedId ?? 'unassigned';
+    const preSown = selectLatestStageEvent(batch.stageEvents, 'pre_sown', 'sowing');
+    const germinated = selectLatestStageEvent(batch.stageEvents, 'germinated');
+    const transplant = selectLatestStageEvent(batch.stageEvents, 'transplant');
+    const harvest = selectLatestStageEvent(batch.stageEvents, 'harvest');
+    const crop = cropsById.get(batch.cropId);
+
+    const pushTask = (taskType: string, date: string, anchorOccurredAt: string, stageEventIndex: number) => {
+      const sourceKey = buildOperationalTaskSourceKey(batch.batchId, taskType, anchorOccurredAt, stageEventIndex);
+      generatedTasks.push({
+        id: sourceKey,
+        sourceKey,
+        date,
+        type: taskType,
+        cropId: batch.cropId,
+        bedId,
+        batchId: batch.batchId,
+        checklist: [],
+        status: 'pending',
+      });
+    };
+
+    if (preSown) {
+      const anchorDate = toIsoDate(preSown.occurredAt);
+      pushTask('germination-check', addDays(anchorDate, 7), preSown.occurredAt, preSown.index);
+      pushTask('germination-check', addDays(anchorDate, 14), preSown.occurredAt, preSown.index + 1);
+    }
+
+    if (germinated) {
+      pushTask('pot-up', addDays(toIsoDate(germinated.occurredAt), 7), germinated.occurredAt, germinated.index);
+    }
+
+    if (transplant) {
+      const transplantDate = toIsoDate(transplant.occurredAt);
+      pushTask('harden-off', addDays(transplantDate, -7), transplant.occurredAt, transplant.index);
+      pushTask('harden-off', addDays(transplantDate, -2), transplant.occurredAt, transplant.index + 1);
+      pushTask('bed-assignment', transplantDate, transplant.occurredAt, transplant.index + 2);
+
+      const harvestWindowDates = crop?.taskRules
+        ?.filter((rule) => rule.taskType === 'harvest')
+        .flatMap((rule) => expandTaskRuleWindowsToLocalDates(rule.windows, Number.parseInt(transplantDate.slice(0, 4), 10)))
+        .sort();
+
+      if (harvestWindowDates && harvestWindowDates.length > 0) {
+        const firstAfterTransplant = harvestWindowDates.find((date) => date >= transplantDate) ?? harvestWindowDates[0];
+        pushTask('harvest-reminder', firstAfterTransplant, transplant.occurredAt, transplant.index + 3);
+      } else {
+        pushTask('harvest-reminder', addDays(transplantDate, 60), transplant.occurredAt, transplant.index + 3);
+      }
+    } else if (harvest) {
+      pushTask('harvest-reminder', toIsoDate(harvest.occurredAt), harvest.occurredAt, harvest.index);
+    }
+  }
+
+  return generatedTasks.sort((left, right) =>
     left.date === right.date
       ? left.sourceKey.localeCompare(right.sourceKey)
       : left.date.localeCompare(right.date),
