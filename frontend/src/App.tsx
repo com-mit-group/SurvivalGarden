@@ -95,6 +95,8 @@ function BedDetailPage() {
   const [bed, setBed] = useState<Bed | null>(null);
   const [notes, setNotes] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [cropNames, setCropNames] = useState<Record<string, string>>({});
+  const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -110,13 +112,27 @@ function BedDetailPage() {
       if (!appState) {
         setBed(null);
         setBatches([]);
+        setCropNames({});
+        setCropScientificNames({});
         setIsLoading(false);
         return;
       }
 
+      setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const scientificName = (crop as { scientificName?: string }).scientificName;
+            return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
+
+      const todayIso = new Date().toISOString();
+
       const nextBed = listBedsFromAppState(appState).find((candidate) => candidate.bedId === bedId) ?? null;
       const relatedBatches = listBatchesFromAppState(appState)
-        .filter((batch) => getDerivedBedId(batch) === bedId)
+        .filter((batch) => getActiveBedAssignment(batch, todayIso)?.bedId === bedId)
         .sort((left, right) => left.batchId.localeCompare(right.batchId));
 
       setBed(nextBed);
@@ -220,8 +236,14 @@ function BedDetailPage() {
           <ul className="bed-detail-batch-list">
             {batches.map((batch) => (
               <li key={batch.batchId}>
-                <Link to={`/batches/${batch.batchId}`}>{batch.batchId}</Link>
-                <span>{batch.stage}</span>
+                <Link to={`/batches/${batch.batchId}`}>
+                  {formatCropOptionLabel({
+                    cropId: batch.cropId,
+                    name: cropNames[batch.cropId],
+                    scientificName: cropScientificNames[batch.cropId],
+                  }) || batch.cropId || batch.batchId}
+                </Link>
+                <span className="batch-stage-badge">{batch.stage}</span>
               </li>
             ))}
           </ul>
