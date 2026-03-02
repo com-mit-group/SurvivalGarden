@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch } from '../../contracts';
-import { getActiveBedAssignment } from './batchRepository';
+import { assignBatchToBed, getActiveBedAssignment } from './batchRepository';
 
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
@@ -74,5 +74,68 @@ describe('getActiveBedAssignment', () => {
     ]);
 
     expect(getActiveBedAssignment(batch, '2026-05-15T00:00:00Z')?.bedId).toBe('bed-7');
+  });
+});
+
+describe('assignBatchToBed', () => {
+  it('appends a new assignment when there is no overlap', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+        toDate: '2026-01-31T23:59:59Z',
+      },
+    ]);
+
+    const updated = assignBatchToBed(batch, 'bed-2', '2026-02-01T00:00:00Z');
+
+    expect(updated.assignments).toHaveLength(2);
+    expect(updated.assignments[1]).toMatchObject({
+      bedId: 'bed-2',
+      assignedAt: '2026-02-01T00:00:00Z',
+      fromDate: '2026-02-01T00:00:00Z',
+    });
+  });
+
+  it('rejects overlapping assignment when move flag is not set', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    expect(() => assignBatchToBed(batch, 'bed-2', '2026-01-15T00:00:00Z')).toThrowError('batch_assignment_overlap');
+  });
+
+  it('returns unchanged batch when already active on same bed', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    const updated = assignBatchToBed(batch, 'bed-1', '2026-01-20T00:00:00Z');
+
+    expect(updated).toBe(batch);
+  });
+
+  it('allows overlapping assignment when move flag is set', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    const updated = assignBatchToBed(batch, 'bed-2', '2026-01-15T00:00:00Z', { move: true });
+
+    expect(updated.assignments).toHaveLength(2);
+    expect(updated.assignments[1]).toMatchObject({ bedId: 'bed-2' });
   });
 });
