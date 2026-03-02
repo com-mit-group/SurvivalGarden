@@ -509,8 +509,171 @@ function BatchesPage() {
 
 function BatchDetailPage() {
   const { batchId } = useParams();
+  const [isLoading, setIsLoading] = useState(true);
+  const [batch, setBatch] = useState<Batch | null>(null);
+  const [cropName, setCropName] = useState<string | null>(null);
 
-  return <p>Batch detail: {batchId}</p>;
+  useEffect(() => {
+    const load = async () => {
+      if (!batchId) {
+        setBatch(null);
+        setCropName(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setBatch(null);
+        setCropName(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const nextBatch = appState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(nextBatch);
+
+      if (!nextBatch) {
+        setCropName(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
+      setCropName(crop?.name ?? null);
+      setIsLoading(false);
+    };
+
+    void load();
+  }, [batchId]);
+
+  const orderedStageEvents = useMemo(() => {
+    if (!batch) {
+      return [];
+    }
+
+    return batch.stageEvents
+      .map((event, index) => ({ event, index }))
+      .sort((left, right) => {
+        const timestampCompare = left.event.occurredAt.localeCompare(right.event.occurredAt);
+        if (timestampCompare !== 0) {
+          return timestampCompare;
+        }
+
+        return left.index - right.index;
+      })
+      .map(({ event }) => event);
+  }, [batch]);
+
+  const assignmentHistory = useMemo(() => {
+    if (!batch) {
+      return [];
+    }
+
+    return [...batch.assignments].sort((left, right) => left.assignedAt.localeCompare(right.assignedAt));
+  }, [batch]);
+
+  if (isLoading) {
+    return <p className="batch-detail-empty">Loading batch…</p>;
+  }
+
+  if (!batch) {
+    return (
+      <section className="batch-detail-page">
+        <h2>Batch not found</h2>
+        <p className="batch-detail-empty">No batch matches ID {batchId ?? 'unknown'}.</p>
+        <Link to="/batches" className="batch-detail-back-link">
+          Back to batches
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="batch-detail-page">
+      <Link to="/batches" className="batch-detail-back-link">
+        ← Back to batches
+      </Link>
+      <h2>{cropName ?? batch.cropId}</h2>
+
+      <div className="batch-detail-grid">
+        <article className="batch-detail-card">
+          <h3>Metadata</h3>
+          <dl>
+            <div>
+              <dt>Batch ID</dt>
+              <dd>{batch.batchId}</dd>
+            </div>
+            <div>
+              <dt>Crop ID</dt>
+              <dd>{batch.cropId}</dd>
+            </div>
+            <div>
+              <dt>Stage</dt>
+              <dd>{batch.stage}</dd>
+            </div>
+            <div>
+              <dt>Started</dt>
+              <dd>{new Date(batch.startedAt).toLocaleString()}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="batch-detail-card">
+          <h3>Counts</h3>
+          <dl>
+            <div>
+              <dt>Stage events</dt>
+              <dd>{batch.stageEvents.length}</dd>
+            </div>
+            <div>
+              <dt>Assignments</dt>
+              <dd>{batch.assignments.length}</dd>
+            </div>
+            <div>
+              <dt>Current bed</dt>
+              <dd>{getDerivedBedId(batch) ?? 'Unassigned'}</dd>
+            </div>
+          </dl>
+        </article>
+      </div>
+
+      <article className="batch-detail-card">
+        <h3>Stage timeline</h3>
+        {orderedStageEvents.length === 0 ? (
+          <p className="batch-detail-empty">No stage events yet.</p>
+        ) : (
+          <ol className="batch-detail-list">
+            {orderedStageEvents.map((event, index) => (
+              <li key={`${event.occurredAt}-${event.stage}-${index}`}>
+                <span className="batch-detail-pill">{event.stage}</span>
+                <span>{new Date(event.occurredAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </article>
+
+      <article className="batch-detail-card">
+        <h3>Bed assignments</h3>
+        <p className="batch-detail-current-bed">Current: {getDerivedBedId(batch) ?? 'Unassigned'}</p>
+        {assignmentHistory.length === 0 ? (
+          <p className="batch-detail-empty">No bed assignment history.</p>
+        ) : (
+          <ol className="batch-detail-list">
+            {assignmentHistory.map((assignment, index) => (
+              <li key={`${assignment.assignedAt}-${assignment.bedId}-${index}`}>
+                <span className="batch-detail-pill">{assignment.bedId}</span>
+                <span>{new Date(assignment.assignedAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </article>
+    </section>
+  );
 }
 
 function NutritionPage() {
