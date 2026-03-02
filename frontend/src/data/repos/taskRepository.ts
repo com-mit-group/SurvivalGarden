@@ -1,4 +1,5 @@
 import type { AppState, Task } from '../../contracts';
+import { expandTaskRuleWindowsToLocalDates } from '../../domain';
 import { assertValid } from '../validation';
 import type { ListQuery } from './interfaces';
 
@@ -87,4 +88,103 @@ export const upsertGeneratedTasksInAppState = (
     ...state,
     tasks: [...mergedTasksBySourceKey.values()],
   });
+};
+
+const buildPlannedTaskSourceKey = (
+  year: number,
+  bedId: string,
+  cropId: string,
+  successionIndex: number,
+  taskType: string,
+  windowIndex: number,
+): string =>
+  ['plan', year, bedId, cropId, successionIndex, taskType, windowIndex]
+    .join('_')
+    .toLowerCase();
+
+const toTaskType = (taskType: string): string => taskType.replace(/_/g, '-');
+
+export const generatePlannedTasks = (appState: unknown, year: number): Task[] => {
+  const state = assertValid('appState', appState);
+  const cropsById = new Map(state.crops.map((crop) => [crop.cropId, crop]));
+  const sortedPlans = [...state.cropPlans]
+    .filter((plan) => plan.seasonYear === year && typeof plan.bedId === 'string' && plan.bedId.length > 0)
+    .sort((left, right) =>
+      left.bedId === right.bedId
+        ? left.cropId === right.cropId
+          ? left.planId.localeCompare(right.planId)
+          : left.cropId.localeCompare(right.cropId)
+        : left.bedId!.localeCompare(right.bedId!),
+    );
+
+  const successionIndexByPlanId = new Map<string, number>();
+  const successionCounters = new Map<string, number>();
+
+  for (const plan of sortedPlans) {
+    const key = `${plan.bedId}:${plan.cropId}`;
+    const nextIndex = (successionCounters.get(key) ?? -1) + 1;
+    successionCounters.set(key, nextIndex);
+    successionIndexByPlanId.set(plan.planId, nextIndex);
+  }
+
+  const plannedTasks: Task[] = [];
+
+  for (const plan of sortedPlans) {
+    const crop = cropsById.get(plan.cropId);
+
+    if (!crop || !crop.taskRules || crop.taskRules.length === 0 || !plan.bedId) {
+      continue;
+    }
+
+    const sortedTaskRules = [...crop.taskRules].sort((left, right) =>
+      left.sequence === right.sequence
+        ? left.taskType.localeCompare(right.taskType)
+        : left.sequence - right.sequence,
+    );
+
+    const successionIndex = successionIndexByPlanId.get(plan.planId);
+
+    if (typeof successionIndex !== 'number') {
+      continue;
+    }
+
+    for (const taskRule of sortedTaskRules) {
+      const windowsWithIndex = taskRule.windows.map((window, windowIndex) => ({ window, windowIndex }));
+
+      for (const { window, windowIndex } of windowsWithIndex) {
+        const [date] = expandTaskRuleWindowsToLocalDates([window], year);
+
+        if (!date) {
+          continue;
+        }
+
+        const sourceKey = buildPlannedTaskSourceKey(
+          year,
+          plan.bedId,
+          plan.cropId,
+          successionIndex,
+          taskRule.taskType,
+          windowIndex,
+        );
+
+        plannedTasks.push({
+          id: sourceKey,
+          sourceKey,
+          date,
+          type: toTaskType(taskRule.taskType),
+          cropId: plan.cropId,
+          bedId: plan.bedId,
+          batchId: `planned_${year}_${plan.bedId}_${plan.cropId}_${successionIndex}`.toLowerCase(),
+          checklist: [],
+          status: 'pending',
+        });
+      }
+    }
+  }
+
+  return plannedTasks.sort((left, right) =>
+    left.date === right.date
+      ? left.sourceKey.localeCompare(right.sourceKey)
+      : left.date.localeCompare(right.date),
+  );
 };
