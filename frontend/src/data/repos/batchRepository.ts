@@ -111,6 +111,7 @@ export const moveBatch = (
   moveDate: string,
   _meta?: AssignBatchMeta,
 ): Batch => {
+  void _meta;
   const activeAssignment = getActiveBedAssignment(batch, moveDate);
 
   if (!activeAssignment) {
