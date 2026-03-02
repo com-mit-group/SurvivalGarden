@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { Batch } from './contracts';
-import { initializeAppStateStorage, listBatchesFromAppState, loadAppStateFromIndexedDb, resetToGoldenDataset } from './data';
+import {
+  SchemaValidationError,
+  initializeAppStateStorage,
+  listBatchesFromAppState,
+  loadAppStateFromIndexedDb,
+  resetToGoldenDataset,
+  saveAppStateToIndexedDb,
+  upsertBatchInAppState,
+} from './data';
 
 function BedsPage() {
   return <p>Beds</p>;
@@ -26,8 +34,18 @@ const getDerivedBedId = (batch: Batch): string | null => {
 function BatchesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [cropIds, setCropIds] = useState<string[]>([]);
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState({
+    cropId: '',
+    variety: '',
+    startedAt: new Date().toLocaleDateString('en-CA'),
+    seedCount: '',
+  });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -35,12 +53,14 @@ function BatchesPage() {
 
       if (!appState) {
         setBatches([]);
+        setCropIds([]);
         setCropNames({});
         setIsLoading(false);
         return;
       }
 
       setBatches(listBatchesFromAppState(appState));
+      setCropIds(appState.crops.map((crop) => crop.cropId));
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setIsLoading(false);
     };
@@ -124,6 +144,117 @@ function BatchesPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const startEdit = (batch: Batch) => {
+    setEditingBatchId(batch.batchId);
+    setFormValues({
+      cropId: batch.cropId,
+      variety: '',
+      startedAt: batch.startedAt.slice(0, 10),
+      seedCount: '',
+    });
+    setFormErrors({});
+    setSaveMessage('Variety and seed count are not supported by the current batch contract yet.');
+  };
+
+  const resetForm = () => {
+    setEditingBatchId(null);
+    setFormValues({
+      cropId: '',
+      variety: '',
+      startedAt: new Date().toLocaleDateString('en-CA'),
+      seedCount: '',
+    });
+    setFormErrors({});
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaveMessage(null);
+    const errors: Record<string, string> = {};
+
+    if (!formValues.cropId) {
+      errors.cropId = 'Choose a crop.';
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(formValues.startedAt)) {
+      errors.startedAt = 'Enter a valid start date.';
+    }
+
+    if (formValues.variety.trim().length > 0) {
+      errors.variety = 'Variety cannot be saved until contract support lands.';
+    }
+
+    if (formValues.seedCount.trim().length > 0) {
+      const seedCount = Number(formValues.seedCount);
+      if (!Number.isFinite(seedCount) || seedCount <= 0) {
+        errors.seedCount = 'Seed count must be a positive number.';
+      } else {
+        errors.seedCount = 'Seed count cannot be saved until contract support lands.';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setSaveMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingBatch = editingBatchId
+        ? appState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
+        : null;
+      const startedAt = `${formValues.startedAt}T00:00:00.000Z`;
+      const batchId = existingBatch?.batchId ?? (globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`);
+      const nextBatch: Batch = {
+        batchId,
+        cropId: formValues.cropId,
+        startedAt,
+        stage: existingBatch?.stage ?? 'sowing',
+        stageEvents:
+          existingBatch?.stageEvents ?? [
+            {
+              stage: 'sowing',
+              occurredAt: startedAt,
+            },
+          ],
+        assignments: existingBatch?.assignments ?? [],
+      };
+
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      setBatches(listBatchesFromAppState(nextState));
+      setFormErrors({});
+      setSaveMessage(editingBatchId ? 'Batch updated.' : 'Batch created.');
+      resetForm();
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        const issueErrors: Record<string, string> = {};
+
+        for (const issue of error.issues) {
+          if (issue.path.includes('/cropId')) {
+            issueErrors.cropId = 'Choose a valid crop.';
+          }
+          if (issue.path.includes('/startedAt')) {
+            issueErrors.startedAt = 'Enter a valid date.';
+          }
+        }
+
+        setFormErrors(issueErrors);
+        setSaveMessage('Please fix the highlighted fields.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to save batch.';
+      setSaveMessage(message);
+    }
+  };
+
   return (
     <section className="batches-page">
       <h2>Batches</h2>
@@ -176,6 +307,68 @@ function BatchesPage() {
         </label>
       </div>
 
+      <form className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
+        <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
+        <div className="batch-form-grid">
+          <label>
+            Crop
+            <select
+              value={formValues.cropId}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropId: event.target.value }))}
+            >
+              <option value="">Choose crop</option>
+              {cropIds.map((cropId) => (
+                <option key={cropId} value={cropId}>
+                  {cropNames[cropId] ?? cropId}
+                </option>
+              ))}
+            </select>
+            {formErrors.cropId ? <span className="form-error">{formErrors.cropId}</span> : null}
+          </label>
+
+          <label>
+            Variety
+            <input
+              type="text"
+              value={formValues.variety}
+              onChange={(event) => setFormValues((current) => ({ ...current, variety: event.target.value }))}
+            />
+            {formErrors.variety ? <span className="form-error">{formErrors.variety}</span> : null}
+          </label>
+
+          <label>
+            Started at
+            <input
+              type="date"
+              value={formValues.startedAt}
+              onChange={(event) => setFormValues((current) => ({ ...current, startedAt: event.target.value }))}
+            />
+            {formErrors.startedAt ? <span className="form-error">{formErrors.startedAt}</span> : null}
+          </label>
+
+          <label>
+            Seed count
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={formValues.seedCount}
+              onChange={(event) => setFormValues((current) => ({ ...current, seedCount: event.target.value }))}
+            />
+            {formErrors.seedCount ? <span className="form-error">{formErrors.seedCount}</span> : null}
+          </label>
+        </div>
+        <div className="batch-form-actions">
+          <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
+          {editingBatchId ? (
+            <button type="button" onClick={resetForm}>
+              Cancel edit
+            </button>
+          ) : null}
+          {saveMessage ? <p className="batch-form-message">{saveMessage}</p> : null}
+        </div>
+      </form>
+
       {isLoading ? <p className="batch-empty-state">Loading batches…</p> : null}
 
       {!isLoading ? (
@@ -192,6 +385,9 @@ function BatchesPage() {
                 </div>
                 <span className="batch-stage-badge">{batch.stage}</span>
               </Link>
+              <button type="button" className="batch-edit-button" onClick={() => startEdit(batch)}>
+                Edit
+              </button>
             </li>
           ))}
         </ul>
