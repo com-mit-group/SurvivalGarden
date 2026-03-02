@@ -387,7 +387,8 @@ describe('indexeddb photo blob storage', () => {
     await saveAppStateToIndexedDb(state);
     const loaded = await loadAppStateFromIndexedDb();
 
-    expect(loaded?.batches[0]?.photos?.[0]).toEqual({ id: 'photo-2', storageRef: 'photo-2', filename: 'sample.jpg' });
+    const firstBatch = loaded?.batches[0] as { photos?: Array<Record<string, unknown>> } | undefined;
+    expect(firstBatch?.photos?.[0]).toEqual({ id: 'photo-2', storageRef: 'photo-2', filename: 'sample.jpg' });
     expect(JSON.stringify(loaded)).not.toContain('blobBase64');
     expect(JSON.stringify(loaded)).not.toContain('image-bytes');
   });
