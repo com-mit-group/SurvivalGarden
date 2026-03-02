@@ -1,5 +1,4 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -42,9 +41,8 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Reset to golden dataset' })).not.toBeInTheDocument();
   });
 
-  it('shows dev reset action when flag is enabled and resets to golden dataset', async () => {
+  it('shows dev reset action when flag is enabled and resets to golden dataset', () => {
     vi.stubEnv('VITE_ENABLE_DEV_RESET', 'true');
-    const user = userEvent.setup();
 
     render(
       <MemoryRouter initialEntries={['/data']}>
@@ -52,7 +50,7 @@ describe('App', () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('button', { name: 'Reset to golden dataset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to golden dataset' }));
 
     expect(resetToGoldenDataset).toHaveBeenCalledTimes(1);
     expect(initializeAppStateStorage).toHaveBeenCalled();

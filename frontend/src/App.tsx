@@ -39,7 +39,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 function App() {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [isInitializingStorage, setIsInitializingStorage] = useState(true);
-  const isDevResetEnabled = import.meta.env.VITE_ENABLE_DEV_RESET === 'true';
+  const isDevResetEnabled =
+    (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+      ?.VITE_ENABLE_DEV_RESET === 'true';
   const isTestEnvironment = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
 
   const initializeStorage = useCallback(async () => {
