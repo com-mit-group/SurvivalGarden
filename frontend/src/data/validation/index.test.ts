@@ -425,6 +425,48 @@ describe('batch repository boundary helpers', () => {
     ).toThrowError(SchemaValidationError);
   });
 
+  it('rejects illegal stage transitions with reason codes', () => {
+    expect(() =>
+      upsertBatchInAppState(validAppState, {
+        ...validBatch,
+        stage: 'ended',
+        stageEvents: [
+          ...validBatch.stageEvents,
+          { stage: 'ended', occurredAt: '2024-03-10T00:00:00Z' },
+        ],
+      }),
+    ).toThrowError('invalid_stage_transition');
+  });
+
+  it('allows failed from any stage and ended after failed', () => {
+    const failedBatch = {
+      ...validBatch,
+      stage: 'failed',
+      stageEvents: [...validBatch.stageEvents, { stage: 'failed', occurredAt: '2024-03-10T00:00:00Z' }],
+    };
+
+    const withFailed = upsertBatchInAppState(validAppState, failedBatch);
+
+    const endedBatch = {
+      ...failedBatch,
+      stage: 'ended',
+      stageEvents: [...failedBatch.stageEvents, { stage: 'ended', occurredAt: '2024-03-20T00:00:00Z' }],
+    };
+
+    const withEnded = upsertBatchInAppState(withFailed, endedBatch);
+    expect(getBatchFromAppState(withEnded, endedBatch.batchId)).toEqual(endedBatch);
+  });
+
+  it('rejects stage changes when latest stage event does not match current stage', () => {
+    expect(() =>
+      upsertBatchInAppState(validAppState, {
+        ...validBatch,
+        stage: 'transplant',
+        stageEvents: [...validBatch.stageEvents, { stage: 'harvest', occurredAt: '2024-03-10T00:00:00Z' }],
+      }),
+    ).toThrowError('stage_event_stage_mismatch');
+  });
+
   it('supports batch read/update/remove and list filters', () => {
     const secondBatch = {
       batchId: 'batch-2',

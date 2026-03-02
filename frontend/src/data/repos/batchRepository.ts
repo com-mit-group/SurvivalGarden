@@ -1,4 +1,5 @@
 import type { AppState, Batch } from '../../contracts';
+import { applyStageEvent } from '../../domain';
 import { assertValid } from '../validation';
 import type { BatchListFilter, ListQuery } from './interfaces';
 
@@ -72,6 +73,24 @@ export const upsertBatchInAppState = (appState: unknown, batch: unknown): AppSta
   const state = assertValid('appState', appState);
   const validBatch = assertValid('batch', normalizeBatchCandidate(batch));
   const existingIndex = state.batches.findIndex((entry) => entry.batchId === validBatch.batchId);
+
+  if (existingIndex >= 0) {
+    const existingBatch = state.batches[existingIndex];
+
+    if (existingBatch.stage !== validBatch.stage) {
+      const latestStageEvent = validBatch.stageEvents[validBatch.stageEvents.length - 1];
+
+      if (!latestStageEvent || latestStageEvent.stage !== validBatch.stage) {
+        throw new Error('stage_event_stage_mismatch');
+      }
+
+      const transition = applyStageEvent(existingBatch, latestStageEvent);
+
+      if (!transition.ok) {
+        throw new Error(transition.reason);
+      }
+    }
+  }
 
   const batches =
     existingIndex >= 0
