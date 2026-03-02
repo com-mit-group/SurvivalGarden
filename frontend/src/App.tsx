@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { initializeAppStateStorage, resetToGoldenDataset } from './data';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
+import type { Batch } from './contracts';
+import { initializeAppStateStorage, listBatchesFromAppState, loadAppStateFromIndexedDb, resetToGoldenDataset } from './data';
 
 function BedsPage() {
   return <p>Beds</p>;
@@ -10,8 +11,203 @@ function CalendarPage() {
   return <p>Calendar</p>;
 }
 
+const getDerivedBedId = (batch: Batch): string | null => {
+  if (batch.assignments.length === 0) {
+    return null;
+  }
+
+  const latestAssignment = batch.assignments.reduce((latest, assignment) =>
+    assignment.assignedAt > latest.assignedAt ? assignment : latest,
+  );
+
+  return latestAssignment.bedId;
+};
+
 function BatchesPage() {
-  return <p>Batches</p>;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [cropNames, setCropNames] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setBatches([]);
+        setCropNames({});
+        setIsLoading(false);
+        return;
+      }
+
+      setBatches(listBatchesFromAppState(appState));
+      setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
+      setIsLoading(false);
+    };
+
+    void load();
+  }, []);
+
+  const filters = {
+    crop: searchParams.get('crop') ?? '',
+    stage: searchParams.get('stage') ?? '',
+    bed: searchParams.get('bed') ?? '',
+    from: searchParams.get('from') ?? '',
+    to: searchParams.get('to') ?? '',
+  };
+
+  const cropOptions = useMemo(
+    () =>
+      Array.from(new Set(batches.map((batch) => batch.cropId)))
+        .sort((left, right) => (cropNames[left] ?? left).localeCompare(cropNames[right] ?? right))
+        .map((cropId) => ({ value: cropId, label: cropNames[cropId] ?? cropId })),
+    [batches, cropNames],
+  );
+
+  const stageOptions = useMemo(
+    () => Array.from(new Set(batches.map((batch) => batch.stage))).sort(),
+    [batches],
+  );
+
+  const bedOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          batches
+            .map((batch) => getDerivedBedId(batch))
+            .filter((bedId): bedId is string => Boolean(bedId)),
+        ),
+      ).sort(),
+    [batches],
+  );
+
+  const filteredBatches = useMemo(
+    () =>
+      batches.filter((batch) => {
+        const derivedBedId = getDerivedBedId(batch);
+        const batchDate = batch.startedAt.slice(0, 10);
+
+        if (filters.crop && batch.cropId !== filters.crop) {
+          return false;
+        }
+
+        if (filters.stage && batch.stage !== filters.stage) {
+          return false;
+        }
+
+        if (filters.bed && derivedBedId !== filters.bed) {
+          return false;
+        }
+
+        if (filters.from && batchDate < filters.from) {
+          return false;
+        }
+
+        if (filters.to && batchDate > filters.to) {
+          return false;
+        }
+
+        return true;
+      }),
+    [batches, filters],
+  );
+
+  const updateFilter = (name: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+
+    if (value) {
+      next.set(name, value);
+    } else {
+      next.delete(name);
+    }
+
+    setSearchParams(next, { replace: true });
+  };
+
+  return (
+    <section className="batches-page">
+      <h2>Batches</h2>
+
+      <div className="batch-filters">
+        <label>
+          Crop
+          <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
+            <option value="">All</option>
+            {cropOptions.map((crop) => (
+              <option key={crop.value} value={crop.value}>
+                {crop.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Stage
+          <select value={filters.stage} onChange={(event) => updateFilter('stage', event.target.value)}>
+            <option value="">All</option>
+            {stageOptions.map((stage) => (
+              <option key={stage} value={stage}>
+                {stage}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Bed
+          <select value={filters.bed} onChange={(event) => updateFilter('bed', event.target.value)}>
+            <option value="">All</option>
+            {bedOptions.map((bedId) => (
+              <option key={bedId} value={bedId}>
+                {bedId}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          From
+          <input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
+        </label>
+
+        <label>
+          To
+          <input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
+        </label>
+      </div>
+
+      {isLoading ? <p className="batch-empty-state">Loading batches…</p> : null}
+
+      {!isLoading ? (
+        <ul className="batch-list">
+          {filteredBatches.map((batch) => (
+            <li key={batch.batchId}>
+              <Link to={`/batches/${batch.batchId}`} className="batch-item-link">
+                <div>
+                  <p className="batch-item-title">{cropNames[batch.cropId] ?? batch.cropId}</p>
+                  <p className="batch-item-meta">
+                    Batch {batch.batchId} · Bed {getDerivedBedId(batch) ?? 'Unassigned'} · Started{' '}
+                    {batch.startedAt.slice(0, 10)}
+                  </p>
+                </div>
+                <span className="batch-stage-badge">{batch.stage}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {!isLoading && filteredBatches.length === 0 ? (
+        <p className="batch-empty-state">No batches match these filters.</p>
+      ) : null}
+    </section>
+  );
+}
+
+function BatchDetailPage() {
+  const { batchId } = useParams();
+
+  return <p>Batch detail: {batchId}</p>;
 }
 
 function NutritionPage() {
@@ -117,6 +313,7 @@ function App() {
           <Route path="/beds" element={<BedsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
+          <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
           <Route
             path="/data"

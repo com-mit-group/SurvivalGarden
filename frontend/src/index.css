@@ -36,8 +36,6 @@ body {
 
 .app-content {
   display: grid;
-  place-content: center;
-  text-align: center;
   padding: 1.5rem 1rem 5.5rem;
 }
 
@@ -45,6 +43,94 @@ body {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
+}
+
+.batches-page {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+  text-align: left;
+}
+
+.batches-page h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.batch-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.batch-filters label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.batch-filters input,
+.batch-filters select {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  background: #ffffff;
+}
+
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.batch-item-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  background: #ffffff;
+}
+
+.batch-item-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.batch-item-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.batch-stage-badge {
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #c7d2fe;
+  font-weight: 700;
+}
+
+.batch-empty-state {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6b7280;
 }
 
 .tab-nav {
