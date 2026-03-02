@@ -31,6 +31,18 @@ describe('crop.schema.json', () => {
         notes: 'Room temperature for short-term storage',
       },
     },
+    taskRules: [
+      {
+        taskType: 'pre_sow',
+        sequence: 1,
+        windows: [{ month: 2, weekIndex: 2 }],
+      },
+      {
+        taskType: 'transplant',
+        sequence: 2,
+        windows: [{ startDate: '2026-04-01', endDate: '2026-04-21' }],
+      },
+    ],
     nutritionProfile: [
       {
         nutrient: 'Vitamin C',
@@ -80,6 +92,21 @@ describe('crop.schema.json', () => {
           unit: 'grams',
           source: '',
           assumptions: '',
+        },
+      ],
+    };
+
+    expect(validate(payload)).toBe(false);
+  });
+
+  it('rejects invalid task rule task types and window shapes', () => {
+    const payload = {
+      ...validPayload,
+      taskRules: [
+        {
+          taskType: 'sowing',
+          sequence: 1,
+          windows: [{ month: 2 }],
         },
       ],
     };
