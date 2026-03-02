@@ -52,7 +52,7 @@ export const assignBatchToBed = (
   fromDate: string,
   meta?: AssignBatchMeta,
 ): Batch => {
-  const validBatch = assertValid('batch', normalizeBatchCandidate(batch));
+  const validBatch = batch;
   const assignments = validBatch.assignments as BatchAssignmentWithRange[];
   const incomingToDate: string | null = null;
 
@@ -78,10 +78,10 @@ export const assignBatchToBed = (
     fromDate,
   } as Batch['assignments'][number];
 
-  return assertValid('batch', {
+  return {
     ...validBatch,
     assignments: [...validBatch.assignments, nextAssignment],
-  });
+  };
 };
 
 export const getActiveBedAssignment = (
