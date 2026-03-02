@@ -11,6 +11,7 @@ import {
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   upsertBatchInAppState,
+  getActiveBedAssignment,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
 
@@ -33,17 +34,7 @@ function CalendarPage() {
   return <p>Calendar</p>;
 }
 
-const getDerivedBedId = (batch: Batch): string | null => {
-  if (batch.assignments.length === 0) {
-    return null;
-  }
-
-  const latestAssignment = batch.assignments.reduce((latest, assignment) =>
-    assignment.assignedAt > latest.assignedAt ? assignment : latest,
-  );
-
-  return latestAssignment.bedId;
-};
+const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(batch, new Date().toISOString())?.bedId ?? null;
 
 const getLocalDateTimeDefault = () => {
   const date = new Date();

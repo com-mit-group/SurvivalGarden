@@ -5,17 +5,42 @@ import type { BatchListFilter, ListQuery } from './interfaces';
 
 const normalizeBatchCandidate = (value: unknown): unknown => value ?? {};
 
-const getDerivedBedId = (batch: Batch): string | null => {
-  if (batch.assignments.length === 0) {
-    return null;
+type BatchAssignmentWithRange = Batch['assignments'][number] & {
+  fromDate?: string;
+  toDate?: string | null;
+};
+
+const getAssignmentFromDate = (assignment: BatchAssignmentWithRange): string => assignment.fromDate ?? assignment.assignedAt;
+
+const getAssignmentToDate = (assignment: BatchAssignmentWithRange): string | null => assignment.toDate ?? null;
+
+export const getActiveBedAssignment = (
+  batch: Batch,
+  onDate: string,
+): BatchAssignmentWithRange | null => {
+  let activeAssignment: BatchAssignmentWithRange | null = null;
+
+  for (const assignment of batch.assignments as BatchAssignmentWithRange[]) {
+    const fromDate = getAssignmentFromDate(assignment);
+    const toDate = getAssignmentToDate(assignment);
+
+    if (fromDate > onDate) {
+      continue;
+    }
+
+    if (toDate && toDate < onDate) {
+      continue;
+    }
+
+    if (!activeAssignment || getAssignmentFromDate(activeAssignment) <= fromDate) {
+      activeAssignment = assignment;
+    }
   }
 
-  const latestAssignment = batch.assignments.reduce((latest, assignment) =>
-    assignment.assignedAt > latest.assignedAt ? assignment : latest,
-  );
-
-  return latestAssignment.bedId;
+  return activeAssignment;
 };
+
+const getDerivedBedId = (batch: Batch, onDate: string): string | null => getActiveBedAssignment(batch, onDate)?.bedId ?? null;
 
 export const getBatchFromAppState = (
   appState: unknown,
@@ -37,6 +62,7 @@ export const listBatchesFromAppState = (
 ): Batch[] => {
   const state = assertValid('appState', appState);
   const { filter } = query;
+  const onDate = new Date().toISOString();
 
   return state.batches
     .filter((batch) => {
@@ -52,7 +78,7 @@ export const listBatchesFromAppState = (
         return false;
       }
 
-      if (filter.bedId && getDerivedBedId(batch) !== filter.bedId) {
+      if (filter.bedId && getDerivedBedId(batch, onDate) !== filter.bedId) {
         return false;
       }
 
