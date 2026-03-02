@@ -396,3 +396,46 @@ body {
   color: #6b7280;
   font-weight: 500;
 }
+
+.batch-next-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.batch-next-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.batch-next-action-row input {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+}
+
+.batch-next-action-row button {
+  border: 1px solid #c7d2fe;
+  border-radius: 0.45rem;
+  background: #eef2ff;
+  color: #1e3a8a;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.batch-next-action-row button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.batch-stage-warning {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.78rem;
+}
