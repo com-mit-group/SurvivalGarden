@@ -744,7 +744,7 @@ function BatchDetailPage() {
     const nextPhoto: BatchPhoto = {
       id: photoId,
       storageRef: photoId,
-      contentType: file.type || undefined,
+      ...(file.type ? { contentType: file.type } : {}),
       filename: file.name,
       capturedAt: new Date().toISOString(),
       caption: file.name,
