@@ -301,3 +301,98 @@ body {
   font-size: 0.78rem;
   color: #6b7280;
 }
+
+.batch-detail-page {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.batch-detail-page h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.batch-detail-back-link {
+  color: #2563eb;
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+
+.batch-detail-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.batch-detail-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.batch-detail-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.batch-detail-card dl {
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.batch-detail-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.batch-detail-card dt {
+  color: #4b5563;
+  font-size: 0.8rem;
+}
+
+.batch-detail-card dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #111827;
+  text-align: right;
+}
+
+.batch-detail-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.batch-detail-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: #374151;
+}
+
+.batch-detail-pill {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  color: #111827;
+  background: #f9fafb;
+}
+
+.batch-detail-current-bed,
+.batch-detail-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
