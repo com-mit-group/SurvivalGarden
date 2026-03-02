@@ -43,6 +43,7 @@ export {
   saveSettingsInAppState,
 } from './repos/settingsRepository';
 export {
+  generatePlannedTasks,
   getTaskFromAppState,
   listTasksFromAppState,
   removeTaskFromAppState,

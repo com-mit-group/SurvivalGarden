@@ -25,6 +25,7 @@ import {
   upsertTaskInAppState,
   removeTaskFromAppState,
   upsertGeneratedTasksInAppState,
+  generatePlannedTasks,
   getSeedInventoryItemFromAppState,
   listSeedInventoryItemsFromAppState,
   upsertSeedInventoryItemInAppState,
@@ -599,6 +600,39 @@ describe('task repository boundary helpers', () => {
 
     const removed = removeTaskFromAppState(upserted, updatedTask.id);
     expect(getTaskFromAppState(removed, updatedTask.id)).toBeNull();
+  });
+});
+
+describe('planned task generation', () => {
+  it('returns deterministic planned tasks for the golden fixture', () => {
+    const fixture = goldenFixtures['../../../../fixtures/golden/trier-v1.json'];
+
+    const first = generatePlannedTasks(fixture, 2026);
+    const second = generatePlannedTasks(fixture, 2026);
+
+    expect(first).toEqual(second);
+    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+    expect(first.every((task) =>
+      /^plan_2026_[a-z0-9-]+_[a-z0-9-]+_\d+_[a-z_]+_\d+$/.test(task.sourceKey),
+    )).toBe(true);
+  });
+
+  it('skips crop plans that cannot resolve crop task rules', () => {
+    const tasks = generatePlannedTasks(
+      {
+        ...validAppState,
+        cropPlans: [
+          {
+            ...validCropPlan,
+            cropId: 'missing-crop',
+            seasonYear: 2026,
+          },
+        ],
+      },
+      2026,
+    );
+
+    expect(tasks).toEqual([]);
   });
 });
 
