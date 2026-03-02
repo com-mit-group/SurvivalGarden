@@ -14,6 +14,7 @@ import {
   upsertBatchInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
+  assignBatchToBed,
   removeBatchFromBed,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
@@ -96,8 +97,15 @@ function BedDetailPage() {
   const [bed, setBed] = useState<Bed | null>(null);
   const [notes, setNotes] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [candidateBatches, setCandidateBatches] = useState<Batch[]>([]);
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
+  const [assignBatchId, setAssignBatchId] = useState('');
+  const [assignDate, setAssignDate] = useState(getLocalDateTimeDefault());
+  const [assignMeta, setAssignMeta] = useState('');
+  const [includeEndedFailed, setIncludeEndedFailed] = useState(false);
+  const [isAssigningBatch, setIsAssigningBatch] = useState(false);
+  const [assignBatchMessage, setAssignBatchMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -105,6 +113,7 @@ function BedDetailPage() {
       if (!bedId) {
         setBed(null);
         setBatches([]);
+        setCandidateBatches([]);
         setIsLoading(false);
         return;
       }
@@ -113,6 +122,7 @@ function BedDetailPage() {
       if (!appState) {
         setBed(null);
         setBatches([]);
+        setCandidateBatches([]);
         setCropNames({});
         setCropScientificNames({});
         setIsLoading(false);
@@ -132,18 +142,92 @@ function BedDetailPage() {
       const todayIso = new Date().toISOString();
 
       const nextBed = listBedsFromAppState(appState).find((candidate) => candidate.bedId === bedId) ?? null;
-      const relatedBatches = listBatchesFromAppState(appState)
+      const allBatches = listBatchesFromAppState(appState);
+      const relatedBatches = allBatches
         .filter((batch) => getActiveBedAssignment(batch, todayIso)?.bedId === bedId)
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+      const eligibleBatches = allBatches
+        .filter((batch) => {
+          if (!includeEndedFailed && (batch.stage === 'ended' || batch.stage === 'failed')) {
+            return false;
+          }
+
+          return !getActiveBedAssignment(batch, todayIso);
+        })
         .sort((left, right) => left.batchId.localeCompare(right.batchId));
 
       setBed(nextBed);
       setNotes(nextBed?.notes ?? '');
       setBatches(relatedBatches);
+      setCandidateBatches(eligibleBatches);
+      setAssignBatchId((current) => (current && eligibleBatches.some((batch) => batch.batchId === current) ? current : eligibleBatches[0]?.batchId ?? ''));
       setIsLoading(false);
     };
 
     void load();
-  }, [bedId]);
+  }, [bedId, includeEndedFailed]);
+
+  const handleAssignBatch = async () => {
+    if (!bedId || !assignBatchId) {
+      setAssignBatchMessage('Select a batch to assign.');
+      return;
+    }
+
+    if (!assignDate) {
+      setAssignBatchMessage('Enter a valid assignment date and time.');
+      return;
+    }
+
+    setIsAssigningBatch(true);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setAssignBatchMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingBatch = appState.batches.find((candidate) => candidate.batchId === assignBatchId);
+      if (!existingBatch) {
+        setAssignBatchMessage('Selected batch was not found.');
+        return;
+      }
+
+      const assignedAt = new Date(assignDate).toISOString();
+      const updatedBatch = assignBatchToBed(existingBatch, bedId, assignedAt);
+      const nextState = upsertBatchInAppState(appState, updatedBatch);
+      await saveAppStateToIndexedDb(nextState);
+
+      const nowIso = new Date().toISOString();
+      const nextBatches = listBatchesFromAppState(nextState)
+        .filter((batch) => getActiveBedAssignment(batch, nowIso)?.bedId === bedId)
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+      const nextCandidates = listBatchesFromAppState(nextState)
+        .filter((batch) => {
+          if (!includeEndedFailed && (batch.stage === 'ended' || batch.stage === 'failed')) {
+            return false;
+          }
+
+          return !getActiveBedAssignment(batch, nowIso);
+        })
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+
+      setBatches(nextBatches);
+      setCandidateBatches(nextCandidates);
+      setAssignBatchId(nextCandidates[0]?.batchId ?? '');
+      setAssignDate(getLocalDateTimeDefault());
+      setAssignMeta('');
+      setAssignBatchMessage(assignMeta ? `Batch assigned to ${bedId}. Meta: ${assignMeta}` : `Batch assigned to ${bedId}.`);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'batch_assignment_overlap') {
+        setAssignBatchMessage('Unable to assign batch: it already has an overlapping bed assignment for that date.');
+      } else {
+        setAssignBatchMessage(error instanceof Error ? error.message : 'Failed to assign batch to bed.');
+      }
+    } finally {
+      setIsAssigningBatch(false);
+    }
+  };
 
   useEffect(() => {
     if (!bed || !bedId) {
@@ -249,6 +333,43 @@ function BedDetailPage() {
             ))}
           </ul>
         )}
+
+        <div className="batch-next-actions">
+          <div className="batch-next-action-row">
+            <span className="batch-detail-pill">assign</span>
+            <select value={assignBatchId} onChange={(event) => setAssignBatchId(event.target.value)} disabled={candidateBatches.length === 0}>
+              {candidateBatches.length === 0 ? <option value="">No eligible batches</option> : null}
+              {candidateBatches.map((batch) => (
+                <option key={batch.batchId} value={batch.batchId}>
+                  {formatCropOptionLabel({
+                    cropId: batch.cropId,
+                    name: cropNames[batch.cropId],
+                    scientificName: cropScientificNames[batch.cropId],
+                  }) || batch.batchId}
+                </option>
+              ))}
+            </select>
+            <input type="datetime-local" value={assignDate} onChange={(event) => setAssignDate(event.target.value)} />
+            <input
+              type="text"
+              value={assignMeta}
+              onChange={(event) => setAssignMeta(event.target.value)}
+              placeholder="Position / meta (optional)"
+            />
+            <button type="button" onClick={() => void handleAssignBatch()} disabled={!assignBatchId || isAssigningBatch || candidateBatches.length === 0}>
+              Assign
+            </button>
+          </div>
+          <label className="bed-detail-meta">
+            <input
+              type="checkbox"
+              checked={includeEndedFailed}
+              onChange={(event) => setIncludeEndedFailed(event.target.checked)}
+            />{' '}
+            Include ended/failed
+          </label>
+          {assignBatchMessage ? <p className="batch-stage-warning">{assignBatchMessage}</p> : null}
+        </div>
       </article>
     </section>
   );
