@@ -37,7 +37,7 @@ const getLocalDateTimeDefault = () => {
   return new Date(date.getTime() - localOffsetMs).toISOString().slice(0, 16);
 };
 
-const formatCropOptionLabel = (crop: { cropId: string; name?: string; scientificName?: string }) => {
+const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined; scientificName: string | undefined }) => {
   if (crop.name && crop.scientificName) {
     return `${crop.name} (${crop.scientificName})`;
   }
