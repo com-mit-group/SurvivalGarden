@@ -24,6 +24,7 @@ export {
   getActiveBedAssignment,
   getBatchFromAppState,
   listBatchesFromAppState,
+  moveBatch,
   removeBatchFromAppState,
   upsertBatchInAppState,
 } from './repos/batchRepository';

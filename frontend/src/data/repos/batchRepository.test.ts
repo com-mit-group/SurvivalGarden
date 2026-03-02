@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch } from '../../contracts';
-import { assignBatchToBed, getActiveBedAssignment } from './batchRepository';
+import { assignBatchToBed, getActiveBedAssignment, moveBatch } from './batchRepository';
 
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
@@ -137,5 +137,57 @@ describe('assignBatchToBed', () => {
 
     expect(updated.assignments).toHaveLength(2);
     expect(updated.assignments[1]).toMatchObject({ bedId: 'bed-2' });
+  });
+});
+
+
+describe('moveBatch', () => {
+  it('closes current assignment and leaves exactly one active assignment after move date', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    const moved = moveBatch(batch, 'bed-2', '2026-01-15T00:00:00Z');
+
+    expect(moved.assignments).toHaveLength(2);
+    expect(moved.assignments[0]).toMatchObject({
+      bedId: 'bed-1',
+      toDate: '2026-01-15T00:00:00Z',
+    });
+    expect(moved.assignments[1]).toMatchObject({
+      bedId: 'bed-2',
+      assignedAt: '2026-01-15T00:00:00Z',
+      fromDate: '2026-01-15T00:00:00Z',
+    });
+    expect(getActiveBedAssignment(moved, '2026-01-16T00:00:00Z')?.bedId).toBe('bed-2');
+  });
+
+  it('throws when there is no active assignment at move date', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-01T00:00:00Z',
+        toDate: '2026-01-05T00:00:00Z',
+      },
+    ]);
+
+    expect(() => moveBatch(batch, 'bed-2', '2026-01-10T00:00:00Z')).toThrowError('batch_assignment_no_active');
+  });
+
+  it('throws when move date is earlier than active assignment fromDate', () => {
+    const batch = createBatch([
+      {
+        bedId: 'bed-1',
+        assignedAt: '2026-01-01T00:00:00Z',
+        fromDate: '2026-01-10T00:00:00Z',
+      },
+    ]);
+
+    expect(() => moveBatch(batch, 'bed-2', '2026-01-09T00:00:00Z')).toThrowError('batch_assignment_no_active');
   });
 });

@@ -105,6 +105,51 @@ export const getActiveBedAssignment = (
   return activeAssignment;
 };
 
+export const moveBatch = (
+  batch: Batch,
+  newBedId: string,
+  moveDate: string,
+  _meta?: AssignBatchMeta,
+): Batch => {
+  const activeAssignment = getActiveBedAssignment(batch, moveDate);
+
+  if (!activeAssignment) {
+    throw new Error('batch_assignment_no_active');
+  }
+
+  const activeFromDate = getAssignmentFromDate(activeAssignment);
+
+  if (moveDate < activeFromDate) {
+    throw new Error('batch_assignment_move_before_start');
+  }
+
+  if (activeAssignment.bedId === newBedId) {
+    return batch;
+  }
+
+  const updatedAssignments = (batch.assignments as BatchAssignmentWithRange[]).map((assignment) => {
+    if (assignment !== activeAssignment) {
+      return assignment;
+    }
+
+    return {
+      ...assignment,
+      toDate: moveDate,
+    };
+  });
+
+  const nextAssignment = {
+    bedId: newBedId,
+    assignedAt: moveDate,
+    fromDate: moveDate,
+  } as Batch['assignments'][number];
+
+  return {
+    ...batch,
+    assignments: [...updatedAssignments, nextAssignment],
+  };
+};
+
 const getDerivedBedId = (batch: Batch, onDate: string): string | null => getActiveBedAssignment(batch, onDate)?.bedId ?? null;
 
 export const getBatchFromAppState = (
