@@ -149,6 +149,22 @@ body {
   font-weight: 600;
 }
 
+.bed-detail-notes-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.bed-detail-notes-input {
+  width: 100%;
+  min-height: 7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  resize: vertical;
+}
+
 .batches-page {
   width: min(900px, 100%);
   margin: 0 auto;

@@ -12,6 +12,7 @@ import {
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   upsertBatchInAppState,
+  upsertBedInAppState,
   getActiveBedAssignment,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
@@ -92,6 +93,7 @@ function BedsPage() {
 function BedDetailPage() {
   const { bedId } = useParams();
   const [bed, setBed] = useState<Bed | null>(null);
+  const [notes, setNotes] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -118,12 +120,52 @@ function BedDetailPage() {
         .sort((left, right) => left.batchId.localeCompare(right.batchId));
 
       setBed(nextBed);
+      setNotes(nextBed?.notes ?? '');
       setBatches(relatedBatches);
       setIsLoading(false);
     };
 
     void load();
   }, [bedId]);
+
+  useEffect(() => {
+    if (!bed || !bedId) {
+      return;
+    }
+
+    if ((bed.notes ?? '') === notes) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const persistNotes = async () => {
+        const appState = await loadAppStateFromIndexedDb();
+        if (!appState) {
+          return;
+        }
+
+        const latestBed = listBedsFromAppState(appState).find((candidate) => candidate.bedId === bedId);
+        if (!latestBed) {
+          return;
+        }
+
+        const nextState = upsertBedInAppState(appState, {
+          ...latestBed,
+          notes,
+          updatedAt: new Date().toISOString(),
+        });
+
+        await saveAppStateToIndexedDb(nextState);
+        setBed((current) => (current && current.bedId === bedId ? { ...current, notes } : current));
+      };
+
+      void persistNotes();
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [bed, bedId, notes]);
 
   if (isLoading) {
     return <p className="beds-empty-state">Loading bed…</p>;
@@ -148,6 +190,27 @@ function BedDetailPage() {
       </Link>
       <h2>{bed.name}</h2>
       <p className="bed-detail-meta">{bed.bedId} · Garden {bed.gardenId}</p>
+
+      <article className="bed-detail-card">
+        <h3>Details</h3>
+        <p className="bed-detail-meta">Area: —</p>
+
+        <label className="bed-detail-notes-label" htmlFor="bed-notes">
+          Notes
+        </label>
+        <textarea
+          id="bed-notes"
+          className="bed-detail-notes-input"
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          placeholder="Add bed notes..."
+        />
+      </article>
+
+      <article className="bed-detail-card">
+        <h3>Composition</h3>
+        <p className="bed-detail-meta">Companions and succession notes will appear here.</p>
+      </article>
 
       <article className="bed-detail-card">
         <h3>Active batches</h3>
