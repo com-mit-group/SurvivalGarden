@@ -10,6 +10,7 @@ import {
   saveAppStateToIndexedDb,
   upsertBatchInAppState,
 } from './data';
+import { applyStageEvent, canTransition } from './domain';
 
 function BedsPage() {
   return <p>Beds</p>;
@@ -512,6 +513,9 @@ function BatchDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [batch, setBatch] = useState<Batch | null>(null);
   const [cropName, setCropName] = useState<string | null>(null);
+  const [actionDates, setActionDates] = useState<Record<string, string>>({});
+  const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
+  const [isSavingStageAction, setIsSavingStageAction] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -543,6 +547,14 @@ function BatchDetailPage() {
 
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
+      const dateDefault = getLocalDateTimeDefault();
+      setActionDates({
+        transplant: dateDefault,
+        harvest: dateDefault,
+        failed: dateDefault,
+        ended: dateDefault,
+      });
+      setStageActionMessage(null);
       setIsLoading(false);
     };
 
@@ -574,6 +586,77 @@ function BatchDetailPage() {
 
     return [...batch.assignments].sort((left, right) => left.assignedAt.localeCompare(right.assignedAt));
   }, [batch]);
+
+  const nextStageActions = useMemo(() => {
+    if (!batch) {
+      return [];
+    }
+
+    return ['transplant', 'harvest', 'failed', 'ended'].filter((stage) => canTransition(batch.stage, stage));
+  }, [batch]);
+
+  const latestStageEventAt = useMemo(() => {
+    if (!batch || batch.stageEvents.length === 0) {
+      return null;
+    }
+
+    return batch.stageEvents.reduce(
+      (latest, event) => (event.occurredAt > latest ? event.occurredAt : latest),
+      batch.stageEvents[0].occurredAt,
+    );
+  }, [batch]);
+
+  const handleStageAction = async (nextStage: string) => {
+    if (!batch || !batchId) {
+      return;
+    }
+
+    const inputValue = actionDates[nextStage] ?? getLocalDateTimeDefault();
+    if (!inputValue) {
+      setStageActionMessage('Enter a valid date and time before applying a stage action.');
+      return;
+    }
+
+    const occurredAt = new Date(inputValue).toISOString();
+    const transition = applyStageEvent(batch, { stage: nextStage, occurredAt });
+    if (!transition.ok) {
+      setStageActionMessage(`Unable to apply stage event: ${transition.reason}.`);
+      return;
+    }
+
+    setIsSavingStageAction(true);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setStageActionMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const nextState = upsertBatchInAppState(appState, transition.batch);
+      await saveAppStateToIndexedDb(nextState);
+      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(refreshedBatch);
+      const dateDefault = getLocalDateTimeDefault();
+      setActionDates({
+        transplant: dateDefault,
+        harvest: dateDefault,
+        failed: dateDefault,
+        ended: dateDefault,
+      });
+
+      if (latestStageEventAt && occurredAt < latestStageEventAt) {
+        setStageActionMessage('Warning: this stage event is earlier than newer timeline events and was saved retroactively.');
+      } else {
+        setStageActionMessage(null);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save stage action.';
+      setStageActionMessage(message);
+    } finally {
+      setIsSavingStageAction(false);
+    }
+  };
 
   if (isLoading) {
     return <p className="batch-detail-empty">Loading batch…</p>;
@@ -639,6 +722,35 @@ function BatchDetailPage() {
           </dl>
         </article>
       </div>
+
+      <article className="batch-detail-card">
+        <h3>Next stage actions</h3>
+        {nextStageActions.length === 0 ? (
+          <p className="batch-detail-empty">No valid next transitions from {batch.stage}.</p>
+        ) : (
+          <div className="batch-next-actions">
+            {nextStageActions.map((stage) => (
+              <div key={stage} className="batch-next-action-row">
+                <span className="batch-detail-pill">{stage}</span>
+                <input
+                  type="datetime-local"
+                  value={actionDates[stage] ?? ''}
+                  onChange={(event) =>
+                    setActionDates((current) => ({
+                      ...current,
+                      [stage]: event.target.value,
+                    }))
+                  }
+                />
+                <button type="button" onClick={() => void handleStageAction(stage)} disabled={isSavingStageAction}>
+                  Apply
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {stageActionMessage ? <p className="batch-stage-warning">{stageActionMessage}</p> : null}
+      </article>
 
       <article className="batch-detail-card">
         <h3>Stage timeline</h3>
