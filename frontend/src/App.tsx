@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch } from './contracts';
+import type { Batch, Bed } from './contracts';
 import {
   SchemaValidationError,
   initializeAppStateStorage,
+  listBedsFromAppState,
   listBatchesFromAppState,
   loadAppStateFromIndexedDb,
   loadPhotoBlobFromIndexedDb,
@@ -27,7 +28,144 @@ type BatchPhoto = {
 type BatchWithPhotos = Batch & { photos?: BatchPhoto[] };
 
 function BedsPage() {
-  return <p>Beds</p>;
+  const [beds, setBeds] = useState<Bed[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setBeds([]);
+        setBatches([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
+      setBatches(listBatchesFromAppState(appState));
+      setIsLoading(false);
+    };
+
+    void load();
+  }, []);
+
+  const activeBatchCountByBedId = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    for (const batch of batches) {
+      const bedId = getDerivedBedId(batch);
+      if (!bedId) {
+        continue;
+      }
+
+      counts[bedId] = (counts[bedId] ?? 0) + 1;
+    }
+
+    return counts;
+  }, [batches]);
+
+  return (
+    <section className="beds-page">
+      <h2>Beds</h2>
+      {isLoading ? <p className="beds-empty-state">Loading beds…</p> : null}
+      {!isLoading ? (
+        <div className="beds-grid">
+          {beds.map((bed) => (
+            <Link key={bed.bedId} to={`/beds/${bed.bedId}`} className="bed-card-link">
+              <article className="bed-card">
+                <p className="bed-card-id">{bed.bedId}</p>
+                <h3>{bed.name}</h3>
+                <p className="bed-card-meta">Garden {bed.gardenId}</p>
+                <p className="bed-card-meta">Active batches: {activeBatchCountByBedId[bed.bedId] ?? 0}</p>
+              </article>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+      {!isLoading && beds.length === 0 ? <p className="beds-empty-state">No beds found.</p> : null}
+    </section>
+  );
+}
+
+function BedDetailPage() {
+  const { bedId } = useParams();
+  const [bed, setBed] = useState<Bed | null>(null);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!bedId) {
+        setBed(null);
+        setBatches([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setBed(null);
+        setBatches([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const nextBed = listBedsFromAppState(appState).find((candidate) => candidate.bedId === bedId) ?? null;
+      const relatedBatches = listBatchesFromAppState(appState)
+        .filter((batch) => getDerivedBedId(batch) === bedId)
+        .sort((left, right) => left.batchId.localeCompare(right.batchId));
+
+      setBed(nextBed);
+      setBatches(relatedBatches);
+      setIsLoading(false);
+    };
+
+    void load();
+  }, [bedId]);
+
+  if (isLoading) {
+    return <p className="beds-empty-state">Loading bed…</p>;
+  }
+
+  if (!bed) {
+    return (
+      <section className="bed-detail-page">
+        <h2>Bed not found</h2>
+        <p className="beds-empty-state">No bed matches ID {bedId ?? 'unknown'}.</p>
+        <Link to="/beds" className="bed-detail-back-link">
+          ← Back to beds
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bed-detail-page">
+      <Link to="/beds" className="bed-detail-back-link">
+        ← Back to beds
+      </Link>
+      <h2>{bed.name}</h2>
+      <p className="bed-detail-meta">{bed.bedId} · Garden {bed.gardenId}</p>
+
+      <article className="bed-detail-card">
+        <h3>Active batches</h3>
+        {batches.length === 0 ? (
+          <p className="beds-empty-state">No active batches assigned to this bed.</p>
+        ) : (
+          <ul className="bed-detail-batch-list">
+            {batches.map((batch) => (
+              <li key={batch.batchId}>
+                <Link to={`/batches/${batch.batchId}`}>{batch.batchId}</Link>
+                <span>{batch.stage}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+    </section>
+  );
 }
 
 function CalendarPage() {
@@ -1123,6 +1261,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/beds" replace />} />
           <Route path="/beds" element={<BedsPage />} />
+          <Route path="/beds/:bedId" element={<BedDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
