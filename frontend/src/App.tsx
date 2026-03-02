@@ -602,7 +602,7 @@ function BatchDetailPage() {
 
     return batch.stageEvents.reduce(
       (latest, event) => (event.occurredAt > latest ? event.occurredAt : latest),
-      batch.stageEvents[0].occurredAt,
+      batch.stageEvents[0]!.occurredAt,
     );
   }, [batch]);
 
