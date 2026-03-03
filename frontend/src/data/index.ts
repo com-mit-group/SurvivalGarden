@@ -96,9 +96,45 @@ export const parseImportedAppState = (rawPayload: string): AppState => {
   return assertValid('appState', parsed);
 };
 
+const compareByString = (left: string, right: string): number => left.localeCompare(right);
+
+const sortCollectionByKey = <T extends Record<string, unknown>>(collection: T[], keys: string[]): T[] =>
+  [...collection].sort((left, right) => {
+    for (const key of keys) {
+      const leftValue = left[key];
+      const rightValue = right[key];
+
+      if (typeof leftValue === 'string' && typeof rightValue === 'string' && leftValue !== rightValue) {
+        return compareByString(leftValue, rightValue);
+      }
+    }
+
+    return compareByString(JSON.stringify(left), JSON.stringify(right));
+  });
+
+const canonicalizeForExport = (appState: AppState): AppState => {
+  const canonicalBatches = sortCollectionByKey(
+    appState.batches.map((batch) => ({
+      ...batch,
+      photos: Array.isArray(batch.photos) ? sortCollectionByKey(batch.photos, ['id', 'storageRef', 'capturedAt', 'filename']) : batch.photos,
+    })),
+    ['batchId', 'cropId', 'createdAt'],
+  );
+
+  return {
+    ...appState,
+    beds: sortCollectionByKey(appState.beds, ['bedId', 'gardenId', 'name']),
+    crops: sortCollectionByKey(appState.crops, ['cropId', 'name']),
+    cropPlans: sortCollectionByKey(appState.cropPlans, ['planId', 'cropId']),
+    batches: canonicalBatches,
+    seedInventory: sortCollectionByKey(appState.seedInventory, ['inventoryId', 'cropId']),
+    tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
+  };
+};
+
 export const serializeAppStateForExport = (appState: unknown): string => {
   const validState = assertValid('appState', appState);
-  return JSON.stringify(validState);
+  return JSON.stringify(canonicalizeForExport(validState));
 };
 
 export const loadAppStateFromStorage = (

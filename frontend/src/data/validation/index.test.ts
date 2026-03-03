@@ -354,6 +354,41 @@ describe('data boundary validation', () => {
 
     expect(canonicalizeForComparison(imported)).toEqual(canonicalizeForComparison(JSON.parse(exported)));
   });
+
+  it('canonicalizes export ordering and keeps photo data metadata-only', () => {
+    const unorderedState = {
+      ...validAppState,
+      beds: [
+        { ...validBed, bedId: 'bed-2', name: 'B bed' },
+        { ...validBed, bedId: 'bed-1', name: 'A bed' },
+      ],
+      batches: [
+        {
+          ...validBatch,
+          batchId: 'batch-2',
+          photos: [
+            { id: 'photo-2', storageRef: 'photo-2', filename: 'second.jpg' },
+            { id: 'photo-1', storageRef: 'photo-1', filename: 'first.jpg' },
+          ],
+        },
+      ],
+      tasks: [
+        { ...validTask, id: 'task-2', sourceKey: 'source-2' },
+        { ...validTask, id: 'task-1', sourceKey: 'source-1' },
+      ],
+    };
+
+    const exported = JSON.parse(serializeAppStateForExport(unorderedState)) as {
+      beds: Array<{ bedId: string }>;
+      tasks: Array<{ id: string }>;
+      batches: Array<{ photos?: Array<{ id: string; filename?: string; blobBase64?: string }> }>;
+    };
+
+    expect(exported.beds.map((bed) => bed.bedId)).toEqual(['bed-1', 'bed-2']);
+    expect(exported.tasks.map((task) => task.id)).toEqual(['task-1', 'task-2']);
+    expect(exported.batches[0]?.photos?.map((photo) => photo.id)).toEqual(['photo-1', 'photo-2']);
+    expect(JSON.stringify(exported)).not.toContain('blobBase64');
+  });
 });
 
 
