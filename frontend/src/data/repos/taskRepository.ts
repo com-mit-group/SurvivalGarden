@@ -58,7 +58,13 @@ const mergeGeneratedChecklist = (
   const generatedIdentities = new Set(merged.map(toChecklistIdentity));
   const userAddedEntries = existingChecklist
     .map(asChecklistEntry)
-    .filter((entry) => !generatedIdentities.has(toChecklistIdentity(entry)));
+    .filter((entry) => !generatedIdentities.has(toChecklistIdentity(entry)))
+    .filter(
+      (entry) =>
+        entry.done === true ||
+        entry.completed === true ||
+        (typeof entry.status === 'string' && entry.status.toLowerCase() === 'done'),
+    );
 
   return [...merged, ...userAddedEntries];
 };
