@@ -35,8 +35,25 @@ vi.mock('./data', () => ({
 describe('App', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_ENABLE_DEV_RESET', '');
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    if (typeof URL.createObjectURL === 'function') {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    } else {
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        writable: true,
+        value: vi.fn().mockReturnValue('blob:test'),
+      });
+    }
+
+    if (typeof URL.revokeObjectURL === 'function') {
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    } else {
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        writable: true,
+        value: vi.fn(),
+      });
+    }
   });
 
   afterEach(() => {
