@@ -1,4 +1,4 @@
-import type { AppState } from '../contracts';
+import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
@@ -98,13 +98,22 @@ export const parseImportedAppState = (rawPayload: string): AppState => {
 
 const compareByString = (left: string, right: string): number => left.localeCompare(right);
 
-const sortCollectionByKey = <T extends Record<string, unknown>>(collection: T[], keys: string[]): T[] =>
+const getStringValue = (record: unknown, key: string): string | null => {
+  if (!record || typeof record !== 'object') {
+    return null;
+  }
+
+  const value = (record as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+};
+
+const sortCollectionByKey = <T>(collection: T[], keys: string[]): T[] =>
   [...collection].sort((left, right) => {
     for (const key of keys) {
-      const leftValue = left[key];
-      const rightValue = right[key];
+      const leftValue = getStringValue(left, key);
+      const rightValue = getStringValue(right, key);
 
-      if (typeof leftValue === 'string' && typeof rightValue === 'string' && leftValue !== rightValue) {
+      if (leftValue !== null && rightValue !== null && leftValue !== rightValue) {
         return compareByString(leftValue, rightValue);
       }
     }
@@ -116,9 +125,11 @@ const canonicalizeForExport = (appState: AppState): AppState => {
   const canonicalBatches = sortCollectionByKey(
     appState.batches.map((batch) => ({
       ...batch,
-      photos: Array.isArray(batch.photos) ? sortCollectionByKey(batch.photos, ['id', 'storageRef', 'capturedAt', 'filename']) : batch.photos,
+      photos: Array.isArray((batch as Batch & { photos?: unknown[] }).photos)
+        ? sortCollectionByKey((batch as Batch & { photos?: unknown[] }).photos ?? [], ['id', 'storageRef', 'capturedAt', 'filename'])
+        : (batch as Batch & { photos?: unknown[] }).photos,
     })),
-    ['batchId', 'cropId', 'createdAt'],
+    ['batchId', 'cropId', 'startedAt'],
   );
 
   return {
@@ -127,7 +138,7 @@ const canonicalizeForExport = (appState: AppState): AppState => {
     crops: sortCollectionByKey(appState.crops, ['cropId', 'name']),
     cropPlans: sortCollectionByKey(appState.cropPlans, ['planId', 'cropId']),
     batches: canonicalBatches,
-    seedInventory: sortCollectionByKey(appState.seedInventory, ['inventoryId', 'cropId']),
+    seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
     tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
   };
 };

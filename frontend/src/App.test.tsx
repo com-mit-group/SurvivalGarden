@@ -21,9 +21,9 @@ vi.mock('./data', () => ({
   listTasksFromAppState: vi.fn().mockReturnValue([]),
   SchemaValidationError: class extends Error {
     schemaName: string;
-    issues: Array<{ path: string; message: string }>;
+    issues: Array<{ schemaName: string; keyword: string; path: string; message: string }>;
 
-    constructor(schemaName: string, issues: Array<{ path: string; message: string }>) {
+    constructor(schemaName: string, issues: Array<{ schemaName: string; keyword: string; path: string; message: string }>) {
       super('Schema validation failed');
       this.name = 'SchemaValidationError';
       this.schemaName = schemaName;
@@ -117,7 +117,12 @@ describe('App', () => {
   it('blocks download and surfaces validation issues when export serialization fails', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({ schemaVersion: 1 } as never);
     const validationError = new SchemaValidationError('appState', [
-      { path: '/batches/0/photos/0/storageRef', message: 'must be string' },
+      {
+        schemaName: 'appState',
+        keyword: 'type',
+        path: '/batches/0/photos/0/storageRef',
+        message: 'must be string',
+      },
     ]);
     vi.mocked(serializeAppStateForExport).mockImplementation(() => {
       throw validationError;
