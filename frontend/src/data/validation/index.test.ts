@@ -612,7 +612,9 @@ describe('planned task generation', () => {
     const second = generatePlannedTasks(fixture, 2026);
 
     expect(first).toEqual(second);
-    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+    expect(first.map((task) => `${task.date}:${task.sourceKey}`)).toEqual(
+      [...first.map((task) => `${task.date}:${task.sourceKey}`)].sort(),
+    );
     expect(first.every((task) =>
       /^plan_2026_[a-z0-9-]+_[a-z0-9-]+_\d+_[a-z_]+_\d+$/.test(task.sourceKey),
     )).toBe(true);
@@ -697,8 +699,8 @@ describe('operational task generation', () => {
             { stage: 'transplant', occurredAt: '2026-03-20T00:00:00Z' },
           ],
           assignments: [
-            { bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z', fromDate: '2026-03-01T00:00:00Z', toDate: '2026-03-16T00:00:00Z' },
-            { bedId: 'bed_002', assignedAt: '2026-03-16T00:00:00Z', fromDate: '2026-03-16T00:00:00Z' },
+            { bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z' },
+            { bedId: 'bed_002', assignedAt: '2026-03-16T00:00:00Z' },
           ],
         },
       ],
@@ -719,7 +721,7 @@ describe('operational task generation', () => {
           stageEvents: [
             { stage: 'pre_sown', occurredAt: '2026-03-01T00:00:00Z' },
           ],
-          assignments: [{ bedId: 'bed_003', assignedAt: '2026-03-01T00:00:00Z', fromDate: '2026-03-01T00:00:00Z', toDate: '2026-03-05T00:00:00Z' }],
+          assignments: [{ bedId: 'bed_003', assignedAt: '2026-03-10T00:00:00Z' }],
         },
       ],
     });
