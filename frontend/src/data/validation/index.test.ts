@@ -612,7 +612,9 @@ describe('planned task generation', () => {
     const second = generatePlannedTasks(fixture, 2026);
 
     expect(first).toEqual(second);
-    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+    expect(first.map((task) => `${task.date}:${task.sourceKey}`)).toEqual(
+      [...first.map((task) => `${task.date}:${task.sourceKey}`)].sort(),
+    );
     expect(first.every((task) =>
       /^plan_2026_[a-z0-9-]+_[a-z0-9-]+_\d+_[a-z_]+_\d+$/.test(task.sourceKey),
     )).toBe(true);
@@ -668,7 +670,9 @@ describe('operational task generation', () => {
     expect(first).toEqual(second);
     expect(first).not.toHaveLength(0);
     expect(first.every((task) => task.batchId === 'batch-alpha')).toBe(true);
-    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+    expect(first.map((task) => `${task.date}:${task.sourceKey}`)).toEqual(
+      [...first.map((task) => `${task.date}:${task.sourceKey}`)].sort(),
+    );
 
     const hardenOffTasks = first.filter((task) => task.type === 'harden-off');
     expect(hardenOffTasks).toHaveLength(2);
@@ -678,6 +682,53 @@ describe('operational task generation', () => {
       ['harden-off', 'bed-assignment', 'harvest-reminder'].includes(task.type),
     );
     expect(transplantAnchorTasks.every((task) => task.sourceKey.includes('2026-05-15t00:00:00z'))).toBe(true);
+  });
+
+  it('resolves bedId per task date using batch assignment history', () => {
+    const fixture = goldenFixtures['../../../../fixtures/golden/trier-v1.json'] as Record<string, unknown>;
+
+    const generated = generateOperationalTasks({
+      ...fixture,
+      batches: [
+        {
+          batchId: 'batch-alpha',
+          cropId: 'tomato',
+          startedAt: '2026-03-01T00:00:00Z',
+          stage: 'transplant',
+          stageEvents: [
+            { stage: 'pre_sown', occurredAt: '2026-03-01T00:00:00Z' },
+            { stage: 'germinated', occurredAt: '2026-03-10T00:00:00Z' },
+            { stage: 'transplant', occurredAt: '2026-03-20T00:00:00Z' },
+          ],
+          assignments: [
+            { bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z' },
+            { bedId: 'bed_002', assignedAt: '2026-03-16T00:00:00Z' },
+          ],
+        },
+      ],
+    });
+
+    expect(generated.find((task) => task.type === 'germination-check' && task.date === '2026-03-08')?.bedId).toBe('bed_001');
+    expect(generated.find((task) => task.type === 'pot-up')?.bedId).toBe('bed_002');
+    expect(generated.find((task) => task.type === 'bed-assignment')?.bedId).toBe('bed_002');
+
+    const withoutActiveAssignment = generateOperationalTasks({
+      ...fixture,
+      batches: [
+        {
+          batchId: 'batch-beta',
+          cropId: 'tomato',
+          startedAt: '2026-03-01T00:00:00Z',
+          stage: 'germinated',
+          stageEvents: [
+            { stage: 'pre_sown', occurredAt: '2026-03-01T00:00:00Z' },
+          ],
+          assignments: [{ bedId: 'bed_003', assignedAt: '2026-03-10T00:00:00Z' }],
+        },
+      ],
+    });
+
+    expect(withoutActiveAssignment[0]?.bedId).toBe('unassigned');
   });
 });
 describe('generated task upsert boundary helper', () => {
