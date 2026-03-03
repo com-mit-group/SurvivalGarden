@@ -237,7 +237,7 @@ export const generateOperationalTasks = (appState: unknown): Task[] => {
 
     const pushTask = (taskType: string, date: string, anchorOccurredAt: string, stageEventIndex: number) => {
       const sourceKey = buildOperationalTaskSourceKey(batch.batchId, taskType, anchorOccurredAt, stageEventIndex);
-      const bedId = getActiveBedAssignment(batch, `${date}T23:59:59.999Z`)?.bedId;
+      const bedId = getActiveBedAssignment(batch, `${date}T23:59:59.999Z`)?.bedId ?? 'unassigned';
       generatedTasks.push({
         id: sourceKey,
         sourceKey,
@@ -273,7 +273,10 @@ export const generateOperationalTasks = (appState: unknown): Task[] => {
         .sort();
 
       if (harvestWindowDates && harvestWindowDates.length > 0) {
-        const firstAfterTransplant = harvestWindowDates.find((date) => date >= transplantDate) ?? harvestWindowDates[0];
+        const firstAfterTransplant =
+          harvestWindowDates.find((date) => date >= transplantDate) ??
+          harvestWindowDates[0] ??
+          addDays(transplantDate, 60);
         pushTask('harvest-reminder', firstAfterTransplant, transplant.occurredAt, transplant.index + 3);
       } else {
         pushTask('harvest-reminder', addDays(transplantDate, 60), transplant.occurredAt, transplant.index + 3);

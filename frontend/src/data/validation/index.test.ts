@@ -724,7 +724,7 @@ describe('operational task generation', () => {
       ],
     });
 
-    expect(withoutActiveAssignment[0]?.bedId).toBeUndefined();
+    expect(withoutActiveAssignment[0]?.bedId).toBe('unassigned');
   });
 });
 describe('generated task upsert boundary helper', () => {
