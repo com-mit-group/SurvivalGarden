@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, Bed } from './contracts';
+import type { Batch, Bed, Task } from './contracts';
 import {
   SchemaValidationError,
   initializeAppStateStorage,
   listBedsFromAppState,
   listBatchesFromAppState,
+  listTasksFromAppState,
   loadAppStateFromIndexedDb,
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
+  upsertTaskInAppState,
   upsertBatchInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
@@ -591,7 +593,265 @@ function BedDetailPage() {
 }
 
 function CalendarPage() {
-  return <p>Calendar</p>;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [bedNames, setBedNames] = useState<Record<string, string>>({});
+  const [cropNames, setCropNames] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setTasks([]);
+        setBedNames({});
+        setCropNames({});
+        setIsLoading(false);
+        return;
+      }
+
+      setTasks(listTasksFromAppState(appState));
+      setBedNames(Object.fromEntries(appState.beds.map((bed) => [bed.bedId, bed.name])));
+      setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
+      setIsLoading(false);
+    };
+
+    void load();
+  }, []);
+
+  const filters = {
+    days: searchParams.get('days') ?? '30',
+    bed: searchParams.get('bed') ?? '',
+    crop: searchParams.get('crop') ?? '',
+    status: searchParams.get('status') ?? '',
+    type: searchParams.get('type') ?? '',
+    overdue: searchParams.get('overdue') === '1',
+  };
+
+  const updateFilter = (name: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+
+    if (value) {
+      next.set(name, value);
+    } else {
+      next.delete(name);
+    }
+
+    setSearchParams(next, { replace: true });
+  };
+
+  const localToday = useMemo(() => {
+    const today = new Date();
+    const localOffsetMs = today.getTimezoneOffset() * 60_000;
+    return new Date(today.getTime() - localOffsetMs).toISOString().slice(0, 10);
+  }, []);
+
+  const rangeEnd = useMemo(() => {
+    const startDate = new Date(`${localToday}T00:00:00`);
+    startDate.setDate(startDate.getDate() + Number(filters.days));
+    const localOffsetMs = startDate.getTimezoneOffset() * 60_000;
+    return new Date(startDate.getTime() - localOffsetMs).toISOString().slice(0, 10);
+  }, [filters.days, localToday]);
+
+  const bedOptions = useMemo(
+    () =>
+      Array.from(new Set(tasks.map((task) => task.bedId).filter(Boolean)))
+        .sort((left, right) => (bedNames[left] ?? left).localeCompare(bedNames[right] ?? right))
+        .map((bedId) => ({ value: bedId, label: bedNames[bedId] ?? bedId })),
+    [bedNames, tasks],
+  );
+
+  const cropOptions = useMemo(
+    () =>
+      Array.from(new Set(tasks.map((task) => task.cropId).filter(Boolean)))
+        .sort((left, right) => (cropNames[left] ?? left).localeCompare(cropNames[right] ?? right))
+        .map((cropId) => ({ value: cropId, label: cropNames[cropId] ?? cropId })),
+    [cropNames, tasks],
+  );
+
+  const statusOptions = useMemo(
+    () => Array.from(new Set(tasks.map((task) => task.status).filter(Boolean))).sort(),
+    [tasks],
+  );
+
+  const typeOptions = useMemo(
+    () => Array.from(new Set(tasks.map((task) => task.type).filter(Boolean))).sort(),
+    [tasks],
+  );
+
+  const filteredTasks = useMemo(
+    () =>
+      tasks
+        .filter((task) => {
+          const inWindow = task.date >= localToday && task.date <= rangeEnd;
+          const isOverdue = task.date < localToday;
+
+          if (!inWindow && !(filters.overdue && isOverdue)) {
+            return false;
+          }
+
+          if (filters.bed && task.bedId !== filters.bed) {
+            return false;
+          }
+
+          if (filters.crop && task.cropId !== filters.crop) {
+            return false;
+          }
+
+          if (filters.status && task.status !== filters.status) {
+            return false;
+          }
+
+          if (filters.type && task.type !== filters.type) {
+            return false;
+          }
+
+          return true;
+        })
+        .sort((left, right) => {
+          if (left.date !== right.date) {
+            return left.date.localeCompare(right.date);
+          }
+
+          return left.id.localeCompare(right.id);
+        }),
+    [filters.bed, filters.crop, filters.overdue, filters.status, filters.type, localToday, rangeEnd, tasks],
+  );
+
+  const handleToggleTaskStatus = async (task: Task) => {
+    if (savingTaskId) {
+      return;
+    }
+
+    setSavingTaskId(task.id);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        return;
+      }
+
+      const doneStatuses = new Set(['done', 'completed']);
+      const isDone = doneStatuses.has(task.status.toLowerCase());
+      const updatedTask = { ...task, status: isDone ? 'pending' : 'done' };
+      const nextState = upsertTaskInAppState(appState, updatedTask);
+      await saveAppStateToIndexedDb(nextState);
+      setTasks((current) => current.map((entry) => (entry.id === updatedTask.id ? updatedTask : entry)));
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
+  return (
+    <section className="calendar-page">
+      <h2>Calendar</h2>
+      <div className="calendar-range-toggle" role="group" aria-label="Date window">
+        {[7, 30, 90].map((days) => (
+          <button
+            key={days}
+            type="button"
+            className={filters.days === String(days) ? 'active' : ''}
+            onClick={() => updateFilter('days', String(days))}
+          >
+            {days} days
+          </button>
+        ))}
+        <label>
+          <input
+            type="checkbox"
+            checked={filters.overdue}
+            onChange={(event) => updateFilter('overdue', event.target.checked ? '1' : '')}
+          />{' '}
+          Show past due
+        </label>
+      </div>
+
+      <div className="calendar-filters">
+        <label>
+          Bed
+          <select value={filters.bed} onChange={(event) => updateFilter('bed', event.target.value)}>
+            <option value="">All beds</option>
+            {bedOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Crop
+          <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
+            <option value="">All crops</option>
+            {cropOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
+            <option value="">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Task type
+          <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)}>
+            <option value="">All types</option>
+            {typeOptions.map((taskType) => (
+              <option key={taskType} value={taskType}>
+                {taskType}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {isLoading ? <p className="batch-empty-state">Loading tasks…</p> : null}
+
+      {!isLoading ? (
+        <ul className="task-list">
+          {filteredTasks.map((task) => {
+            const isDone = ['done', 'completed'].includes(task.status.toLowerCase());
+            const isOverdue = task.date < localToday && !isDone;
+
+            return (
+              <li key={task.id} className={`task-row${isOverdue ? ' is-overdue' : ''}`}>
+                <div className="task-row-main">
+                  <p className="task-row-date">{task.date}</p>
+                  <div className="task-row-badges">
+                    <span className="task-type-badge">{task.type.replace(/[-_]/g, ' ')}</span>
+                    <span className={`task-status-badge${isDone ? ' is-done' : ''}`}>{task.status}</span>
+                  </div>
+                  <p className="task-row-meta">
+                    Bed: {(bedNames[task.bedId] ?? task.bedId) || '—'} · Crop: {(cropNames[task.cropId] ?? task.cropId) || '—'}
+                  </p>
+                  {task.batchId ? (
+                    <p className="task-row-meta">
+                      Batch: <Link to={`/batches/${task.batchId}`}>{task.batchId}</Link>
+                    </p>
+                  ) : null}
+                </div>
+                <button type="button" onClick={() => void handleToggleTaskStatus(task)} disabled={savingTaskId === task.id}>
+                  {isDone ? 'Mark undone' : 'Mark done'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {!isLoading && filteredTasks.length === 0 ? <p className="batch-empty-state">No tasks in this range.</p> : null}
+    </section>
+  );
 }
 
 const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(batch, new Date().toISOString())?.bedId ?? null;
