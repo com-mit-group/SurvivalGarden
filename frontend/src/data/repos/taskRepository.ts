@@ -18,8 +18,13 @@ const toChecklistIdentity = (entry: Record<string, unknown>): string => {
     return `label:${entry.label}`;
   }
 
-  const { done, completed, status, ...identity } = entry;
-  return JSON.stringify(identity);
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(entry).filter(
+        ([key]) => key !== 'done' && key !== 'completed' && key !== 'status',
+      ),
+    ),
+  );
 };
 
 const mergeGeneratedChecklist = (
