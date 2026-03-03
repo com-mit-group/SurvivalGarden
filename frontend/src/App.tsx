@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { Batch, Bed, Task } from './contracts';
 import {
+  generateOperationalTasks,
   SchemaValidationError,
   initializeAppStateStorage,
   listBedsFromAppState,
@@ -12,6 +13,7 @@ import {
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
+  upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
   upsertBedInAppState,
@@ -599,6 +601,9 @@ function CalendarPage() {
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [isRegeneratingTasks, setIsRegeneratingTasks] = useState(false);
+  const [regenerationSummary, setRegenerationSummary] = useState<{ added: number; updated: number; unchanged: number } | null>(null);
+  const [regenerationError, setRegenerationError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -744,6 +749,72 @@ function CalendarPage() {
     }
   };
 
+  const handleRegenerateTasks = async () => {
+    if (isRegeneratingTasks) {
+      return;
+    }
+
+    setIsRegeneratingTasks(true);
+    setRegenerationSummary(null);
+    setRegenerationError(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setRegenerationError('Unable to regenerate tasks because local app state is unavailable.');
+        return;
+      }
+
+      const tasksBeforeBySourceKey = new Map(listTasksFromAppState(appState).map((task) => [task.sourceKey, task]));
+      const generatedTasks = generateOperationalTasks(appState);
+      const nextState = upsertGeneratedTasksInAppState(appState, generatedTasks);
+      const tasksAfter = listTasksFromAppState(nextState);
+      const tasksAfterBySourceKey = new Map(tasksAfter.map((task) => [task.sourceKey, task]));
+
+      let added = 0;
+      let updated = 0;
+      let unchanged = 0;
+      const processedSourceKeys = new Set<string>();
+
+      for (const generatedTask of generatedTasks) {
+        if (processedSourceKeys.has(generatedTask.sourceKey)) {
+          continue;
+        }
+
+        processedSourceKeys.add(generatedTask.sourceKey);
+        const beforeTask = tasksBeforeBySourceKey.get(generatedTask.sourceKey);
+        const afterTask = tasksAfterBySourceKey.get(generatedTask.sourceKey);
+
+        if (!beforeTask && afterTask) {
+          added += 1;
+          continue;
+        }
+
+        if (!beforeTask || !afterTask) {
+          continue;
+        }
+
+        if (JSON.stringify(beforeTask) === JSON.stringify(afterTask)) {
+          unchanged += 1;
+        } else {
+          updated += 1;
+        }
+      }
+
+      await saveAppStateToIndexedDb(nextState);
+      setTasks(tasksAfter);
+      setRegenerationSummary({ added, updated, unchanged });
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        setRegenerationError(`${error.message}: ${error.issues.map((issue) => issue.path || issue.message).join('; ')}`);
+      } else {
+        setRegenerationError(error instanceof Error ? error.message : 'Failed to regenerate tasks.');
+      }
+    } finally {
+      setIsRegeneratingTasks(false);
+    }
+  };
+
   return (
     <section className="calendar-page">
       <h2>Calendar</h2>
@@ -766,7 +837,18 @@ function CalendarPage() {
           />{' '}
           Show past due
         </label>
+        <button type="button" onClick={() => void handleRegenerateTasks()} disabled={isRegeneratingTasks}>
+          {isRegeneratingTasks ? 'Regenerating…' : 'Regenerate tasks'}
+        </button>
       </div>
+
+      {regenerationSummary ? (
+        <p className="batch-stage-warning">
+          Regenerated tasks — Added: {regenerationSummary.added}, Updated: {regenerationSummary.updated}, Unchanged:{' '}
+          {regenerationSummary.unchanged}
+        </p>
+      ) : null}
+      {regenerationError ? <p className="batch-stage-warning">Regeneration failed: {regenerationError}</p> : null}
 
       <div className="calendar-filters">
         <label>
