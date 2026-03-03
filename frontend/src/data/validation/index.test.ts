@@ -670,7 +670,9 @@ describe('operational task generation', () => {
     expect(first).toEqual(second);
     expect(first).not.toHaveLength(0);
     expect(first.every((task) => task.batchId === 'batch-alpha')).toBe(true);
-    expect(first.map((task) => task.sourceKey)).toEqual([...first.map((task) => task.sourceKey)].sort());
+    expect(first.map((task) => `${task.date}:${task.sourceKey}`)).toEqual(
+      [...first.map((task) => `${task.date}:${task.sourceKey}`)].sort(),
+    );
 
     const hardenOffTasks = first.filter((task) => task.type === 'harden-off');
     expect(hardenOffTasks).toHaveLength(2);
