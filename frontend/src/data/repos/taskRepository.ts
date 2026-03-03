@@ -6,6 +6,69 @@ import type { ListQuery } from './interfaces';
 
 const normalizeTaskCandidate = (value: unknown): unknown => value ?? {};
 
+const asChecklistEntry = (entry: unknown): Record<string, unknown> =>
+  typeof entry === 'object' && entry !== null ? { ...(entry as Record<string, unknown>) } : {};
+
+const toChecklistIdentity = (entry: Record<string, unknown>): string => {
+  if (typeof entry.step === 'string') {
+    return `step:${entry.step}`;
+  }
+
+  if (typeof entry.label === 'string') {
+    return `label:${entry.label}`;
+  }
+
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(entry).filter(
+        ([key]) => key !== 'done' && key !== 'completed' && key !== 'status',
+      ),
+    ),
+  );
+};
+
+const mergeGeneratedChecklist = (
+  existingChecklist: Record<string, unknown>[],
+  generatedChecklist: Record<string, unknown>[],
+): Record<string, unknown>[] => {
+  const existingByIdentity = new Map(
+    existingChecklist.map((entry) => {
+      const normalized = asChecklistEntry(entry);
+      return [toChecklistIdentity(normalized), normalized] as const;
+    }),
+  );
+
+  const merged = generatedChecklist.map((entry) => {
+    const normalized = asChecklistEntry(entry);
+    const identity = toChecklistIdentity(normalized);
+    const existingEntry = existingByIdentity.get(identity);
+
+    if (!existingEntry) {
+      return normalized;
+    }
+
+    return {
+      ...normalized,
+      ...(typeof existingEntry.done === 'boolean' ? { done: existingEntry.done } : {}),
+      ...(typeof existingEntry.completed === 'boolean' ? { completed: existingEntry.completed } : {}),
+      ...(typeof existingEntry.status === 'string' ? { status: existingEntry.status } : {}),
+    };
+  });
+
+  const generatedIdentities = new Set(merged.map(toChecklistIdentity));
+  const userAddedEntries = existingChecklist
+    .map(asChecklistEntry)
+    .filter((entry) => !generatedIdentities.has(toChecklistIdentity(entry)))
+    .filter(
+      (entry) =>
+        entry.done === true ||
+        entry.completed === true ||
+        (typeof entry.status === 'string' && entry.status.toLowerCase() === 'done'),
+    );
+
+  return [...merged, ...userAddedEntries];
+};
+
 export const getTaskFromAppState = (appState: unknown, taskId: Task['id']): Task | null => {
   const state = assertValid('appState', appState);
   const candidate = state.tasks.find((task) => task.id === taskId);
@@ -80,6 +143,7 @@ export const upsertGeneratedTasksInAppState = (
         ? {
             ...validGeneratedTask,
             status: existingTask.status,
+            checklist: mergeGeneratedChecklist(existingTask.checklist, validGeneratedTask.checklist),
           }
         : validGeneratedTask,
     );

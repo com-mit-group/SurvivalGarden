@@ -752,6 +752,48 @@ describe('generated task upsert boundary helper', () => {
       {
         ...regeneratedTask,
         status: 'done',
+        checklist: [{ step: 'Water and mulch' }],
+      },
+    ]);
+  });
+
+  it('preserves checklist completion and keeps user-added checklist entries on regeneration', () => {
+    const appStateWithTask = {
+      ...validAppState,
+      tasks: [
+        {
+          ...validTask,
+          checklist: [
+            { step: 'Water thoroughly', done: true },
+            { step: 'User note', done: true },
+          ],
+          status: 'done',
+        },
+      ],
+    };
+
+    const regeneratedTask = {
+      ...validTask,
+      id: 'task-2',
+      date: '2026-03-10',
+      checklist: [
+        { step: 'Water thoroughly', done: false },
+        { step: 'Add compost', done: false },
+      ],
+      status: 'pending',
+    };
+
+    const merged = upsertGeneratedTasksInAppState(appStateWithTask, [regeneratedTask]);
+
+    expect(merged.tasks).toEqual([
+      {
+        ...regeneratedTask,
+        status: 'done',
+        checklist: [
+          { step: 'Water thoroughly', done: true },
+          { step: 'Add compost', done: false },
+          { step: 'User note', done: true },
+        ],
       },
     ]);
   });
