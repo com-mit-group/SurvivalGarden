@@ -432,6 +432,33 @@ describeIndexedDb('indexeddb photo blob storage', () => {
     expect(JSON.stringify(loaded)).not.toContain('image-bytes');
   });
 
+
+  it('replace mode wipes previous entities, clears blobs, and seeds default settings when missing', async () => {
+    await resetToGoldenDataset();
+
+    await savePhotoBlobToIndexedDb('stale-photo', new Blob(['old-bytes'], { type: 'image/jpeg' }));
+
+    const replacementState = {
+      ...validAppState,
+      beds: [{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed' }],
+      crops: [{ ...validCrop, cropId: 'replacement-crop', name: 'Replacement Crop' }],
+      cropPlans: [{ ...validCropPlan, planId: 'replacement-plan', cropId: 'replacement-crop' }],
+      batches: [{ ...validBatch, batchId: 'replacement-batch', bedId: 'replacement-bed', cropId: 'replacement-crop' }],
+      settings: undefined,
+    };
+
+    await saveAppStateToIndexedDb(replacementState, { mode: 'replace' });
+
+    const loaded = await loadAppStateFromIndexedDb();
+    expect(loaded?.beds).toEqual([{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed' }]);
+    expect(loaded?.crops).toEqual([{ ...validCrop, cropId: 'replacement-crop', name: 'Replacement Crop' }]);
+    expect(loaded?.cropPlans).toEqual([{ ...validCropPlan, planId: 'replacement-plan', cropId: 'replacement-crop' }]);
+    expect(loaded?.batches).toEqual([{ ...validBatch, batchId: 'replacement-batch', bedId: 'replacement-bed', cropId: 'replacement-crop' }]);
+    expect(loaded?.settings).toEqual(getSettingsOrDefault(undefined));
+
+    await expect(loadPhotoBlobFromIndexedDb('stale-photo')).resolves.toBeNull();
+  });
+
   it('maps quota failures to AppStateStorageError with quota warning', async () => {
     const quotaError = Object.assign(new Error('Quota exceeded'), { name: 'QuotaExceededError' });
     const originalIndexedDB = globalThis.indexedDB;
