@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, Bed, Task } from './contracts';
+import type { Batch, Bed, SeedInventoryItem, Task } from './contracts';
 import {
   generateOperationalTasks,
   SchemaValidationError,
@@ -15,6 +15,9 @@ import {
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
+  listSeedInventoryItemsFromAppState,
+  removeSeedInventoryItemFromAppState,
+  upsertSeedInventoryItemInAppState,
   upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
@@ -934,6 +937,223 @@ function CalendarPage() {
       ) : null}
 
       {!isLoading && filteredTasks.length === 0 ? <p className="batch-empty-state">No tasks in this range.</p> : null}
+    </section>
+  );
+}
+
+const UNLINKED_CROP_ID = 'unlinked-seed-inventory-crop';
+
+function SeedInventoryPage() {
+  const [items, setItems] = useState<SeedInventoryItem[]>([]);
+  const [cropNames, setCropNames] = useState<Record<string, string>>({});
+  const [cropIds, setCropIds] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState({
+    variety: '',
+    cropId: UNLINKED_CROP_ID,
+    quantity: '0',
+    unit: 'seeds' as SeedInventoryItem['unit'],
+    notes: '',
+  });
+
+  const loadInventory = useCallback(async () => {
+    const appState = await loadAppStateFromIndexedDb();
+
+    if (!appState) {
+      setItems([]);
+      setCropNames({});
+      setCropIds([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setItems(
+      listSeedInventoryItemsFromAppState(appState).sort((left, right) => left.variety.localeCompare(right.variety)),
+    );
+    setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
+    setCropIds(appState.crops.map((crop) => crop.cropId).sort((left, right) => left.localeCompare(right)));
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadInventory();
+  }, [loadInventory]);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormValues({
+      variety: '',
+      cropId: UNLINKED_CROP_ID,
+      quantity: '0',
+      unit: 'seeds',
+      notes: '',
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedVariety = formValues.variety.trim();
+    if (!trimmedVariety) {
+      return;
+    }
+
+    const parsedQuantity = Number(formValues.quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+      return;
+    }
+
+    setSavingId(editingId ?? 'new');
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const existing = editingId
+        ? appState.seedInventoryItems.find((item) => item.seedInventoryItemId === editingId)
+        : null;
+
+      const nextItem: SeedInventoryItem = {
+        seedInventoryItemId: existing?.seedInventoryItemId ?? `seed-item-${crypto.randomUUID()}`,
+        cropId: formValues.cropId,
+        variety: trimmedVariety,
+        quantity: parsedQuantity,
+        unit: formValues.unit,
+        status: parsedQuantity === 0 ? 'depleted' : parsedQuantity <= 10 ? 'low' : 'available',
+        notes: formValues.notes.trim() || undefined,
+        createdAt: existing?.createdAt ?? nowIso,
+        updatedAt: nowIso,
+      };
+
+      const nextState = upsertSeedInventoryItemInAppState(appState, nextItem);
+      await saveAppStateToIndexedDb(nextState);
+      await loadInventory();
+      resetForm();
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleDelete = async (seedInventoryItemId: string) => {
+    setSavingId(seedInventoryItemId);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        return;
+      }
+
+      const nextState = removeSeedInventoryItemFromAppState(appState, seedInventoryItemId);
+      await saveAppStateToIndexedDb(nextState);
+      await loadInventory();
+      if (editingId === seedInventoryItemId) {
+        resetForm();
+      }
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <section className="seed-inventory-page">
+      <h2>Seed Inventory</h2>
+      <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
+        <input
+          type="text"
+          value={formValues.variety}
+          onChange={(event) => setFormValues((current) => ({ ...current, variety: event.target.value }))}
+          placeholder="Variety"
+          required
+        />
+        <select
+          value={formValues.cropId}
+          onChange={(event) => setFormValues((current) => ({ ...current, cropId: event.target.value }))}
+        >
+          <option value={UNLINKED_CROP_ID}>Unlinked crop</option>
+          {cropIds.map((cropId) => (
+            <option key={cropId} value={cropId}>
+              {cropNames[cropId] ?? cropId}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={formValues.quantity}
+          onChange={(event) => setFormValues((current) => ({ ...current, quantity: event.target.value }))}
+          placeholder="Quantity"
+          required
+        />
+        <select
+          value={formValues.unit}
+          onChange={(event) => setFormValues((current) => ({ ...current, unit: event.target.value as SeedInventoryItem['unit'] }))}
+        >
+          <option value="seeds">seeds</option>
+          <option value="g">g</option>
+          <option value="packets">packets</option>
+        </select>
+        <input
+          type="text"
+          value={formValues.notes}
+          onChange={(event) => setFormValues((current) => ({ ...current, notes: event.target.value }))}
+          placeholder="Notes"
+        />
+        <button type="submit" disabled={savingId !== null}>
+          {editingId ? 'Save item' : 'Add item'}
+        </button>
+        {editingId ? (
+          <button type="button" onClick={resetForm} disabled={savingId !== null}>
+            Cancel
+          </button>
+        ) : null}
+      </form>
+
+      {isLoading ? <p>Loading inventory…</p> : null}
+      {!isLoading ? (
+        <ul className="seed-inventory-list">
+          {items.map((item) => (
+            <li key={item.seedInventoryItemId} className="seed-inventory-row">
+              <div>
+                <p className="seed-inventory-primary">{item.variety}</p>
+                <p className="seed-inventory-meta">
+                  Crop: {item.cropId === UNLINKED_CROP_ID ? 'Unlinked' : cropNames[item.cropId] ?? 'Unknown crop'}
+                </p>
+                <p className="seed-inventory-meta">
+                  {item.quantity} {item.unit} • {item.status}
+                </p>
+                {item.notes ? <p className="seed-inventory-meta">{item.notes}</p> : null}
+              </div>
+              <div className="seed-inventory-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(item.seedInventoryItemId);
+                    setFormValues({
+                      variety: item.variety,
+                      cropId: item.cropId,
+                      quantity: String(item.quantity),
+                      unit: item.unit,
+                      notes: item.notes ?? '',
+                    });
+                  }}
+                  disabled={savingId !== null}
+                >
+                  Edit
+                </button>
+                <button type="button" onClick={() => void handleDelete(item.seedInventoryItemId)} disabled={savingId !== null}>
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!isLoading && items.length === 0 ? <p>No seed inventory items yet.</p> : null}
     </section>
   );
 }
@@ -2218,6 +2438,7 @@ function App() {
           <Route path="/batches" element={<BatchesPage />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
+          <Route path="/seed-inventory" element={<SeedInventoryPage />} />
           <Route
             path="/data"
             element={
@@ -2238,6 +2459,7 @@ function App() {
         <NavLink to="/calendar">Calendar</NavLink>
         <NavLink to="/batches">Batches</NavLink>
         <NavLink to="/nutrition">Nutrition</NavLink>
+        <NavLink to="/seed-inventory">Seeds</NavLink>
         <NavLink to="/data">Data</NavLink>
       </nav>
     </div>
