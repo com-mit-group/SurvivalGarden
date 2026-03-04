@@ -4,6 +4,8 @@ import { getActiveBedAssignment } from './batchRepository';
 import { assertValid } from '../validation';
 import type { ListQuery } from './interfaces';
 
+type MergeOutcome = 'added' | 'updated' | 'unchanged';
+
 const normalizeTaskCandidate = (value: unknown): unknown => value ?? {};
 
 const asChecklistEntry = (entry: unknown): Record<string, unknown> =>
@@ -153,6 +155,54 @@ export const upsertGeneratedTasksInAppState = (
     ...state,
     tasks: [...mergedTasksBySourceKey.values()],
   });
+};
+
+const isTaskDone = (task: Task): boolean => task.status.toLowerCase() === 'done';
+
+const hasCompletedChecklistEntries = (task: Task): boolean =>
+  task.checklist.some((entry) => {
+    const normalizedEntry = asChecklistEntry(entry);
+    return (
+      normalizedEntry.done === true ||
+      normalizedEntry.completed === true ||
+      (typeof normalizedEntry.status === 'string' && normalizedEntry.status.toLowerCase() === 'done')
+    );
+  });
+
+const shouldPreferCurrentTask = (currentTask: Task, incomingTask: Task): boolean => {
+  if (isTaskDone(currentTask) && !isTaskDone(incomingTask)) {
+    return true;
+  }
+
+  if (hasCompletedChecklistEntries(currentTask) && !hasCompletedChecklistEntries(incomingTask)) {
+    return true;
+  }
+
+  return false;
+};
+
+const areTasksEquivalent = (left: Task, right: Task): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+export const mergeTaskForImport = (
+  currentTask: Task | null,
+  incomingTask: Task,
+): { task: Task; outcome: MergeOutcome } => {
+  if (!currentTask) {
+    return { task: incomingTask, outcome: 'added' };
+  }
+
+  const mergedTask = shouldPreferCurrentTask(currentTask, incomingTask)
+    ? {
+        ...incomingTask,
+        status: currentTask.status,
+        checklist: mergeGeneratedChecklist(currentTask.checklist, incomingTask.checklist),
+      }
+    : incomingTask;
+
+  return {
+    task: mergedTask,
+    outcome: areTasksEquivalent(currentTask, mergedTask) ? 'unchanged' : 'updated',
+  };
 };
 
 const buildPlannedTaskSourceKey = (

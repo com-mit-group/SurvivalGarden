@@ -433,6 +433,81 @@ describeIndexedDb('indexeddb photo blob storage', () => {
   });
 
 
+
+
+  it('merge mode prevents duplicate entities and tasks by id/sourceKey', async () => {
+    await resetToGoldenDataset();
+
+    const imported = {
+      ...validAppState,
+      beds: [{ ...validBed, bedId: 'bed-1', name: 'Imported Bed Name', updatedAt: '2024-01-03T00:00:00Z' }],
+      tasks: [
+        {
+          ...validTask,
+          id: 'task-imported-id',
+          sourceKey: 'shared-source',
+          status: 'pending',
+          checklist: [{ step: 'Water thoroughly' }],
+        },
+      ],
+    };
+
+    await saveAppStateToIndexedDb({
+      ...validAppState,
+      tasks: [
+        {
+          ...validTask,
+          id: 'task-existing-id',
+          sourceKey: 'shared-source',
+          status: 'done',
+          checklist: [{ step: 'Water thoroughly', done: true }],
+        },
+      ],
+    }, { mode: 'replace' });
+
+    const report = await saveAppStateToIndexedDb(imported, { mode: 'merge' });
+    const loaded = await loadAppStateFromIndexedDb();
+
+    expect(loaded?.beds).toHaveLength(1);
+    expect(loaded?.beds[0]?.name).toBe('Imported Bed Name');
+    expect(loaded?.tasks).toHaveLength(1);
+    expect(loaded?.tasks[0]?.sourceKey).toBe('shared-source');
+    expect(loaded?.tasks[0]?.status).toBe('done');
+    expect(report?.beds.updated).toBe(1);
+    expect(report?.tasks.updated).toBe(1);
+  });
+
+  it('merge mode prefers latest updatedAt and records conflict for equal timestamps', async () => {
+    await saveAppStateToIndexedDb({
+      ...validAppState,
+      beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Current Name', updatedAt: '2024-01-03T00:00:00Z' }],
+    }, { mode: 'replace' });
+
+    const report = await saveAppStateToIndexedDb({
+      ...validAppState,
+      beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Imported Name', updatedAt: '2024-01-03T00:00:00Z' }],
+    }, { mode: 'merge' });
+
+    const loaded = await loadAppStateFromIndexedDb();
+    expect(loaded?.beds[0]?.name).toBe('Imported Name');
+    expect(report?.conflicts.some((entry) => entry.includes('beds:bed-conflict'))).toBe(true);
+  });
+
+  it('merge mode treats missing updatedAt as imported newer and warns', async () => {
+    await saveAppStateToIndexedDb({
+      ...validAppState,
+      batches: [{ ...validBatch, batchId: 'batch-missing-updated-at', stage: 'sowing' }],
+    }, { mode: 'replace' });
+
+    const report = await saveAppStateToIndexedDb({
+      ...validAppState,
+      batches: [{ ...validBatch, batchId: 'batch-missing-updated-at', stage: 'harvest' }],
+    }, { mode: 'merge' });
+
+    const loaded = await loadAppStateFromIndexedDb();
+    expect(loaded?.batches[0]?.stage).toBe('harvest');
+    expect(report?.warnings.some((entry) => entry.includes('batch-missing-updated-at'))).toBe(true);
+  });
   it('replace mode wipes previous entities, clears blobs, and seeds default settings when missing', async () => {
     await resetToGoldenDataset();
 

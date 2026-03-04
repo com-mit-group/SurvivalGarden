@@ -1,6 +1,7 @@
 import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
+import { mergeTaskForImport } from './repos/taskRepository';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -179,6 +180,138 @@ export class AppStateStorageError extends Error {
 
 type SaveAppStateOptions = {
   mode?: 'merge' | 'replace';
+};
+
+type MergeReportSection = {
+  added: number;
+  updated: number;
+  unchanged: number;
+};
+
+type MergeReport = {
+  beds: MergeReportSection;
+  crops: MergeReportSection;
+  cropPlans: MergeReportSection;
+  batches: MergeReportSection;
+  tasks: MergeReportSection;
+  seedInventoryItems: MergeReportSection;
+  conflicts: string[];
+  warnings: string[];
+};
+
+type EntityType = 'beds' | 'crops' | 'cropPlans' | 'batches' | 'seedInventoryItems';
+
+const createEmptyMergeReportSection = (): MergeReportSection => ({ added: 0, updated: 0, unchanged: 0 });
+
+const createEmptyMergeReport = (): MergeReport => ({
+  beds: createEmptyMergeReportSection(),
+  crops: createEmptyMergeReportSection(),
+  cropPlans: createEmptyMergeReportSection(),
+  batches: createEmptyMergeReportSection(),
+  tasks: createEmptyMergeReportSection(),
+  seedInventoryItems: createEmptyMergeReportSection(),
+  conflicts: [],
+  warnings: [],
+});
+
+const ENTITY_ID_KEY: Record<EntityType, string> = {
+  beds: 'bedId',
+  crops: 'cropId',
+  cropPlans: 'planId',
+  batches: 'batchId',
+  seedInventoryItems: 'seedInventoryItemId',
+};
+
+const normalizeTimestamp = (value: unknown): number | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? null : date;
+};
+
+const compareWithUpdatedAt = (
+  entityLabel: string,
+  id: string,
+  currentRecord: Record<string, unknown>,
+  incomingRecord: Record<string, unknown>,
+  report: MergeReport,
+): number => {
+  const currentUpdatedAt = normalizeTimestamp(currentRecord.updatedAt);
+  const incomingUpdatedAt = normalizeTimestamp(incomingRecord.updatedAt);
+
+  if (currentUpdatedAt === null || incomingUpdatedAt === null) {
+    report.warnings.push(`${entityLabel}:${id} missing updatedAt; preferred imported value.`);
+    return 1;
+  }
+
+  if (currentUpdatedAt === incomingUpdatedAt) {
+    report.conflicts.push(`${entityLabel}:${id} has identical updatedAt; preferred imported value.`);
+  }
+
+  return incomingUpdatedAt >= currentUpdatedAt ? 1 : -1;
+};
+
+const mergeCollectionById = <T extends Record<string, unknown>>(
+  entityType: EntityType,
+  currentCollection: T[],
+  incomingCollection: T[],
+  report: MergeReport,
+): T[] => {
+  const section = report[entityType];
+  const idKey = ENTITY_ID_KEY[entityType];
+  const mergedById = new Map(currentCollection.map((record) => [String(record[idKey]), record]));
+
+  for (const incomingRecord of incomingCollection) {
+    const id = String(incomingRecord[idKey]);
+    const currentRecord = mergedById.get(id);
+
+    if (!currentRecord) {
+      mergedById.set(id, incomingRecord);
+      section.added += 1;
+      continue;
+    }
+
+    const preference = compareWithUpdatedAt(entityType, id, currentRecord, incomingRecord, report);
+    const nextRecord = preference >= 0 ? incomingRecord : currentRecord;
+    const unchanged = JSON.stringify(currentRecord) === JSON.stringify(nextRecord);
+    mergedById.set(id, nextRecord);
+    section[unchanged ? 'unchanged' : 'updated'] += 1;
+  }
+
+  return [...mergedById.values()];
+};
+
+const mergeTasksForImport = (currentTasks: AppState['tasks'], incomingTasks: AppState['tasks'], report: MergeReport): AppState['tasks'] => {
+  const mergedBySourceKey = new Map(currentTasks.map((task) => [task.sourceKey, task]));
+
+  for (const incomingTask of incomingTasks) {
+    const currentTask = mergedBySourceKey.get(incomingTask.sourceKey) ?? null;
+    const merged = mergeTaskForImport(currentTask, incomingTask);
+    mergedBySourceKey.set(incomingTask.sourceKey, merged.task);
+    report.tasks[merged.outcome] += 1;
+  }
+
+  return [...mergedBySourceKey.values()];
+};
+
+const mergeAppStates = (currentState: AppState, incomingState: AppState): { state: AppState; report: MergeReport } => {
+  const report = createEmptyMergeReport();
+
+  const mergedState: AppState = {
+    ...currentState,
+    schemaVersion: incomingState.schemaVersion,
+    settings: incomingState.settings,
+    beds: mergeCollectionById('beds', currentState.beds, incomingState.beds, report),
+    crops: mergeCollectionById('crops', currentState.crops, incomingState.crops, report),
+    cropPlans: mergeCollectionById('cropPlans', currentState.cropPlans, incomingState.cropPlans, report),
+    batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
+    tasks: mergeTasksForImport(currentState.tasks, incomingState.tasks, report),
+    seedInventoryItems: mergeCollectionById('seedInventoryItems', currentState.seedInventoryItems, incomingState.seedInventoryItems, report),
+  };
+
+  return { state: mergedState, report };
 };
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -376,7 +509,10 @@ export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
   }
 };
 
-export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAppStateOptions = {}): Promise<void> => {
+export const saveAppStateToIndexedDb = async (
+  appState: unknown,
+  options: SaveAppStateOptions = {},
+): Promise<MergeReport | null> => {
   const database = await openAppStateDatabase();
 
   try {
@@ -389,6 +525,8 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
         : appState;
     const validState = assertValid('appState', candidateState);
     const isReplaceMode = options.mode === 'replace';
+    let report: MergeReport | null = null;
+
     const transaction = database.transaction(
       isReplaceMode
         ? [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE, BATCH_INDEX_STORE, PHOTO_BLOB_STORE]
@@ -396,8 +534,21 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
       'readwrite',
     );
 
-    transaction.objectStore(APP_STATE_STORE).put(validState, APP_STATE_RECORD_KEY);
-    transaction.objectStore(META_STORE).put(validState.schemaVersion, SCHEMA_VERSION_KEY);
+    let stateToPersist = validState;
+
+    if (!isReplaceMode) {
+      const existingRaw = await requestToPromise(transaction.objectStore(APP_STATE_STORE).get(APP_STATE_RECORD_KEY));
+
+      if (existingRaw !== undefined) {
+        const existingState = assertValid('appState', existingRaw);
+        const merged = mergeAppStates(existingState, validState);
+        stateToPersist = assertValid('appState', merged.state);
+        report = merged.report;
+      }
+    }
+
+    transaction.objectStore(APP_STATE_STORE).put(stateToPersist, APP_STATE_RECORD_KEY);
+    transaction.objectStore(META_STORE).put(stateToPersist.schemaVersion, SCHEMA_VERSION_KEY);
 
     const bedStore = transaction.objectStore(BED_INDEX_STORE);
     const existingBedKeys = await requestToPromise(bedStore.getAllKeys());
@@ -406,7 +557,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
       bedStore.delete(key);
     }
 
-    for (const bed of validState.beds) {
+    for (const bed of stateToPersist.beds) {
       bedStore.put(assertValid('bed', bed ?? {}));
     }
 
@@ -417,7 +568,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
       cropStore.delete(key);
     }
 
-    for (const crop of validState.crops) {
+    for (const crop of stateToPersist.crops) {
       cropStore.put(assertValid('crop', crop ?? {}));
     }
 
@@ -428,7 +579,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
       cropPlanStore.delete(key);
     }
 
-    for (const cropPlan of validState.cropPlans) {
+    for (const cropPlan of stateToPersist.cropPlans) {
       cropPlanStore.put(assertValid('cropPlan', cropPlan ?? {}));
     }
 
@@ -439,7 +590,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
       batchStore.delete(key);
     }
 
-    for (const batch of validState.batches) {
+    for (const batch of stateToPersist.batches) {
       batchStore.put(assertValid('batch', batch ?? {}));
     }
 
@@ -448,6 +599,7 @@ export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAp
     }
 
     await transactionDone(transaction);
+    return report;
   } catch (error) {
     throw toStorageWriteError(error, 'Failed to save app state to local data storage');
   } finally {
