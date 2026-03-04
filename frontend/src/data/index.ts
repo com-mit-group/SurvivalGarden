@@ -1,5 +1,6 @@
 import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
+import { getSettingsOrDefault } from './repos/settingsRepository';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -175,6 +176,10 @@ export class AppStateStorageError extends Error {
     this.name = 'AppStateStorageError';
   }
 }
+
+type SaveAppStateOptions = {
+  mode?: 'merge' | 'replace';
+};
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
   new Promise((resolve, reject) => {
@@ -371,13 +376,23 @@ export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
   }
 };
 
-export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> => {
+export const saveAppStateToIndexedDb = async (appState: unknown, options: SaveAppStateOptions = {}): Promise<void> => {
   const database = await openAppStateDatabase();
 
   try {
-    const validState = assertValid('appState', appState);
+    const candidateState =
+      appState && typeof appState === 'object'
+        ? {
+            ...(appState as Record<string, unknown>),
+            settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+          }
+        : appState;
+    const validState = assertValid('appState', candidateState);
+    const isReplaceMode = options.mode === 'replace';
     const transaction = database.transaction(
-      [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE, BATCH_INDEX_STORE],
+      isReplaceMode
+        ? [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE, BATCH_INDEX_STORE, PHOTO_BLOB_STORE]
+        : [APP_STATE_STORE, META_STORE, BED_INDEX_STORE, CROP_INDEX_STORE, CROP_PLAN_INDEX_STORE, BATCH_INDEX_STORE],
       'readwrite',
     );
 
@@ -426,6 +441,10 @@ export const saveAppStateToIndexedDb = async (appState: unknown): Promise<void> 
 
     for (const batch of validState.batches) {
       batchStore.put(assertValid('batch', batch ?? {}));
+    }
+
+    if (isReplaceMode) {
+      transaction.objectStore(PHOTO_BLOB_STORE).clear();
     }
 
     await transactionDone(transaction);

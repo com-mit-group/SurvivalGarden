@@ -2088,7 +2088,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      await saveAppStateToIndexedDb(pendingImportState);
+      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
       setPendingImportState(null);
       setImportMessage('Import complete. Existing data was replaced.');
     } catch (error) {
