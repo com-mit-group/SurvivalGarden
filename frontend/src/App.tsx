@@ -11,6 +11,7 @@ import {
   loadAppStateFromIndexedDb,
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
+  parseImportedAppState,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
@@ -1990,6 +1991,25 @@ type DataPageProps = {
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<Array<{ path: string; message: string }>>([]);
+  const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
+
+  const mapImportError = useCallback((error: unknown): Array<{ path: string; message: string }> => {
+    if (error instanceof SchemaValidationError && error.issues.length > 0) {
+      return error.issues.map((issue) => ({
+        path: issue.path || '/',
+        message: issue.message,
+      }));
+    }
+
+    if (error instanceof SyntaxError) {
+      return [{ path: '/', message: error.message }];
+    }
+
+    return [{ path: '/', message: error instanceof Error ? error.message : 'Unknown import error.' }];
+  }, []);
 
   const handleExportJson = useCallback(async () => {
     if (isExporting) {
@@ -2032,6 +2052,53 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isExporting]);
 
+  const handleImportJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+
+    try {
+      const payload = await file.text();
+      const parsedState = parseImportedAppState(payload);
+      setPendingImportState(parsedState);
+      setImportMessage('Import file is valid. Replace existing data?');
+    } catch (error) {
+      setImportMessage('Import failed. Fix the errors below and try again.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError]);
+
+  const handleConfirmReplace = useCallback(async () => {
+    if (!pendingImportState || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+
+    try {
+      await saveAppStateToIndexedDb(pendingImportState);
+      setPendingImportState(null);
+      setImportMessage('Import complete. Existing data was replaced.');
+    } catch (error) {
+      setImportMessage('Import failed while saving.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError, pendingImportState]);
+
   return (
     <>
       <p>Data</p>
@@ -2039,6 +2106,25 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         {isExporting ? 'Exporting JSON…' : 'Export JSON'}
       </button>
       {exportMessage ? <p>{exportMessage}</p> : null}
+      <label>
+        Import JSON
+        <input type="file" accept="application/json,.json" onChange={(event) => void handleImportJson(event)} disabled={isImporting} />
+      </label>
+      {pendingImportState ? (
+        <button type="button" onClick={() => void handleConfirmReplace()} disabled={isImporting}>
+          {isImporting ? 'Replacing data…' : 'Replace existing data'}
+        </button>
+      ) : null}
+      {importMessage ? <p>{importMessage}</p> : null}
+      {importErrors.length > 0 ? (
+        <ul>
+          {importErrors.map((error, index) => (
+            <li key={`${error.path}-${index}`}>
+              <code>{error.path}</code>: {error.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {showDevResetButton ? (
         <button type="button" onClick={onResetToGoldenDataset}>
           Reset to golden dataset
