@@ -6,7 +6,9 @@ import App from './App';
 import {
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
+  parseImportedAppState,
   resetToGoldenDataset,
+  saveAppStateToIndexedDb,
   SchemaValidationError,
   serializeAppStateForExport,
 } from './data';
@@ -15,6 +17,8 @@ vi.mock('./data', () => ({
   initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
   resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
   loadAppStateFromIndexedDb: vi.fn().mockResolvedValue(null),
+  parseImportedAppState: vi.fn(),
+  saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
   serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
@@ -161,5 +165,66 @@ describe('App', () => {
     });
 
     expect(anchorClickSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows import validation errors and does not persist invalid payloads', async () => {
+    const validationError = new SchemaValidationError('appState', [
+      {
+        schemaName: 'appState',
+        keyword: 'type',
+        path: '/batches/0/photos/0/storageRef',
+        message: 'must be string',
+      },
+    ]);
+    vi.mocked(parseImportedAppState).mockImplementation(() => {
+      throw validationError;
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import JSON');
+    const file = new File(['{invalid'], 'bad.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{invalid');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/\/batches\/0\/photos\/0\/storageRef/)).toBeInTheDocument();
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
+  });
+
+  it('requires replace confirmation before saving imported data', async () => {
+    const importedState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [], seedInventoryItems: [], tasks: [] };
+    vi.mocked(parseImportedAppState).mockReturnValue(importedState as never);
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import JSON');
+    const file = new File(['{"schemaVersion":1}'], 'good.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"schemaVersion":1}');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Import file is valid. Replace existing data?')).toBeInTheDocument();
+    });
+
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace existing data' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState);
+      expect(screen.getByText('Import complete. Existing data was replaced.')).toBeInTheDocument();
+    });
   });
 });
