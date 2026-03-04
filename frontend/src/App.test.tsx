@@ -229,7 +229,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Replace existing data' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState);
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState, { mode: 'replace' });
       expect(screen.getByText('Import complete. Existing data was replaced.')).toBeInTheDocument();
     });
   });
