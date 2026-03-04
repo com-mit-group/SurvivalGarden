@@ -1,4 +1,4 @@
-import type { AppState } from '../contracts';
+import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
@@ -96,9 +96,56 @@ export const parseImportedAppState = (rawPayload: string): AppState => {
   return assertValid('appState', parsed);
 };
 
+const compareByString = (left: string, right: string): number => left.localeCompare(right);
+
+const getStringValue = (record: unknown, key: string): string | null => {
+  if (!record || typeof record !== 'object') {
+    return null;
+  }
+
+  const value = (record as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+};
+
+const sortCollectionByKey = <T>(collection: T[], keys: string[]): T[] =>
+  [...collection].sort((left, right) => {
+    for (const key of keys) {
+      const leftValue = getStringValue(left, key);
+      const rightValue = getStringValue(right, key);
+
+      if (leftValue !== null && rightValue !== null && leftValue !== rightValue) {
+        return compareByString(leftValue, rightValue);
+      }
+    }
+
+    return compareByString(JSON.stringify(left), JSON.stringify(right));
+  });
+
+const canonicalizeForExport = (appState: AppState): AppState => {
+  const canonicalBatches = sortCollectionByKey(
+    appState.batches.map((batch) => ({
+      ...batch,
+      photos: Array.isArray((batch as Batch & { photos?: unknown[] }).photos)
+        ? sortCollectionByKey((batch as Batch & { photos?: unknown[] }).photos ?? [], ['id', 'storageRef', 'capturedAt', 'filename'])
+        : (batch as Batch & { photos?: unknown[] }).photos,
+    })),
+    ['batchId', 'cropId', 'startedAt'],
+  );
+
+  return {
+    ...appState,
+    beds: sortCollectionByKey(appState.beds, ['bedId', 'gardenId', 'name']),
+    crops: sortCollectionByKey(appState.crops, ['cropId', 'name']),
+    cropPlans: sortCollectionByKey(appState.cropPlans, ['planId', 'cropId']),
+    batches: canonicalBatches,
+    seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
+    tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
+  };
+};
+
 export const serializeAppStateForExport = (appState: unknown): string => {
   const validState = assertValid('appState', appState);
-  return JSON.stringify(validState);
+  return JSON.stringify(canonicalizeForExport(validState));
 };
 
 export const loadAppStateFromStorage = (

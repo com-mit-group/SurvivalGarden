@@ -13,6 +13,7 @@ import {
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
+  serializeAppStateForExport,
   upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
@@ -1987,9 +1988,57 @@ type DataPageProps = {
 };
 
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  const handleExportJson = useCallback(async () => {
+    if (isExporting) {
+      return;
+    }
+
+    setIsExporting(true);
+    setExportMessage(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setExportMessage('Export failed: local app state is unavailable.');
+        return;
+      }
+
+      const json = serializeAppStateForExport(appState);
+      const timestamp = new Date().toISOString().replace(/[.:]/g, '-');
+      const fileName = `survival-garden-export-${timestamp}.json`;
+      const exportBlob = new Blob([json], { type: 'application/json' });
+      const objectUrl = URL.createObjectURL(exportBlob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      setExportMessage(`Export complete: ${fileName}`);
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        const issueSummary = error.issues
+          .slice(0, 5)
+          .map((issue) => issue.path || issue.message)
+          .join('; ');
+        setExportMessage(`Export failed: ${error.message}: ${issueSummary}`);
+      } else {
+        setExportMessage(`Export failed: ${error instanceof Error ? error.message : 'Unknown error.'}`);
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting]);
+
   return (
     <>
       <p>Data</p>
+      <button type="button" onClick={() => void handleExportJson()} disabled={isExporting}>
+        {isExporting ? 'Exporting JSON…' : 'Export JSON'}
+      </button>
+      {exportMessage ? <p>{exportMessage}</p> : null}
       {showDevResetButton ? (
         <button type="button" onClick={onResetToGoldenDataset}>
           Reset to golden dataset
