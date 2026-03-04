@@ -58,6 +58,14 @@ describe('App', () => {
         value: vi.fn(),
       });
     }
+
+    if (typeof File !== 'undefined' && typeof File.prototype.text !== 'function') {
+      Object.defineProperty(File.prototype, 'text', {
+        configurable: true,
+        writable: true,
+        value: vi.fn().mockResolvedValue(''),
+      });
+    }
   });
 
   afterEach(() => {
@@ -188,7 +196,6 @@ describe('App', () => {
 
     const input = screen.getByLabelText('Import JSON');
     const file = new File(['{invalid'], 'bad.json', { type: 'application/json' });
-    vi.spyOn(file, 'text').mockResolvedValue('{invalid');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -211,7 +218,6 @@ describe('App', () => {
 
     const input = screen.getByLabelText('Import JSON');
     const file = new File(['{"schemaVersion":1}'], 'good.json', { type: 'application/json' });
-    vi.spyOn(file, 'text').mockResolvedValue('{"schemaVersion":1}');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
