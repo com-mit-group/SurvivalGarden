@@ -1,5 +1,6 @@
 import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
+import { getSettingsOrDefault } from './repos/settingsRepository';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
