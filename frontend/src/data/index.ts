@@ -231,15 +231,18 @@ const normalizeTimestamp = (value: unknown): number | null => {
   return Number.isNaN(date) ? null : date;
 };
 
+const getObjectValue = (record: object, key: string): unknown =>
+  (record as Record<string, unknown>)[key];
+
 const compareWithUpdatedAt = (
   entityLabel: string,
   id: string,
-  currentRecord: Record<string, unknown>,
-  incomingRecord: Record<string, unknown>,
+  currentRecord: object,
+  incomingRecord: object,
   report: MergeReport,
 ): number => {
-  const currentUpdatedAt = normalizeTimestamp(currentRecord.updatedAt);
-  const incomingUpdatedAt = normalizeTimestamp(incomingRecord.updatedAt);
+  const currentUpdatedAt = normalizeTimestamp(getObjectValue(currentRecord, 'updatedAt'));
+  const incomingUpdatedAt = normalizeTimestamp(getObjectValue(incomingRecord, 'updatedAt'));
 
   if (currentUpdatedAt === null || incomingUpdatedAt === null) {
     report.warnings.push(`${entityLabel}:${id} missing updatedAt; preferred imported value.`);
@@ -253,7 +256,7 @@ const compareWithUpdatedAt = (
   return incomingUpdatedAt >= currentUpdatedAt ? 1 : -1;
 };
 
-const mergeCollectionById = <T extends Record<string, unknown>>(
+const mergeCollectionById = <T extends object>(
   entityType: EntityType,
   currentCollection: T[],
   incomingCollection: T[],
@@ -261,10 +264,10 @@ const mergeCollectionById = <T extends Record<string, unknown>>(
 ): T[] => {
   const section = report[entityType];
   const idKey = ENTITY_ID_KEY[entityType];
-  const mergedById = new Map(currentCollection.map((record) => [String(record[idKey]), record]));
+  const mergedById = new Map(currentCollection.map((record) => [String(getObjectValue(record, idKey)), record]));
 
   for (const incomingRecord of incomingCollection) {
-    const id = String(incomingRecord[idKey]);
+    const id = String(getObjectValue(incomingRecord, idKey));
     const currentRecord = mergedById.get(id);
 
     if (!currentRecord) {
