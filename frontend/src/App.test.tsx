@@ -290,8 +290,18 @@ describe('App', () => {
       expect(screen.getByText('Coverage summary')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Calories:\s*total 23100 kcal\s*[·.]\s*per day 63 kcal\.?/)).toBeInTheDocument();
-    expect(screen.getByText(/Protein:\s*total 600 g\s*[·.]\s*per day 1.64 g\.?/)).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => {
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return element?.tagName === 'LI' && text.includes('Calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal');
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => {
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return element?.tagName === 'LI' && text.includes('Protein') && text.includes('total 600 g') && text.includes('per day 1.64 g');
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Insufficient yield data: none.')).toBeInTheDocument();
   });
 
