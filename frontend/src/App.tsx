@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, Bed, SeedInventoryItem, Task } from './contracts';
+import type { Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
 import {
   generateOperationalTasks,
   SchemaValidationError,
@@ -2199,8 +2199,180 @@ function BatchDetailPage() {
   );
 }
 
+type NutritionMetric = {
+  key: string;
+  label: string;
+  unit: 'kcal' | 'g' | 'mg' | 'mcg' | 'IU';
+};
+
+type NutritionSummary = {
+  totals: Record<string, number>;
+  excludedCrops: string[];
+  confidenceNotes: string[];
+};
+
+const NUTRITION_METRICS: NutritionMetric[] = [
+  { key: 'kcal', label: 'Calories', unit: 'kcal' },
+  { key: 'protein', label: 'Protein', unit: 'g' },
+  { key: 'fat', label: 'Fat', unit: 'g' },
+  { key: 'fiber', label: 'Fiber', unit: 'g' },
+  { key: 'vitamin_c', label: 'Vitamin C', unit: 'mg' },
+  { key: 'vitamin_a', label: 'Vitamin A', unit: 'mcg' },
+  { key: 'vitamin_k', label: 'Vitamin K', unit: 'mcg' },
+];
+
+const toYieldGrams = (plan: CropPlan): number | null => {
+  if (!plan.expectedYield || !Number.isFinite(plan.expectedYield.amount) || plan.expectedYield.amount <= 0) {
+    return null;
+  }
+
+  if (plan.expectedYield.unit === 'kg') {
+    return plan.expectedYield.amount * 1_000;
+  }
+
+  if (plan.expectedYield.unit === 'g') {
+    return plan.expectedYield.amount;
+  }
+
+  return null;
+};
+
+const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSummary => {
+  const cropById = new Map(crops.map((crop) => [crop.cropId, crop]));
+  const totals = Object.fromEntries(NUTRITION_METRICS.map((metric) => [metric.key, 0])) as Record<string, number>;
+  const excluded = new Set<string>();
+  const confidence = new Set<string>();
+
+  for (const plan of cropPlans) {
+    const crop = cropById.get(plan.cropId);
+    const yieldGrams = toYieldGrams(plan);
+    if (!crop || yieldGrams === null) {
+      excluded.add(crop?.name ?? plan.cropId);
+      continue;
+    }
+
+    for (const item of crop.nutritionProfile) {
+      if (!(item.nutrient in totals)) {
+        continue;
+      }
+
+      const assumptions = item.assumptions.trim().toLowerCase();
+      const perServing = assumptions.includes('per serving');
+
+      if (perServing) {
+        if (plan.expectedYield.unit !== 'pieces') {
+          excluded.add(crop.name);
+          continue;
+        }
+
+        totals[item.nutrient] += item.value * plan.expectedYield.amount;
+      } else {
+        totals[item.nutrient] += (yieldGrams / 100) * item.value;
+      }
+
+      confidence.add(`${crop.name}: ${item.source} — ${item.assumptions}`);
+    }
+  }
+
+  return {
+    totals,
+    excludedCrops: [...excluded].sort((left, right) => left.localeCompare(right)),
+    confidenceNotes: [...confidence].sort((left, right) => left.localeCompare(right)),
+  };
+};
+
+const roundMetricValue = (value: number, unit: NutritionMetric['unit']): number => {
+  if (unit === 'kcal') {
+    return Math.round(value);
+  }
+  return Number(value.toFixed(2));
+};
+
 function NutritionPage() {
-  return <p>Nutrition</p>;
+  const [days, setDays] = useState(365);
+  const [cropPlans, setCropPlans] = useState<CropPlan[]>([]);
+  const [crops, setCrops] = useState<Crop[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const appState = await loadAppStateFromIndexedDb();
+      setCropPlans(appState?.cropPlans ?? []);
+      setCrops(appState?.crops ?? []);
+      setIsLoading(false);
+    };
+
+    void load();
+  }, []);
+
+  const summary = useMemo(() => summarizeNutrition(cropPlans, crops), [cropPlans, crops]);
+  const safeDays = Number.isFinite(days) && days > 0 ? days : 365;
+
+  return (
+    <section className="data-page">
+      <h2>Nutrition</h2>
+      <p>Rough coverage estimate using planned yield and crop nutrition profiles.</p>
+      <label>
+        Horizon (days)
+        <input
+          type="number"
+          min={1}
+          value={days}
+          onChange={(event) => setDays(Number(event.target.value) || 365)}
+          aria-label="Nutrition horizon in days"
+        />
+      </label>
+      {isLoading ? <p>Loading nutrition data…</p> : null}
+      {!isLoading ? (
+        <>
+          <h3>Coverage summary</h3>
+          <ul>
+            {NUTRITION_METRICS.map((metric) => {
+              const total = roundMetricValue(summary.totals[metric.key] ?? 0, metric.unit);
+              const perDay = roundMetricValue(total / safeDays, metric.unit);
+
+              return (
+                <li key={metric.key}>
+                  <strong>{metric.label}</strong>: total {total} {metric.unit} · per day {perDay} {metric.unit}
+                </li>
+              );
+            })}
+          </ul>
+
+          <h3>Assumptions and confidence</h3>
+          <ul>
+            <li>Uses expectedYield from CropPlan and nutritionProfile values from each crop.</li>
+            <li>Per 100g entries are normalized by mass yield (kg/g).</li>
+            <li>Per serving entries require piece-based yield; otherwise crop is flagged below.</li>
+            <li>Rounding: kcal rounded to whole numbers, other nutrients rounded to 2 decimals.</li>
+          </ul>
+          {summary.excludedCrops.length > 0 ? (
+            <>
+              <h4>Insufficient yield data</h4>
+              <ul>
+                {summary.excludedCrops.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>Insufficient yield data: none.</p>
+          )}
+
+          <h4>Confidence notes</h4>
+          {summary.confidenceNotes.length === 0 ? (
+            <p>No confidence notes available.</p>
+          ) : (
+            <ul>
+              {summary.confidenceNotes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : null}
+    </section>
+  );
 }
 
 type DataPageProps = {
