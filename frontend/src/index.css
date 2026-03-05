@@ -832,6 +832,108 @@ body {
   padding: 0.4rem 0.5rem;
 }
 
+.data-page {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.9rem;
+  text-align: left;
+}
+
+.data-page h2,
+.data-page h3,
+.data-page h4 {
+  margin: 0;
+}
+
+.data-page label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.data-page input {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  background: #ffffff;
+  font: inherit;
+}
+
+.nutrition-layout {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.nutrition-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.nutrition-card-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #4b5563;
+  overflow-wrap: anywhere;
+}
+
+.nutrition-metric-list,
+.nutrition-flag-list,
+.nutrition-assumption-list,
+.nutrition-warning-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.nutrition-metric-item,
+.nutrition-flag-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.3rem;
+  background: #f9fafb;
+}
+
+.nutrition-metric-item p,
+.nutrition-flag-item {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.nutrition-assumption-list li,
+.nutrition-warning-list li {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #374151;
+  overflow-wrap: anywhere;
+}
+
+.nutrition-flag-high {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.nutrition-flag-medium {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.nutrition-flag-info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .seed-inventory-page {
   width: min(900px, 100%);
   margin: 0 auto;

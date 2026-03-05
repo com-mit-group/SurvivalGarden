@@ -2205,6 +2205,11 @@ type NutritionMetric = {
   unit: 'kcal' | 'g' | 'mg' | 'mcg' | 'IU';
 };
 
+type NutritionTarget = {
+  daily: number;
+  label: string;
+};
+
 type NutritionSummary = {
   totals: Record<string, number>;
   excludedCrops: string[];
@@ -2249,6 +2254,15 @@ const NUTRITION_FLAGS: NutritionFlag[] = [
     guidanceText: 'Informational only: consider ALA-focused foods such as flax, chia, and walnuts in rotation plans.',
   },
 ];
+
+const NUTRITION_TARGETS: Record<string, NutritionTarget> = {
+  kcal: { daily: 2000, label: 'Generic target 2000 kcal/day' },
+  protein: { daily: 50, label: 'Generic target 50 g/day' },
+  fat: { daily: 70, label: 'Generic target 70 g/day' },
+  vitamin_c: { daily: 90, label: 'Generic target 90 mg/day' },
+  vitamin_a: { daily: 900, label: 'Generic target 900 mcg/day' },
+  vitamin_k: { daily: 120, label: 'Generic target 120 mcg/day' },
+};
 
 const toYieldGrams = (plan: CropPlan): number | null => {
   if (!plan.expectedYield || !Number.isFinite(plan.expectedYield.amount) || plan.expectedYield.amount <= 0) {
@@ -2337,11 +2351,13 @@ function NutritionPage() {
 
   const summary = useMemo(() => summarizeNutrition(cropPlans, crops), [cropPlans, crops]);
   const safeDays = Number.isFinite(days) && days > 0 ? days : 365;
+  const macroMetrics = NUTRITION_METRICS.filter((metric) => ['kcal', 'protein', 'fat'].includes(metric.key));
+  const microMetrics = NUTRITION_METRICS.filter((metric) => ['vitamin_c', 'vitamin_a', 'vitamin_k'].includes(metric.key));
 
   return (
     <section className="data-page">
       <h2>Nutrition</h2>
-      <p>Rough coverage estimate using planned yield and crop nutrition profiles.</p>
+      <p>Rough coverage estimate using planned yield and crop nutrition profiles. Generic targets only; not personalized advice.</p>
       <label>
         Horizon (days)
         <input
@@ -2354,62 +2370,107 @@ function NutritionPage() {
       </label>
       {isLoading ? <p>Loading nutrition data…</p> : null}
       {!isLoading ? (
-        <>
-          <h3>Vegan nutrition flags</h3>
-          <p>Informational only, not medical advice.</p>
-          <ul>
-            {summary.flags.map((flag) => (
-              <li key={flag.title}>
-                <strong>{flag.title}</strong> ({flag.severity}): {flag.rationale} {flag.guidanceText}
-              </li>
-            ))}
-          </ul>
+        <div className="nutrition-layout">
+          <article className="nutrition-card">
+            <h3>Macro coverage</h3>
+            <p className="nutrition-card-note">Totals and per-day estimates from the selected horizon.</p>
+            <ul className="nutrition-metric-list">
+              {macroMetrics.map((metric) => {
+                const total = roundMetricValue(summary.totals[metric.key] ?? 0, metric.unit);
+                const perDay = roundMetricValue(total / safeDays, metric.unit);
+                const target = NUTRITION_TARGETS[metric.key];
+                const coverage = target ? Math.round((perDay / target.daily) * 100) : 0;
 
-          <h3>Coverage summary</h3>
-          <ul>
-            {NUTRITION_METRICS.map((metric) => {
-              const total = roundMetricValue(summary.totals[metric.key] ?? 0, metric.unit);
-              const perDay = roundMetricValue(total / safeDays, metric.unit);
+                return (
+                  <li key={metric.key} className="nutrition-metric-item">
+                    <p>
+                      <strong>{metric.label}</strong>
+                    </p>
+                    <p>
+                      total {total} {metric.unit} · per day {perDay} {metric.unit}
+                    </p>
+                    <p>
+                      coverage vs generic target: {coverage}% ({target?.label})
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </article>
 
-              return (
-                <li key={metric.key}>
-                  <strong>{metric.label}</strong>: total {total} {metric.unit} · per day {perDay} {metric.unit}
+          <article className="nutrition-card">
+            <h3>Key micronutrients</h3>
+            <p className="nutrition-card-note">Coverage labels use generic targets and are informational only.</p>
+            <ul className="nutrition-metric-list">
+              {microMetrics.map((metric) => {
+                const total = roundMetricValue(summary.totals[metric.key] ?? 0, metric.unit);
+                const perDay = roundMetricValue(total / safeDays, metric.unit);
+                const target = NUTRITION_TARGETS[metric.key];
+                const coverage = target ? Math.round((perDay / target.daily) * 100) : 0;
+
+                return (
+                  <li key={metric.key} className="nutrition-metric-item">
+                    <p>
+                      <strong>{metric.label}</strong>
+                    </p>
+                    <p>
+                      total {total} {metric.unit} · per day {perDay} {metric.unit}
+                    </p>
+                    <p>
+                      coverage vs generic target: {coverage}% ({target?.label})
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </article>
+
+          <article className="nutrition-card">
+            <h3>Vegan nutrition flags</h3>
+            <p className="nutrition-card-note">Informational only, not medical advice.</p>
+            <ul className="nutrition-flag-list">
+              {summary.flags.map((flag) => (
+                <li key={flag.title} className={`nutrition-flag-item nutrition-flag-${flag.severity}`}>
+                  <strong>{flag.title}</strong> ({flag.severity}): {flag.rationale} {flag.guidanceText}
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          </article>
 
-          <h3>Assumptions and confidence</h3>
-          <ul>
-            <li>Uses expectedYield from CropPlan and nutritionProfile values from each crop.</li>
-            <li>Per 100g entries are normalized by mass yield (kg/g).</li>
-            <li>Per serving entries require piece-based yield; otherwise crop is flagged below.</li>
-            <li>Rounding: kcal rounded to whole numbers, other nutrients rounded to 2 decimals.</li>
-          </ul>
-          {summary.excludedCrops.length > 0 ? (
-            <>
-              <h4>Insufficient yield data</h4>
-              <ul>
+          <article className="nutrition-card">
+            <h3>Assumptions and missing data</h3>
+            <ul className="nutrition-assumption-list">
+              <li>Generic targets are used for coverage labels (not individualized).</li>
+              <li>Uses expectedYield from CropPlan and nutritionProfile values from each crop.</li>
+              <li>Per 100g entries are normalized by mass yield (kg/g).</li>
+              <li>Per serving entries require piece-based yield; otherwise crop is listed below.</li>
+              <li>Rounding: kcal rounded to whole numbers, other nutrients rounded to 2 decimals.</li>
+            </ul>
+            <h4>Missing-data warning</h4>
+            {summary.excludedCrops.length > 0 ? (
+              <ul className="nutrition-warning-list">
                 {summary.excludedCrops.map((name) => (
                   <li key={name}>{name}</li>
                 ))}
               </ul>
-            </>
-          ) : (
-            <p>Insufficient yield data: none.</p>
-          )}
+            ) : (
+              <p className="nutrition-card-note">Missing-data warning: none.</p>
+            )}
+          </article>
 
-          <h4>Confidence notes</h4>
-          {summary.confidenceNotes.length === 0 ? (
-            <p>No confidence notes available.</p>
-          ) : (
-            <ul>
-              {summary.confidenceNotes.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          )}
-        </>
+          <article className="nutrition-card">
+            <h4>Confidence notes</h4>
+            {summary.confidenceNotes.length === 0 ? (
+              <p className="nutrition-card-note">No confidence notes available.</p>
+            ) : (
+              <ul className="nutrition-assumption-list">
+                {summary.confidenceNotes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        </div>
       ) : null}
     </section>
   );
