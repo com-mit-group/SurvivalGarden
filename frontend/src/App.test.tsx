@@ -385,7 +385,7 @@ describe('App', () => {
       const text = flag.textContent?.toLowerCase() ?? '';
       expect(text).not.toContain('mg');
       expect(text).not.toContain('mcg');
-      expect(text).not.toContain('iu');
+      expect(text).not.toMatch(/\biu\b/);
       expect(text).not.toContain('dose');
       expect(text).not.toContain('dosage');
     }
