@@ -2353,11 +2353,34 @@ function NutritionPage() {
   const safeDays = Number.isFinite(days) && days > 0 ? days : 365;
   const macroMetrics = NUTRITION_METRICS.filter((metric) => ['kcal', 'protein', 'fat'].includes(metric.key));
   const microMetrics = NUTRITION_METRICS.filter((metric) => ['vitamin_c', 'vitamin_a', 'vitamin_k'].includes(metric.key));
+  const flagsToShow = summary.flags.filter((flag) => flag.title.includes('B12') || flag.title.includes('Iodine'));
+  const missingDataWarnings = useMemo(() => {
+    const warnings = new Set(summary.excludedCrops);
+    const cropById = new Map(crops.map((crop) => [crop.cropId, crop]));
+
+    for (const plan of cropPlans) {
+      const crop = cropById.get(plan.cropId);
+      if (!crop) {
+        warnings.add(plan.cropId);
+        continue;
+      }
+
+      if (!crop.nutritionProfile || crop.nutritionProfile.length === 0) {
+        warnings.add(`${crop.name} (missing nutrition profile)`);
+      }
+
+      if (!plan.expectedYield || !Number.isFinite(plan.expectedYield.amount) || plan.expectedYield.amount <= 0) {
+        warnings.add(`${crop.name} (missing expected yield)`);
+      }
+    }
+
+    return [...warnings].sort((left, right) => left.localeCompare(right));
+  }, [cropPlans, crops, summary.excludedCrops]);
 
   return (
     <section className="data-page">
       <h2>Nutrition</h2>
-      <p>Rough coverage estimate using planned yield and crop nutrition profiles. Generic targets only; not personalized advice.</p>
+      <p className="nutrition-intro">Rough estimate from planned yield and crop nutrition profiles.</p>
       <label>
         Horizon (days)
         <input
@@ -2386,11 +2409,11 @@ function NutritionPage() {
                     <p>
                       <strong>{metric.label}</strong>
                     </p>
-                    <p>
+                    <p className="nutrition-metric-values">
                       total {total} {metric.unit} · per day {perDay} {metric.unit}
                     </p>
-                    <p>
-                      coverage vs generic target: {coverage}% ({target?.label})
+                    <p className="nutrition-target-copy">
+                      Coverage vs generic target: {coverage}% ({target?.label})
                     </p>
                   </li>
                 );
@@ -2400,7 +2423,7 @@ function NutritionPage() {
 
           <article className="nutrition-card">
             <h3>Key micronutrients</h3>
-            <p className="nutrition-card-note">Coverage labels use generic targets and are informational only.</p>
+            <p className="nutrition-card-note">Coverage labels use generic targets only (not personalized advice).</p>
             <ul className="nutrition-metric-list">
               {microMetrics.map((metric) => {
                 const total = roundMetricValue(summary.totals[metric.key] ?? 0, metric.unit);
@@ -2413,11 +2436,11 @@ function NutritionPage() {
                     <p>
                       <strong>{metric.label}</strong>
                     </p>
-                    <p>
+                    <p className="nutrition-metric-values">
                       total {total} {metric.unit} · per day {perDay} {metric.unit}
                     </p>
-                    <p>
-                      coverage vs generic target: {coverage}% ({target?.label})
+                    <p className="nutrition-target-copy">
+                      Coverage vs generic target: {coverage}% ({target?.label})
                     </p>
                   </li>
                 );
@@ -2426,10 +2449,10 @@ function NutritionPage() {
           </article>
 
           <article className="nutrition-card">
-            <h3>Vegan nutrition flags</h3>
+            <h3>Nutrition flags (B12, iodine)</h3>
             <p className="nutrition-card-note">Informational only, not medical advice.</p>
             <ul className="nutrition-flag-list">
-              {summary.flags.map((flag) => (
+              {flagsToShow.map((flag) => (
                 <li key={flag.title} className={`nutrition-flag-item nutrition-flag-${flag.severity}`}>
                   <strong>{flag.title}</strong> ({flag.severity}): {flag.rationale} {flag.guidanceText}
                 </li>
@@ -2439,6 +2462,7 @@ function NutritionPage() {
 
           <article className="nutrition-card">
             <h3>Assumptions and missing data</h3>
+            <p className="nutrition-card-note">Generic targets are for reference labels only and this estimate is rough.</p>
             <ul className="nutrition-assumption-list">
               <li>Generic targets are used for coverage labels (not individualized).</li>
               <li>Uses expectedYield from CropPlan and nutritionProfile values from each crop.</li>
@@ -2447,9 +2471,9 @@ function NutritionPage() {
               <li>Rounding: kcal rounded to whole numbers, other nutrients rounded to 2 decimals.</li>
             </ul>
             <h4>Missing-data warning</h4>
-            {summary.excludedCrops.length > 0 ? (
+            {missingDataWarnings.length > 0 ? (
               <ul className="nutrition-warning-list">
-                {summary.excludedCrops.map((name) => (
+                {missingDataWarnings.map((name) => (
                   <li key={name}>{name}</li>
                 ))}
               </ul>

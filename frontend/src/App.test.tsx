@@ -292,19 +292,20 @@ describe('App', () => {
 
     expect(
       screen.getByText((_, element) => {
-        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-        return element?.tagName === 'LI' && text.includes('Calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal') && text.includes('coverage vs generic target: 3%');
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
+        return element?.tagName === 'LI' && text.includes('calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal') && text.includes('coverage vs generic target: 3%');
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_, element) => {
-        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-        return element?.tagName === 'LI' && text.includes('Protein') && text.includes('total 600 g') && text.includes('per day 1.64 g') && text.includes('coverage vs generic target: 3%');
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
+        return element?.tagName === 'LI' && text.includes('protein') && text.includes('total 600 g') && text.includes('per day 1.64 g') && text.includes('coverage vs generic target: 3%');
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('Missing-data warning: none.')).toBeInTheDocument();
     expect(screen.getByText('Key micronutrients')).toBeInTheDocument();
-    expect(screen.getByText(/coverage labels use generic targets/i)).toBeInTheDocument();
+    expect(screen.getByText(/coverage labels use generic targets only/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generic targets are for reference labels only and this estimate is rough/i)).toBeInTheDocument();
   });
 
   it('flags plans with insufficient yield data in nutrition assumptions', async () => {
@@ -373,15 +374,14 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Vegan nutrition flags')).toBeInTheDocument();
+      expect(screen.getByText('Nutrition flags (B12, iodine)')).toBeInTheDocument();
     });
 
-    const flagsSection = screen.getByText('Vegan nutrition flags').closest('article');
+    const flagsSection = screen.getByText('Nutrition flags (B12, iodine)').closest('article');
     const flags = within(flagsSection as HTMLElement).getAllByRole('listitem');
-    expect(flags).toHaveLength(3);
+    expect(flags).toHaveLength(2);
     expect(flags[0]).toHaveTextContent('Vitamin B12 coverage gap');
     expect(flags[1]).toHaveTextContent('Iodine planning check');
-    expect(flags[2]).toHaveTextContent('Omega-3 planning check');
 
     expect(screen.getByText('Informational only, not medical advice.')).toBeInTheDocument();
     for (const flag of flags) {
