@@ -2265,9 +2265,9 @@ const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSumm
           continue;
         }
 
-        totals[item.nutrient] += item.value * plan.expectedYield.amount;
+        totals[item.nutrient] = (totals[item.nutrient] ?? 0) + item.value * plan.expectedYield.amount;
       } else {
-        totals[item.nutrient] += (yieldGrams / 100) * item.value;
+        totals[item.nutrient] = (totals[item.nutrient] ?? 0) + (yieldGrams / 100) * item.value;
       }
 
       confidence.add(`${crop.name}: ${item.source} — ${item.assumptions}`);
