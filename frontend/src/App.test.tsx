@@ -233,4 +233,115 @@ describe('App', () => {
       expect(screen.getByText('Import complete. Existing data was replaced.')).toBeInTheDocument();
     });
   });
+
+  it('renders deterministic nutrition coverage totals and per-day values', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      crops: [
+        {
+          cropId: 'crop_potato',
+          name: 'Potato',
+          companionsGood: [],
+          companionsAvoid: [],
+          rules: {
+            sowing: { sequence: 1, windows: [] },
+            transplant: { sequence: 2, windows: [] },
+            harvest: { sequence: 3, windows: [] },
+            storage: { sequence: 4, windows: [] },
+          },
+          nutritionProfile: [
+            { nutrient: 'kcal', value: 77, unit: 'kcal', source: 'USDA', assumptions: 'Per 100g edible portion.' },
+            { nutrient: 'protein', value: 2, unit: 'g', source: 'USDA', assumptions: 'Per 100g edible portion.' },
+          ],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      cropPlans: [
+        {
+          planId: 'plan_1',
+          cropId: 'crop_potato',
+          seasonYear: 2026,
+          plannedWindows: { sowing: [], harvest: [] },
+          expectedYield: { amount: 30, unit: 'kg' },
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/nutrition']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Coverage summary')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText((_, element) => {
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return element?.tagName === 'LI' && text.includes('Calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal');
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => {
+        const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return element?.tagName === 'LI' && text.includes('Protein') && text.includes('total 600 g') && text.includes('per day 1.64 g');
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Insufficient yield data: none.')).toBeInTheDocument();
+  });
+
+  it('flags plans with insufficient yield data in nutrition assumptions', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      crops: [],
+      cropPlans: [
+        {
+          planId: 'plan_unknown',
+          cropId: 'crop_unknown',
+          seasonYear: 2026,
+          plannedWindows: { sowing: [], harvest: [] },
+          expectedYield: { amount: 12, unit: 'kg' },
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/nutrition']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Insufficient yield data')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('crop_unknown')).toBeInTheDocument();
+  });
 });
