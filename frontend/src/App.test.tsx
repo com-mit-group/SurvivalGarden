@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -287,22 +287,24 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Coverage summary')).toBeInTheDocument();
+      expect(screen.getByText('Macro coverage')).toBeInTheDocument();
     });
 
     expect(
       screen.getByText((_, element) => {
         const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-        return element?.tagName === 'LI' && text.includes('Calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal');
+        return element?.tagName === 'LI' && text.includes('Calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal') && text.includes('coverage vs generic target: 3%');
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_, element) => {
         const text = element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-        return element?.tagName === 'LI' && text.includes('Protein') && text.includes('total 600 g') && text.includes('per day 1.64 g');
+        return element?.tagName === 'LI' && text.includes('Protein') && text.includes('total 600 g') && text.includes('per day 1.64 g') && text.includes('coverage vs generic target: 3%');
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Insufficient yield data: none.')).toBeInTheDocument();
+    expect(screen.getByText('Missing-data warning: none.')).toBeInTheDocument();
+    expect(screen.getByText('Key micronutrients')).toBeInTheDocument();
+    expect(screen.getByText(/coverage labels use generic targets/i)).toBeInTheDocument();
   });
 
   it('flags plans with insufficient yield data in nutrition assumptions', async () => {
@@ -339,7 +341,7 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Insufficient yield data')).toBeInTheDocument();
+      expect(screen.getByText('Missing-data warning')).toBeInTheDocument();
     });
 
     expect(screen.getByText('crop_unknown')).toBeInTheDocument();
@@ -374,7 +376,8 @@ describe('App', () => {
       expect(screen.getByText('Vegan nutrition flags')).toBeInTheDocument();
     });
 
-    const flags = screen.getAllByRole('listitem').filter((item) => item.textContent?.includes('planning check') || item.textContent?.includes('B12 coverage gap'));
+    const flagsSection = screen.getByText('Vegan nutrition flags').closest('article');
+    const flags = within(flagsSection as HTMLElement).getAllByRole('listitem');
     expect(flags).toHaveLength(3);
     expect(flags[0]).toHaveTextContent('Vitamin B12 coverage gap');
     expect(flags[1]).toHaveTextContent('Iodine planning check');
