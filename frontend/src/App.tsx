@@ -1024,7 +1024,7 @@ function SeedInventoryPage() {
         quantity: parsedQuantity,
         unit: formValues.unit,
         status: parsedQuantity === 0 ? 'depleted' : parsedQuantity <= 10 ? 'low' : 'available',
-        notes: formValues.notes.trim() || undefined,
+        ...(formValues.notes.trim() ? { notes: formValues.notes.trim() } : {}),
         createdAt: existing?.createdAt ?? nowIso,
         updatedAt: nowIso,
       };
