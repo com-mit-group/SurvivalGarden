@@ -344,4 +344,50 @@ describe('App', () => {
 
     expect(screen.getByText('crop_unknown')).toBeInTheDocument();
   });
+
+  it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      crops: [],
+      cropPlans: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/nutrition']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Vegan nutrition flags')).toBeInTheDocument();
+    });
+
+    const flags = screen.getAllByRole('listitem').filter((item) => item.textContent?.includes('planning check') || item.textContent?.includes('B12 coverage gap'));
+    expect(flags).toHaveLength(3);
+    expect(flags[0]).toHaveTextContent('Vitamin B12 coverage gap');
+    expect(flags[1]).toHaveTextContent('Iodine planning check');
+    expect(flags[2]).toHaveTextContent('Omega-3 planning check');
+
+    expect(screen.getByText('Informational only, not medical advice.')).toBeInTheDocument();
+    for (const flag of flags) {
+      const text = flag.textContent?.toLowerCase() ?? '';
+      expect(text).not.toContain('mg');
+      expect(text).not.toContain('mcg');
+      expect(text).not.toContain('iu');
+      expect(text).not.toContain('dose');
+      expect(text).not.toContain('dosage');
+    }
+  });
 });

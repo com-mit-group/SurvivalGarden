@@ -2209,6 +2209,14 @@ type NutritionSummary = {
   totals: Record<string, number>;
   excludedCrops: string[];
   confidenceNotes: string[];
+  flags: NutritionFlag[];
+};
+
+type NutritionFlag = {
+  severity: 'high' | 'medium' | 'info';
+  title: string;
+  rationale: string;
+  guidanceText: string;
 };
 
 const NUTRITION_METRICS: NutritionMetric[] = [
@@ -2219,6 +2227,27 @@ const NUTRITION_METRICS: NutritionMetric[] = [
   { key: 'vitamin_c', label: 'Vitamin C', unit: 'mg' },
   { key: 'vitamin_a', label: 'Vitamin A', unit: 'mcg' },
   { key: 'vitamin_k', label: 'Vitamin K', unit: 'mcg' },
+];
+
+const NUTRITION_FLAGS: NutritionFlag[] = [
+  {
+    severity: 'high',
+    title: 'Vitamin B12 coverage gap',
+    rationale: 'Plant-based crop plans do not provide a reliable B12 source.',
+    guidanceText: 'Informational only: plan for a dependable B12 supplement path for vegan nutrition coverage.',
+  },
+  {
+    severity: 'medium',
+    title: 'Iodine planning check',
+    rationale: 'Iodine intake can vary if crops are the primary food source.',
+    guidanceText: 'Informational only: consider iodized salt or seaweed choices with caution as part of planning.',
+  },
+  {
+    severity: 'info',
+    title: 'Omega-3 planning check',
+    rationale: 'EPA/DHA are limited in crops, so omega-3 planning usually depends on ALA food patterns.',
+    guidanceText: 'Informational only: consider ALA-focused foods such as flax, chia, and walnuts in rotation plans.',
+  },
 ];
 
 const toYieldGrams = (plan: CropPlan): number | null => {
@@ -2278,6 +2307,7 @@ const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSumm
     totals,
     excludedCrops: [...excluded].sort((left, right) => left.localeCompare(right)),
     confidenceNotes: [...confidence].sort((left, right) => left.localeCompare(right)),
+    flags: NUTRITION_FLAGS,
   };
 };
 
@@ -2325,6 +2355,16 @@ function NutritionPage() {
       {isLoading ? <p>Loading nutrition data…</p> : null}
       {!isLoading ? (
         <>
+          <h3>Vegan nutrition flags</h3>
+          <p>Informational only, not medical advice.</p>
+          <ul>
+            {summary.flags.map((flag) => (
+              <li key={flag.title}>
+                <strong>{flag.title}</strong> ({flag.severity}): {flag.rationale} {flag.guidanceText}
+              </li>
+            ))}
+          </ul>
+
           <h3>Coverage summary</h3>
           <ul>
             {NUTRITION_METRICS.map((metric) => {
