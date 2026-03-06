@@ -234,7 +234,7 @@ describe('App', () => {
     });
   });
 
-  it('renders deterministic nutrition coverage totals and per-day values', async () => {
+  it('renders deterministic nutrition coverage totals and per-day values from non-trivial yields', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
       beds: [],
@@ -268,6 +268,24 @@ describe('App', () => {
           createdAt: '2026-01-01T00:00:00Z',
           updatedAt: '2026-01-01T00:00:00Z',
         },
+        {
+          cropId: 'crop_beans',
+          name: 'Beans',
+          companionsGood: [],
+          companionsAvoid: [],
+          rules: {
+            sowing: { sequence: 1, windows: [] },
+            transplant: { sequence: 2, windows: [] },
+            harvest: { sequence: 3, windows: [] },
+            storage: { sequence: 4, windows: [] },
+          },
+          nutritionProfile: [
+            { nutrient: 'kcal', value: 127, unit: 'kcal', source: 'USDA', assumptions: 'Per 100g cooked.' },
+            { nutrient: 'protein', value: 8.7, unit: 'g', source: 'USDA', assumptions: 'Per 100g cooked.' },
+          ],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
       ],
       cropPlans: [
         {
@@ -275,7 +293,14 @@ describe('App', () => {
           cropId: 'crop_potato',
           seasonYear: 2026,
           plannedWindows: { sowing: [], harvest: [] },
-          expectedYield: { amount: 30, unit: 'kg' },
+          expectedYield: { amount: 22, unit: 'kg' },
+        },
+        {
+          planId: 'plan_2',
+          cropId: 'crop_beans',
+          seasonYear: 2026,
+          plannedWindows: { sowing: [], harvest: [] },
+          expectedYield: { amount: 8, unit: 'kg' },
         },
       ],
     } as never);
@@ -293,13 +318,13 @@ describe('App', () => {
     expect(
       screen.getByText((_, element) => {
         const text = element?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
-        return element?.tagName === 'LI' && text.includes('calories') && text.includes('total 23100 kcal') && text.includes('per day 63 kcal') && text.includes('coverage vs generic target: 3%');
+        return element?.tagName === 'LI' && text.includes('calories') && text.includes('total 27100 kcal') && text.includes('per day 74 kcal') && text.includes('coverage vs generic target: 4%');
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_, element) => {
         const text = element?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
-        return element?.tagName === 'LI' && text.includes('protein') && text.includes('total 600 g') && text.includes('per day 1.64 g') && text.includes('coverage vs generic target: 3%');
+        return element?.tagName === 'LI' && text.includes('protein') && text.includes('total 1136 g') && text.includes('per day 3.11 g') && text.includes('coverage vs generic target: 6%');
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('Missing-data warning: none.')).toBeInTheDocument();
