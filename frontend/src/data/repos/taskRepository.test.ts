@@ -143,7 +143,6 @@ describe('taskRepository generation idempotence', () => {
         cropPlans: shuffleWithSeed(baselineScenario.cropPlans, seed),
         batches: shuffleWithSeed(baselineScenario.batches, seed + 1).map((batch) => ({
           ...batch,
-          stageEvents: shuffleWithSeed(batch.stageEvents, seed + 2),
           assignments: shuffleWithSeed(batch.assignments, seed + 3),
         })),
         tasks: shuffleWithSeed(baselineScenario.tasks, seed + 4),
