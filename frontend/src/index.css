@@ -12,6 +12,16 @@ body {
   margin: 0;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -419,12 +429,22 @@ body {
 }
 
 .tab-nav a {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
   padding: 0.5rem 0.25rem;
   text-align: center;
   font-size: 0.75rem;
   color: #6b7280;
   text-decoration: none;
   border-radius: 0.5rem;
+}
+
+button,
+input,
+select,
+textarea {
+  min-height: 44px;
 }
 
 .tab-nav a.active {

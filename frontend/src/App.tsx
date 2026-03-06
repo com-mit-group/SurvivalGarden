@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import type { Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
 import {
   generateOperationalTasks,
@@ -499,6 +499,7 @@ function BedDetailPage() {
                       <span className="batch-detail-pill">move</span>
                       <select
                         value={moveTargetBedByBatchId[batch.batchId] ?? ''}
+                        aria-label={`Move ${batch.batchId} to bed`}
                         onChange={(event) => setMoveTargetBedByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
                         disabled={allBeds.filter((candidateBed) => candidateBed.bedId !== bedId).length === 0}
                       >
@@ -513,11 +514,13 @@ function BedDetailPage() {
                       </select>
                       <input
                         type="datetime-local"
+                        aria-label={`Move ${batch.batchId} date and time`}
                         value={moveDateByBatchId[batch.batchId] ?? ''}
                         onChange={(event) => setMoveDateByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
                       />
                       <input
                         type="text"
+                        aria-label={`Move ${batch.batchId} meta`}
                         value={moveMetaByBatchId[batch.batchId] ?? ''}
                         onChange={(event) => setMoveMetaByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
                         placeholder="Position / meta (optional)"
@@ -543,6 +546,7 @@ function BedDetailPage() {
                       </label>
                       <input
                         type="datetime-local"
+                        aria-label={`Remove ${batch.batchId} from bed date and time`}
                         value={removeDateByBatchId[batch.batchId] ?? ''}
                         onChange={(event) => setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: event.target.value }))}
                       />
@@ -561,7 +565,12 @@ function BedDetailPage() {
         <div className="batch-next-actions">
           <div className="batch-next-action-row">
             <span className="batch-detail-pill">assign</span>
-            <select value={assignBatchId} onChange={(event) => setAssignBatchId(event.target.value)} disabled={candidateBatches.length === 0}>
+            <select
+              value={assignBatchId}
+              aria-label="Select batch to assign"
+              onChange={(event) => setAssignBatchId(event.target.value)}
+              disabled={candidateBatches.length === 0}
+            >
               {candidateBatches.length === 0 ? <option value="">No eligible batches</option> : null}
               {candidateBatches.map((batch) => (
                 <option key={batch.batchId} value={batch.batchId}>
@@ -573,9 +582,15 @@ function BedDetailPage() {
                 </option>
               ))}
             </select>
-            <input type="datetime-local" value={assignDate} onChange={(event) => setAssignDate(event.target.value)} />
+            <input
+              type="datetime-local"
+              aria-label="Assignment date and time"
+              value={assignDate}
+              onChange={(event) => setAssignDate(event.target.value)}
+            />
             <input
               type="text"
+              aria-label="Assignment meta"
               value={assignMeta}
               onChange={(event) => setAssignMeta(event.target.value)}
               placeholder="Position / meta (optional)"
@@ -2618,7 +2633,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
   return (
     <>
-      <p>Data</p>
+      <h2 data-route-focus="true">Data</h2>
       <button type="button" onClick={() => void handleExportJson()} disabled={isExporting}>
         {isExporting ? 'Exporting JSON…' : 'Export JSON'}
       </button>
@@ -2659,6 +2674,8 @@ function App() {
   const isDevResetEnabled =
     env?.VITE_ENABLE_DEV_RESET === 'true' || processEnv?.VITE_ENABLE_DEV_RESET === 'true';
   const isTestEnvironment = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+  const mainContentRef = useRef<HTMLElement | null>(null);
+  const location = useLocation();
 
   const initializeStorage = useCallback(async () => {
     setIsInitializingStorage(true);
@@ -2678,6 +2695,19 @@ function App() {
   useEffect(() => {
     void initializeStorage();
   }, [initializeStorage]);
+
+  useEffect(() => {
+    const focusTarget = mainContentRef.current?.querySelector<HTMLElement>('[data-route-focus], h2, h1');
+    if (!focusTarget) {
+      return;
+    }
+
+    if (!focusTarget.hasAttribute('tabindex')) {
+      focusTarget.setAttribute('tabindex', '-1');
+    }
+
+    focusTarget.focus();
+  }, [location.pathname]);
 
   const handleReset = useCallback(async () => {
     setIsInitializingStorage(true);
@@ -2726,7 +2756,7 @@ function App() {
         <h1>SurvivalGarden</h1>
       </header>
 
-      <main className="app-content">
+      <main className="app-content" ref={mainContentRef}>
         <Routes>
           <Route path="/" element={<Navigate to="/beds" replace />} />
           <Route path="/beds" element={<BedsPage />} />
