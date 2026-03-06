@@ -63,7 +63,11 @@ const shuffleWithSeed = <T>(items: T[], seed: number): T[] => {
 
   for (let index = output.length - 1; index > 0; index -= 1) {
     const nextIndex = Math.floor(random() * (index + 1));
-    [output[index], output[nextIndex]] = [output[nextIndex], output[index]];
+    const currentItem = output[index]!;
+    const nextItem = output[nextIndex]!;
+
+    output[index] = nextItem;
+    output[nextIndex] = currentItem;
   }
 
   return output;
