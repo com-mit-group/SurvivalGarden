@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import App from './App';
+import App, { RecoveryScreen } from './App';
 import {
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
@@ -72,6 +72,48 @@ describe('App', () => {
     cleanup();
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+  });
+
+
+  it('renders recovery mode and requires explicit reset confirmation', async () => {
+    render(<RecoveryScreen error={new Error('corrupt state')} onRetry={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'Recovery mode' })).toBeInTheDocument();
+    const resetButton = screen.getByRole('button', { name: 'Reset local database' });
+    expect(resetButton).toBeDisabled();
+
+    fireEvent.click(resetButton);
+    expect(resetToGoldenDataset).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand reset will replace local data/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset local database' }));
+
+    await waitFor(() => {
+      expect(resetToGoldenDataset).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('exports readable data from recovery mode', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({ schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [], seedInventory: [], tasks: [] } as never);
+    render(<RecoveryScreen error={new Error('boom')} onRetry={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export readable data' }));
+
+    await waitFor(() => {
+      expect(serializeAppStateForExport).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/Export complete:/)).toBeInTheDocument();
+    });
+  });
+
+
+  it('calls retry from recovery mode without auto-looping actions', () => {
+    const onRetry = vi.fn();
+    render(<RecoveryScreen error={new Error('fail')} onRetry={onRetry} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(resetToGoldenDataset).not.toHaveBeenCalled();
   });
 
   it('renders the app title and primary navigation', () => {

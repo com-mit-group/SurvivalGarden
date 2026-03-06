@@ -2520,6 +2520,151 @@ type DataPageProps = {
   onResetToGoldenDataset: () => void;
 };
 
+type RecoveryScreenProps = {
+  error: unknown;
+  onRetry: () => void;
+};
+
+export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleExportJson = useCallback(async () => {
+    if (isExporting) {
+      return;
+    }
+
+    setIsExporting(true);
+    setExportMessage(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setExportMessage('Export failed: no readable data was found in local storage.');
+        return;
+      }
+
+      const payload = serializeAppStateForExport(appState);
+      const timestamp = new Date().toISOString().replace(/[.:]/g, '-');
+      const fileName = `survival-garden-recovery-${timestamp}.json`;
+      const blob = new Blob([payload], { type: 'application/json' });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      setExportMessage(`Export complete: ${fileName}`);
+    } catch (exportError) {
+      setExportMessage(`Export failed: ${exportError instanceof Error ? exportError.message : 'Unknown error.'}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting]);
+
+  const handleImportJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setPendingImportState(null);
+
+    try {
+      const payload = await file.text();
+      const parsedState = parseImportedAppState(payload);
+      setPendingImportState(parsedState);
+      setImportMessage('Import file is valid. Replace existing data?');
+    } catch (importError) {
+      setImportMessage(`Import failed: ${importError instanceof Error ? importError.message : 'Unknown error.'}`);
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting]);
+
+  const handleConfirmImport = useCallback(async () => {
+    if (!pendingImportState || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+
+    try {
+      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
+      setPendingImportState(null);
+      setImportMessage('Import complete. Existing data was replaced.');
+    } catch (importError) {
+      setImportMessage(`Import failed while saving: ${importError instanceof Error ? importError.message : 'Unknown error.'}`);
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, pendingImportState]);
+
+  const handleReset = useCallback(async () => {
+    if (!confirmReset || isResetting) {
+      return;
+    }
+
+    setIsResetting(true);
+    setResetMessage(null);
+
+    try {
+      await resetToGoldenDataset();
+      setResetMessage('Reset complete. You can retry loading the app now.');
+      setConfirmReset(false);
+    } catch (resetError) {
+      setResetMessage(`Reset failed: ${resetError instanceof Error ? resetError.message : 'Unknown error.'}`);
+    } finally {
+      setIsResetting(false);
+    }
+  }, [confirmReset, isResetting]);
+
+  return (
+    <div className="storage-error-screen" role="alert">
+      <h1>Recovery mode</h1>
+      <p>The app hit a runtime/storage error and stopped loading.</p>
+      <p>Nothing is deleted automatically. Choose a recovery action below.</p>
+      <p>{error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown runtime failure.'}</p>
+      <div className="storage-error-actions">
+        <button type="button" onClick={onRetry}>Retry</button>
+        <button type="button" onClick={() => void handleExportJson()} disabled={isExporting}>
+          {isExporting ? 'Exporting…' : 'Export readable data'}
+        </button>
+      </div>
+      {exportMessage ? <p>{exportMessage}</p> : null}
+      <label>
+        Import backup JSON
+        <input type="file" accept="application/json,.json" onChange={(event) => void handleImportJson(event)} disabled={isImporting} />
+      </label>
+      {pendingImportState ? (
+        <button type="button" onClick={() => void handleConfirmImport()} disabled={isImporting}>
+          {isImporting ? 'Replacing data…' : 'Replace with imported backup'}
+        </button>
+      ) : null}
+      {importMessage ? <p>{importMessage}</p> : null}
+      <label>
+        <input type="checkbox" checked={confirmReset} onChange={(event) => setConfirmReset(event.currentTarget.checked)} disabled={isResetting} />
+        I understand reset will replace local data with the golden dataset.
+      </label>
+      <button type="button" onClick={() => void handleReset()} disabled={!confirmReset || isResetting}>
+        {isResetting ? 'Resetting…' : 'Reset local database'}
+      </button>
+      {resetMessage ? <p>{resetMessage}</p> : null}
+    </div>
+  );
+}
+
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
