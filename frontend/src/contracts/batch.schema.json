@@ -8,12 +8,9 @@
     "batchId",
     "cropId",
     "startedAt",
-    "propagationType",
-    "startQuantity",
-    "currentStage",
+    "stage",
     "stageEvents",
-    "bedAssignments",
-    "photos"
+    "assignments"
   ],
   "properties": {
     "batchId": {
