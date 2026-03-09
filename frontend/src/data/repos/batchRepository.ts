@@ -76,12 +76,13 @@ const detectPropagationType = (candidate: Record<string, unknown>): Batch['propa
   return undefined;
 };
 
-const normalizeBatchCandidate = (value: unknown): unknown => {
+const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?: boolean }): unknown => {
   if (!value || typeof value !== 'object') {
     return {};
   }
 
   const candidate = asRecord(value);
+  const forMigrationReport = options?.forMigrationReport === true;
   const start = asRecord(candidate.start);
   const counts = asRecord(candidate.counts);
   const status = asRecord(candidate.status);
@@ -122,8 +123,15 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
     stage,
     stageEvents,
     assignments,
-    photos: Array.isArray(candidate.photos) ? candidate.photos : [],
   };
+
+  if (candidate.currentStage !== undefined || forMigrationReport) {
+    normalized.currentStage = asString(candidate.currentStage) ?? stage;
+  }
+
+  if (Array.isArray(candidate.photos) || forMigrationReport) {
+    normalized.photos = Array.isArray(candidate.photos) ? candidate.photos : [];
+  }
 
   const normalizedVariety = asString(candidate.variety) ?? asString(varietyRecord.cultivar);
   if (normalizedVariety !== undefined) {
@@ -148,10 +156,6 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
 
   if (candidate.notes !== undefined) {
     normalized.notes = candidate.notes;
-  }
-
-  if (candidate.currentStage !== undefined) {
-    normalized.currentStage = candidate.currentStage;
   }
 
   if (candidate.bedAssignments !== undefined) {
@@ -212,7 +216,7 @@ export const normalizeBatchesWithReport = (records: unknown[]): { batches: Batch
   const batches: Batch[] = [];
 
   records.forEach((record, index) => {
-    const normalized = normalizeBatchCandidate(record);
+    const normalized = normalizeBatchCandidate(record, { forMigrationReport: true });
     const validation = validateSchema('batch', normalized);
 
     if (!validation.ok) {
@@ -423,7 +427,7 @@ export const getBatchFromAppState = (
   const records = Array.isArray(state.batches) ? state.batches : [];
 
   for (const record of records) {
-    const normalized = normalizeBatchCandidate(record);
+    const normalized = normalizeBatchCandidate(record, { forMigrationReport: true });
     const validation = validateSchema('batch', normalized);
 
     if (validation.ok && validation.value.batchId === batchId) {
