@@ -427,7 +427,7 @@ export const getBatchFromAppState = (
   const records = Array.isArray(state.batches) ? state.batches : [];
 
   for (const record of records) {
-    const normalized = normalizeBatchCandidate(record, { forMigrationReport: true });
+    const normalized = normalizeBatchCandidate(record);
     const validation = validateSchema('batch', normalized);
 
     if (validation.ok && validation.value.batchId === batchId) {
