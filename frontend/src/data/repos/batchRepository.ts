@@ -1,9 +1,218 @@
 import type { AppState, Batch } from '../../contracts';
 import { applyStageEvent } from '../../domain';
-import { assertValid } from '../validation';
+import { assertValid, validateSchema } from '../validation';
 import type { BatchListFilter, ListQuery } from './interfaces';
 
-const normalizeBatchCandidate = (value: unknown): unknown => value ?? {};
+
+export type BatchMigrationWarningCode =
+  | 'legacy_variety_cultivar'
+  | 'legacy_counts_mapped'
+  | 'legacy_start_mapped'
+  | 'legacy_status_ignored'
+  | 'legacy_propagation_heuristic'
+  | 'stage_events_synthesized'
+  | 'bed_assignments_alias_mapped'
+  | 'photos_defaulted'
+  | 'assignments_defaulted';
+
+export type BatchMigrationWarning = {
+  batchId: string | null;
+  code: BatchMigrationWarningCode;
+  message: string;
+};
+
+export type BatchMigrationInvalidRecord = {
+  index: number;
+  batchId: string | null;
+  issues: string[];
+};
+
+export type BatchMigrationReport = {
+  migrated: number;
+  warnings: BatchMigrationWarning[];
+  invalidRecords: BatchMigrationInvalidRecord[];
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+const asString = (value: unknown): string | undefined => (typeof value === 'string' && value.length > 0 ? value : undefined);
+
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const detectPropagationType = (candidate: Record<string, unknown>): Batch['propagationType'] | undefined => {
+  const direct = asString(candidate.propagationType);
+
+  if (
+    direct === 'seed' ||
+    direct === 'transplant' ||
+    direct === 'cutting' ||
+    direct === 'division' ||
+    direct === 'tuber' ||
+    direct === 'bulb' ||
+    direct === 'runner' ||
+    direct === 'graft' ||
+    direct === 'other'
+  ) {
+    return direct;
+  }
+
+  const keys = Object.keys(candidate).join(' ').toLowerCase();
+  const payload = JSON.stringify(candidate).toLowerCase();
+
+  if (keys.includes('cutting') || payload.includes('cutting')) {
+    return 'cutting';
+  }
+
+  if (keys.includes('regrow') || keys.includes('runner') || payload.includes('regrow') || payload.includes('runner')) {
+    return 'runner';
+  }
+
+  if (keys.includes('tuber') || payload.includes('tuber') || keys.includes('bulb') || payload.includes('bulb')) {
+    return 'tuber';
+  }
+
+  return undefined;
+};
+
+const normalizeBatchCandidate = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const candidate = asRecord(value);
+  const start = asRecord(candidate.start);
+  const counts = asRecord(candidate.counts);
+  const status = asRecord(candidate.status);
+  const varietyRecord = asRecord(candidate.variety);
+  const batchId = asString(candidate.batchId) ?? null;
+  const warnings: BatchMigrationWarning[] = [];
+
+  const startedAt = asString(candidate.startedAt) ?? asString(start.startedAt) ?? asString(start.at);
+  if (!asString(candidate.startedAt) && startedAt) {
+    warnings.push({ batchId, code: 'legacy_start_mapped', message: 'Mapped legacy start.* fields into startedAt.' });
+  }
+
+  const stage = asString(candidate.stage) ?? asString(candidate.currentStage) ?? asString(status.state) ?? 'unknown';
+  if (status.state || status.isActive !== undefined) {
+    warnings.push({ batchId, code: 'legacy_status_ignored', message: 'Legacy status.* fields observed; canonical stage/currentStage applied.' });
+  }
+
+  const stageEventsInput = Array.isArray(candidate.stageEvents) ? candidate.stageEvents : [];
+  const stageEvents = stageEventsInput.length > 0 ? stageEventsInput : startedAt ? [{ stage, occurredAt: startedAt }] : [];
+  if (stageEventsInput.length === 0 && startedAt) {
+    warnings.push({ batchId, code: 'stage_events_synthesized', message: 'Synthesized first stage event from start timestamp.' });
+  }
+
+  const canonicalStart = startedAt ?? asString((stageEvents[0] as Record<string, unknown> | undefined)?.occurredAt);
+  const assignments = Array.isArray(candidate.assignments)
+    ? candidate.assignments
+    : Array.isArray(candidate.bedAssignments)
+      ? candidate.bedAssignments
+      : [];
+  if (!Array.isArray(candidate.assignments)) {
+    warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped bedAssignments alias to assignments.' });
+  }
+
+  const normalized: Record<string, unknown> = {
+    ...candidate,
+    variety: asString(candidate.variety) ?? asString(varietyRecord.cultivar),
+    startedAt: canonicalStart,
+    stage,
+    currentStage: stage,
+    stageEvents,
+    assignments,
+    bedAssignments: Array.isArray(candidate.bedAssignments) ? candidate.bedAssignments : assignments,
+    photos: Array.isArray(candidate.photos) ? candidate.photos : [],
+  };
+
+  if (!asString(candidate.variety) && asString(varietyRecord.cultivar)) {
+    warnings.push({ batchId, code: 'legacy_variety_cultivar', message: 'Mapped variety.cultivar to variety.' });
+  }
+
+  const seedsPlanned = asNumber(candidate.seedCountPlanned) ?? asNumber(counts.seedsSown);
+  const seedsGerminated = asNumber(candidate.seedCountGerminated) ?? asNumber(counts.seedsGerminated);
+  const plantsAlive = asNumber(candidate.plantCountAlive) ?? asNumber(counts.plantsAlive);
+
+  if (seedsPlanned !== undefined) normalized.seedCountPlanned = seedsPlanned;
+  if (seedsGerminated !== undefined) normalized.seedCountGerminated = seedsGerminated;
+  if (plantsAlive !== undefined) normalized.plantCountAlive = plantsAlive;
+
+  if (counts.seedsSown !== undefined || counts.seedsGerminated !== undefined || counts.plantsAlive !== undefined) {
+    warnings.push({ batchId, code: 'legacy_counts_mapped', message: 'Mapped legacy counts.* fields to canonical counters.' });
+  }
+
+  if (!Array.isArray(candidate.photos)) {
+    warnings.push({ batchId, code: 'photos_defaulted', message: 'Defaulted missing photos to empty array.' });
+  }
+
+  if (!Array.isArray(candidate.assignments) && !Array.isArray(candidate.bedAssignments)) {
+    warnings.push({ batchId, code: 'assignments_defaulted', message: 'Defaulted missing assignments to empty array.' });
+  }
+
+  const propagationType = detectPropagationType(candidate);
+  if (propagationType && !asString(candidate.propagationType)) {
+    normalized.propagationType = propagationType;
+    warnings.push({
+      batchId,
+      code: 'legacy_propagation_heuristic',
+      message: `Derived propagationType=${propagationType} from legacy hints with uncertainty.`,
+    });
+  }
+
+  const meta = asRecord(candidate.meta);
+  if (warnings.length > 0) {
+    normalized.meta = {
+      ...meta,
+      migration: {
+        normalizedFromLegacy: true,
+        warningCodes: warnings.map((warning) => warning.code),
+        confidence: warnings.some((warning) => warning.code === 'legacy_propagation_heuristic') ? 'low' : 'medium',
+      },
+    };
+  }
+
+  return normalized;
+};
+
+export const normalizeBatchesWithReport = (records: unknown[]): { batches: Batch[]; report: BatchMigrationReport } => {
+  const report: BatchMigrationReport = { migrated: 0, warnings: [], invalidRecords: [] };
+  const batches: Batch[] = [];
+
+  records.forEach((record, index) => {
+    const normalized = normalizeBatchCandidate(record);
+    const validation = validateSchema('batch', normalized);
+
+    if (!validation.ok) {
+      const batchId = asString(asRecord(record).batchId) ?? null;
+      report.invalidRecords.push({
+        index,
+        batchId,
+        issues: validation.issues.map((issue) => `${issue.path} ${issue.message}`),
+      });
+      return;
+    }
+
+    const metaWarnings = asRecord(validation.value.meta).migration;
+    if (metaWarnings && typeof metaWarnings === 'object' && Array.isArray((metaWarnings as Record<string, unknown>).warningCodes)) {
+      const warningCodes = (metaWarnings as Record<string, unknown>).warningCodes as BatchMigrationWarningCode[];
+      warningCodes.forEach((code) => {
+        report.warnings.push({
+          batchId: validation.value.batchId,
+          code,
+          message: `Normalized ${validation.value.batchId} with ${code}.`,
+        });
+      });
+    }
+
+    report.migrated += 1;
+    batches.push(validation.value);
+  });
+
+  return { batches, report };
+};
+
 
 type BatchAssignmentWithRange = Batch['assignments'][number] & {
   fromDate?: string;
@@ -179,25 +388,34 @@ export const getBatchFromAppState = (
   appState: unknown,
   batchId: Batch['batchId'],
 ): Batch | null => {
-  const state = assertValid('appState', appState);
-  const candidate = state.batches.find((batch) => batch.batchId === batchId);
+  const state = asRecord(appState);
+  const records = Array.isArray(state.batches) ? state.batches : [];
 
-  if (!candidate) {
-    return null;
+  for (const record of records) {
+    const normalized = normalizeBatchCandidate(record);
+    const validation = validateSchema('batch', normalized);
+
+    if (validation.ok && validation.value.batchId === batchId) {
+      return validation.value;
+    }
   }
 
-  return assertValid('batch', normalizeBatchCandidate(candidate));
+  return null;
 };
 
 export const listBatchesFromAppState = (
   appState: unknown,
   query: ListQuery<BatchListFilter> = {},
 ): Batch[] => {
-  const state = assertValid('appState', appState);
+  const state = asRecord(appState);
+  const records = Array.isArray(state.batches) ? state.batches : [];
   const { filter } = query;
   const onDate = new Date().toISOString();
 
-  return state.batches
+  return records
+    .map((record) => validateSchema('batch', normalizeBatchCandidate(record)))
+    .filter((result): result is { ok: true; value: Batch } => result.ok)
+    .map((result) => result.value)
     .filter((batch) => {
       if (!filter) {
         return true;
@@ -224,8 +442,7 @@ export const listBatchesFromAppState = (
       }
 
       return true;
-    })
-    .map((batch) => assertValid('batch', normalizeBatchCandidate(batch)));
+    });
 };
 
 export const upsertBatchInAppState = (appState: unknown, batch: unknown): AppState => {
