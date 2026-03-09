@@ -120,7 +120,6 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
     cropId: candidate.cropId,
     startedAt: canonicalStart,
     stage,
-    currentStage: stage,
     stageEvents,
     assignments,
     photos: Array.isArray(candidate.photos) ? candidate.photos : [],
