@@ -58,6 +58,12 @@
       "type": "integer",
       "minimum": 0
     },
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Legacy alias for currentStage during migration."
+    },
     "currentStage": {
       "type": "string",
       "minLength": 1,
@@ -74,6 +80,13 @@
       "items": {
         "$ref": "#/$defs/bedAssignment"
       }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/bedAssignment"
+      },
+      "description": "Legacy alias for bedAssignments during migration."
     },
     "notes": {
       "type": "string",
