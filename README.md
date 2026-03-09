@@ -30,3 +30,32 @@ The current Bed schema has no dedicated area field, so approximate m² allocatio
 Import/export is treated as lossless for all schema-defined `AppState` fields after canonical JSON normalization (stable key ordering before deep comparison).
 
 Photo/blob payload data is intentionally excluded from roundtrip guarantees. If photo metadata fields exist in schema, metadata must survive export → import → export, while blob payload paths (currently documented as `/photos/*/blob` and `/photos/*/blobBase64`) are excluded-by-design.
+
+## Schema vNext notes (Crop + Batch)
+
+`AppState.schemaVersion` minimum is now `2` for the canonical vNext contract.
+
+`Crop` additions:
+- `scientificName?: string`
+- `taxonomy?: { family?: string; genus?: string; species?: string }`
+- `aliases?: string[]`
+- `isUserDefined?: boolean`
+
+`Batch` canonical shape (legacy nested `start`, `counts`, `status`, and `assignments` are no longer first-class):
+- `propagationType: "seed" | "transplant" | "cutting" | "division" | "tuber" | "bulb" | "runner" | "graft" | "other"`
+- `startQuantity: { count: number; unit: string }`
+- `currentStage: string`
+- `stageEvents: Array<{ stage; occurredAt; location?; method?; meta? }>`
+- `bedAssignments: Array<{ bedId; assignedAt; removedAt?; meta? }>`
+- `photos: Array<{ id; storageRef; ...metadata }>`
+- Optional seed-specific counts: `seedCountPlanned?`, `seedCountGerminated?`
+- Optional universal count: `plantCountAlive?`
+
+Migration mapping guidance:
+- `batch.stage` -> `batch.currentStage`
+- `batch.assignments` -> `batch.bedAssignments`
+- legacy `start.count` / `counts.*` -> `startQuantity` and optional seed-specific fields as appropriate
+- legacy `status` timeline -> `stageEvents`
+
+For non-seed propagation, use `propagationType` + `startQuantity` only; do not populate fake seed counts.
+

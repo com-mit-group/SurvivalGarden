@@ -23,6 +23,44 @@
       "minLength": 1,
       "maxLength": 120
     },
+    "scientificName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "genus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "species": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "uniqueItems": true
+    },
+    "isUserDefined": {
+      "type": "boolean"
+    },
     "category": {
       "type": "string",
       "minLength": 1,
