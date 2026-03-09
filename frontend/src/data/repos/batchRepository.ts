@@ -120,6 +120,7 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
     cropId: candidate.cropId,
     startedAt: canonicalStart,
     stage,
+    currentStage: stage,
     stageEvents,
     assignments,
     photos: Array.isArray(candidate.photos) ? candidate.photos : [],
@@ -176,10 +177,6 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
 
   if (counts.seedsSown !== undefined || counts.seedsGerminated !== undefined || counts.plantsAlive !== undefined) {
     warnings.push({ batchId, code: 'legacy_counts_mapped', message: 'Mapped legacy counts.* fields to canonical counters.' });
-  }
-
-  if (!Array.isArray(candidate.photos)) {
-    warnings.push({ batchId, code: 'photos_defaulted', message: 'Defaulted missing photos to empty array.' });
   }
 
   if (!Array.isArray(candidate.assignments) && !Array.isArray(candidate.bedAssignments)) {
