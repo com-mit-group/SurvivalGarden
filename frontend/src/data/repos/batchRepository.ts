@@ -116,16 +116,51 @@ const normalizeBatchCandidate = (value: unknown): unknown => {
   }
 
   const normalized: Record<string, unknown> = {
-    ...candidate,
-    variety: asString(candidate.variety) ?? asString(varietyRecord.cultivar),
+    batchId: candidate.batchId,
+    cropId: candidate.cropId,
     startedAt: canonicalStart,
     stage,
-    currentStage: stage,
     stageEvents,
     assignments,
-    bedAssignments: Array.isArray(candidate.bedAssignments) ? candidate.bedAssignments : assignments,
     photos: Array.isArray(candidate.photos) ? candidate.photos : [],
   };
+
+  const normalizedVariety = asString(candidate.variety) ?? asString(varietyRecord.cultivar);
+  if (normalizedVariety !== undefined) {
+    normalized.variety = normalizedVariety;
+  }
+
+  if (candidate.propagationType !== undefined) {
+    normalized.propagationType = candidate.propagationType;
+  }
+
+  if (candidate.startMethod !== undefined) {
+    normalized.startMethod = candidate.startMethod;
+  }
+
+  if (candidate.startLocation !== undefined) {
+    normalized.startLocation = candidate.startLocation;
+  }
+
+  if (candidate.startQuantity !== undefined) {
+    normalized.startQuantity = candidate.startQuantity;
+  }
+
+  if (candidate.notes !== undefined) {
+    normalized.notes = candidate.notes;
+  }
+
+  if (candidate.currentStage !== undefined) {
+    normalized.currentStage = candidate.currentStage;
+  }
+
+  if (candidate.bedAssignments !== undefined) {
+    normalized.bedAssignments = candidate.bedAssignments;
+  }
+
+  if (candidate.meta !== undefined) {
+    normalized.meta = candidate.meta;
+  }
 
   if (!asString(candidate.variety) && asString(varietyRecord.cultivar)) {
     warnings.push({ batchId, code: 'legacy_variety_cultivar', message: 'Mapped variety.cultivar to variety.' });
