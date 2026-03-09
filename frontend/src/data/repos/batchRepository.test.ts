@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch } from '../../contracts';
-import { assignBatchToBed, getActiveBedAssignment, moveBatch, removeBatchFromBed } from './batchRepository';
+import {
+  assignBatchToBed,
+  getActiveBedAssignment,
+  getBatchFromAppState,
+  listBatchesFromAppState,
+  moveBatch,
+  normalizeBatchesWithReport,
+  removeBatchFromBed,
+} from './batchRepository';
 
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
@@ -227,5 +235,94 @@ describe('removeBatchFromBed', () => {
 
     expect(updated).toBe(batch);
     expect(getActiveBedAssignment(updated, '2026-01-10T00:00:01Z')).toBeNull();
+  });
+});
+
+
+describe('batch normalization pipeline', () => {
+  it('normalizes legacy shapes and returns migration report', () => {
+    const input = [
+      {
+        batchId: 'legacy-1',
+        cropId: 'crop-1',
+        variety: { cultivar: 'Black Cherry' },
+        start: { at: '2026-01-01T00:00:00Z' },
+        status: { state: 'sowing', isActive: true },
+        counts: { seedsSown: 12, seedsGerminated: 10, plantsAlive: 8 },
+        cuttings: true,
+      },
+    ];
+
+    const { batches, report } = normalizeBatchesWithReport(input);
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toMatchObject({
+      batchId: 'legacy-1',
+      variety: 'Black Cherry',
+      startedAt: '2026-01-01T00:00:00Z',
+      seedCountPlanned: 12,
+      seedCountGerminated: 10,
+      plantCountAlive: 8,
+      stage: 'sowing',
+      currentStage: 'sowing',
+      propagationType: 'cutting',
+      assignments: [],
+      photos: [],
+    });
+    expect(batches[0]!.stageEvents[0]!).toMatchObject({ stage: 'sowing', occurredAt: '2026-01-01T00:00:00Z' });
+    expect(report.migrated).toBe(1);
+    expect(report.invalidRecords).toEqual([]);
+    expect(report.warnings.map((warning) => warning.code)).toContain('legacy_variety_cultivar');
+    expect(report.warnings.map((warning) => warning.code)).toContain('legacy_counts_mapped');
+    expect(report.warnings.map((warning) => warning.code)).toContain('legacy_propagation_heuristic');
+  });
+
+  it('reports invalid records without silently dropping in report', () => {
+    const { batches, report } = normalizeBatchesWithReport([
+      { batchId: 'bad-1', cropId: 'crop-1', stage: 'sowing', stageEvents: [], assignments: [] },
+    ]);
+
+    expect(batches).toEqual([]);
+    expect(report.migrated).toBe(0);
+    expect(report.invalidRecords).toHaveLength(1);
+    expect(report.invalidRecords[0]?.batchId).toBe('bad-1');
+    expect(report.invalidRecords[0]?.issues.join(' ')).toContain('stageEvents');
+  });
+
+  it('normalizes legacy batches through repository read paths', () => {
+    const appState = {
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 's',
+        locale: 'en',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      batches: [
+        {
+          batchId: 'legacy-read-1',
+          cropId: 'crop-1',
+          variety: { cultivar: 'Rose' },
+          start: { startedAt: '2026-02-01T00:00:00Z' },
+          status: { state: 'sowing' },
+          bedAssignments: [{ bedId: 'bed-1', assignedAt: '2026-02-01T00:00:00Z' }],
+        },
+      ],
+    };
+
+    const one = getBatchFromAppState(appState, 'legacy-read-1');
+    const all = listBatchesFromAppState(appState);
+
+    expect(one?.variety).toBe('Rose');
+    expect(one?.assignments).toHaveLength(1);
+    expect(all).toHaveLength(1);
+    expect(all[0]?.batchId).toBe('legacy-read-1');
   });
 });

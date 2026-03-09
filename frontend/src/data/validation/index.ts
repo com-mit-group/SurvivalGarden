@@ -49,6 +49,10 @@ export type ValidationIssue = {
   keyword: string;
 };
 
+export type ValidationResult<T extends SchemaName> =
+  | { ok: true; value: SchemaTypeMap[T] }
+  | { ok: false; issues: ValidationIssue[] };
+
 export class SchemaValidationError extends Error {
   readonly schemaName: SchemaName;
   readonly issues: ValidationIssue[];
@@ -94,12 +98,25 @@ export const assertValid = <T extends SchemaName>(
   schemaName: T,
   payload: unknown,
 ): SchemaTypeMap[T] => {
+  const result = validateSchema(schemaName, payload);
+
+  if (result.ok) {
+    return result.value;
+  }
+
+  throw new SchemaValidationError(schemaName, result.issues);
+};
+
+export const validateSchema = <T extends SchemaName>(
+  schemaName: T,
+  payload: unknown,
+): ValidationResult<T> => {
   const validator = validators[schemaName];
 
   if (validator(payload)) {
-    return payload;
+    return { ok: true, value: payload };
   }
 
   const issues = (validator.errors || []).map((error) => normalizeError(schemaName, error));
-  throw new SchemaValidationError(schemaName, issues);
+  return { ok: false, issues };
 };
