@@ -61,15 +61,12 @@ const detectPropagationType = (candidate: Record<string, unknown>): Batch['propa
 
   if (
     direct === 'seed' ||
-    direct === 'seedling' ||
     direct === 'transplant' ||
-    direct === 'clove' ||
     direct === 'cutting' ||
     direct === 'division' ||
     direct === 'tuber' ||
     direct === 'bulb' ||
     direct === 'runner' ||
-    direct === 'slip' ||
     direct === 'graft' ||
     direct === 'other'
   ) {
