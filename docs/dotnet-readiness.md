@@ -149,6 +149,40 @@ Example `GET /api/crop-plans?cropId=crop_potato&seasonYear=2026` response item:
 - `PUT /api/batches/{batchId}` body `Batch` -> `Batch`
 - `DELETE /api/batches/{batchId}` -> `204 No Content`
 
+Batch timeline canonicalization (vNext):
+
+- Canonical export does not include a separate required `start` object; start semantics are represented by `startedAt` + `stageEvents[0]`.
+- Mapping from legacy `start.*`:
+  - `start.date` -> `startedAt` and `stageEvents[0].occurredAt`
+  - `start.stage` -> `stageEvents[0].stage` and `currentStage` when no later stage events exist
+  - `start.location` -> `stageEvents[0].location` (or `stageEvents[0].meta.location` if needed for source fidelity)
+  - `start.method` -> `stageEvents[0].method` (or `stageEvents[0].meta.method` if needed for source fidelity)
+- `currentStage` should resolve to the latest stage event stage after mapping/import.
+- First-event guidance by propagation type:
+  - `seed`: prefer `sowing`/`seeding` when known; otherwise use a neutral initiation stage and preserve source stage text in `stageEvents[0].meta`.
+  - non-seed (`transplant`, `cutting`, `division`, `tuber`, `bulb`, `runner`, `graft`, `other`): prefer a propagation-appropriate first stage when known; otherwise use a neutral initiation stage and preserve source detail in `meta`.
+
+Minimal migration example (legacy start-only history -> valid timeline):
+
+```json
+{
+  "batchId": "batch_001",
+  "cropId": "crop_tomato",
+  "startedAt": "2026-03-01T00:00:00Z",
+  "currentStage": "sowing",
+  "stage": "sowing",
+  "stageEvents": [
+    {
+      "stage": "sowing",
+      "occurredAt": "2026-03-01T00:00:00Z",
+      "location": "greenhouse-bench-a",
+      "method": "direct-seed"
+    }
+  ],
+  "assignments": []
+}
+```
+
 ### App state + settings
 
 - `GET /api/app-state` -> `AppState | 404`
