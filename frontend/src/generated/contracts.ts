@@ -69,7 +69,7 @@ export interface Batch {
   bedAssignments?: BatchBedAssignment[];
   assignments: BatchBedAssignment[];
   notes?: string;
-  photos?: BatchPhotoMetadata[] | unknown[];
+  photos?: BatchPhotoMetadata[] | unknown[] | undefined;
   meta?: {
     [k: string]: unknown;
   };
