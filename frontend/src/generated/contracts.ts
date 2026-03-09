@@ -56,20 +56,20 @@ export interface Batch {
   cropId: string;
   variety?: string;
   startedAt: string;
-  propagationType: BatchPropagationType;
+  propagationType?: BatchPropagationType;
   startMethod?: string;
   startLocation?: string;
-  startQuantity: BatchStartQuantity;
+  startQuantity?: BatchStartQuantity;
   seedCountPlanned?: number;
   seedCountGerminated?: number;
   plantCountAlive?: number;
-  currentStage: string;
-  stage?: string;
+  currentStage?: string;
+  stage: string;
   stageEvents: BatchStageEvent[];
-  bedAssignments: BatchBedAssignment[];
-  assignments?: BatchBedAssignment[];
+  bedAssignments?: BatchBedAssignment[];
+  assignments: BatchBedAssignment[];
   notes?: string;
-  photos: BatchPhotoMetadata[];
+  photos?: BatchPhotoMetadata[] | unknown[];
   meta?: {
     [k: string]: unknown;
   };
