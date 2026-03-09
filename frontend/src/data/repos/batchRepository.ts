@@ -41,17 +41,35 @@ const asString = (value: unknown): string | undefined => (typeof value === 'stri
 const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
+const asUtcIso = (value: unknown): string | undefined => {
+  const text = asString(value);
+
+  if (!text) {
+    return undefined;
+  }
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    return text;
+  }
+
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+};
+
 const detectPropagationType = (candidate: Record<string, unknown>): Batch['propagationType'] | undefined => {
   const direct = asString(candidate.propagationType);
 
   if (
     direct === 'seed' ||
+    direct === 'seedling' ||
     direct === 'transplant' ||
+    direct === 'clove' ||
     direct === 'cutting' ||
     direct === 'division' ||
     direct === 'tuber' ||
     direct === 'bulb' ||
     direct === 'runner' ||
+    direct === 'slip' ||
     direct === 'graft' ||
     direct === 'other'
   ) {
@@ -87,42 +105,56 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
   const counts = asRecord(candidate.counts);
   const status = asRecord(candidate.status);
   const varietyRecord = asRecord(candidate.variety);
-  const batchId = asString(candidate.batchId) ?? null;
+  const batchId = asString(candidate.batchId) ?? asString(candidate.id) ?? null;
   const warnings: BatchMigrationWarning[] = [];
 
-  const startedAt = asString(candidate.startedAt) ?? asString(start.startedAt) ?? asString(start.at);
+  const startedAt = asUtcIso(candidate.startedAt) ?? asUtcIso(start.startedAt) ?? asUtcIso(start.at);
   if (!asString(candidate.startedAt) && startedAt) {
     warnings.push({ batchId, code: 'legacy_start_mapped', message: 'Mapped legacy start.* fields into startedAt.' });
   }
 
-  const stage = asString(candidate.stage) ?? asString(candidate.currentStage) ?? asString(status.state) ?? 'unknown';
+  const stage = asString(candidate.currentStage) ?? asString(candidate.stage) ?? asString(status.state) ?? 'unknown';
   if (status.state || status.isActive !== undefined) {
     warnings.push({ batchId, code: 'legacy_status_ignored', message: 'Legacy status.* fields observed; canonical stage/currentStage applied.' });
   }
 
   const stageEventsInput = Array.isArray(candidate.stageEvents) ? candidate.stageEvents : [];
-  const stageEvents = stageEventsInput.length > 0 ? stageEventsInput : startedAt ? [{ stage, occurredAt: startedAt }] : [];
+  const stageEvents =
+    stageEventsInput.length > 0
+      ? stageEventsInput.map((event) => {
+          const record = asRecord(event);
+          return {
+            ...record,
+            stage: asString(record.stage) ?? asString(record.type),
+            occurredAt: asUtcIso(record.occurredAt) ?? asUtcIso(record.date),
+          };
+        })
+      : startedAt
+        ? [{ stage, occurredAt: startedAt }]
+        : [];
   if (stageEventsInput.length === 0 && startedAt) {
     warnings.push({ batchId, code: 'stage_events_synthesized', message: 'Synthesized first stage event from start timestamp.' });
   }
 
-  const canonicalStart = startedAt ?? asString((stageEvents[0] as Record<string, unknown> | undefined)?.occurredAt);
-  const assignments = Array.isArray(candidate.assignments)
-    ? candidate.assignments
-    : Array.isArray(candidate.bedAssignments)
-      ? candidate.bedAssignments
+  const canonicalStart = startedAt ?? asUtcIso((stageEvents[0] as Record<string, unknown> | undefined)?.occurredAt);
+  const bedAssignments = Array.isArray(candidate.bedAssignments)
+    ? candidate.bedAssignments
+    : Array.isArray(candidate.assignments)
+      ? candidate.assignments
       : [];
-  if (!Array.isArray(candidate.assignments)) {
-    warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped bedAssignments alias to assignments.' });
+  if (!Array.isArray(candidate.bedAssignments) && Array.isArray(candidate.assignments)) {
+    warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped assignments alias to bedAssignments.' });
   }
 
   const normalized: Record<string, unknown> = {
-    batchId: candidate.batchId,
+    batchId: candidate.batchId ?? candidate.id,
     cropId: candidate.cropId,
     startedAt: canonicalStart,
+    currentStage: asString(candidate.currentStage) ?? stage,
     stage,
     stageEvents,
-    assignments,
+    bedAssignments,
+    assignments: bedAssignments,
   };
 
   if (candidate.currentStage !== undefined || forMigrationReport) {
@@ -158,8 +190,8 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
     normalized.notes = candidate.notes;
   }
 
-  if (candidate.bedAssignments !== undefined) {
-    normalized.bedAssignments = candidate.bedAssignments;
+  if (candidate.lifecycleStatus !== undefined) {
+    normalized.lifecycleStatus = candidate.lifecycleStatus;
   }
 
   if (candidate.meta !== undefined) {

@@ -10,8 +10,6 @@ describe('crop.schema.json', () => {
     cropId: 'crop_tomato',
     name: 'Tomato',
     category: 'fruiting',
-    companionsGood: ['basil', 'marigold'],
-    companionsAvoid: ['potato'],
     rules: {
       sowing: {
         sequence: 1,
@@ -61,10 +59,30 @@ describe('crop.schema.json', () => {
   });
 
   it('rejects payloads missing required fields', () => {
-    const { rules, ...payload } = validPayload;
+    const { cropId, ...payload } = validPayload;
 
-    expect(rules).toBeDefined();
+    expect(cropId).toBeDefined();
     expect(validate(payload)).toBe(false);
+  });
+
+
+  it('accepts minimal payload with migration aliases and partial rules', () => {
+    const payload = {
+      id: 'crop_garlic',
+      commonName: 'Garlic',
+      createdAt: '2026-01-01T01:00:00+01:00',
+      updatedAt: '2026-01-01T01:00:00+01:00',
+      rules: {
+        sowing: {
+          sequence: 1,
+          windows: [{ startMonth: 10, startWeek: 1, endMonth: 11, endWeek: 4 }],
+        },
+      },
+      defaults: { spacingCm: 15 },
+      meta: { family: 'Amaryllidaceae' },
+    };
+
+    expect(validate(payload)).toBe(true);
   });
 
   it('rejects invalid rule window shape', () => {
