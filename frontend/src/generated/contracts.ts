@@ -7,20 +7,70 @@
 export interface BatchStageEvent {
   stage: string;
   occurredAt: string;
+  location?: string;
+  method?: string;
+  meta?: {
+    [k: string]: unknown;
+  };
 }
 
-export interface BatchAssignment {
+export interface BatchBedAssignment {
   bedId: string;
   assignedAt: string;
+  removedAt?: string;
+  meta?: {
+    [k: string]: unknown;
+  };
+}
+
+export interface BatchPhotoMetadata {
+  id: string;
+  storageRef: string;
+  capturedAt?: string;
+  contentType?: string;
+  filename?: string;
+  caption?: string;
+  meta?: {
+    [k: string]: unknown;
+  };
+}
+
+export type BatchPropagationType =
+  | 'seed'
+  | 'transplant'
+  | 'cutting'
+  | 'division'
+  | 'tuber'
+  | 'bulb'
+  | 'runner'
+  | 'graft'
+  | 'other';
+
+export interface BatchStartQuantity {
+  count: number;
+  unit: string;
 }
 
 export interface Batch {
   batchId: string;
   cropId: string;
+  variety?: string;
   startedAt: string;
-  stage: string;
+  propagationType: BatchPropagationType;
+  startMethod?: string;
+  startLocation?: string;
+  startQuantity: BatchStartQuantity;
+  seedCountPlanned?: number;
+  seedCountGerminated?: number;
+  plantCountAlive?: number;
+  currentStage: string;
   stageEvents: BatchStageEvent[];
-  assignments: BatchAssignment[];
+  bedAssignments: BatchBedAssignment[];
+  notes?: string;
+  photos: BatchPhotoMetadata[];
+  meta?: {
+    [k: string]: unknown;
+  };
 }
 
 export interface Bed {
@@ -84,6 +134,14 @@ export interface CropNutritionItem {
 export interface Crop {
   cropId: string;
   name: string;
+  scientificName?: string;
+  taxonomy?: {
+    family?: string;
+    genus?: string;
+    species?: string;
+  };
+  aliases?: string[];
+  isUserDefined?: boolean;
   category?: string;
   companionsGood: string[];
   companionsAvoid: string[];

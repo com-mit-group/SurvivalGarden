@@ -8,9 +8,12 @@
     "batchId",
     "cropId",
     "startedAt",
-    "stage",
+    "propagationType",
+    "startQuantity",
+    "currentStage",
     "stageEvents",
-    "assignments"
+    "bedAssignments",
+    "photos"
   ],
   "properties": {
     "batchId": {
@@ -19,11 +22,43 @@
     "cropId": {
       "$ref": "#/$defs/id"
     },
-    "startedAt": {
+    "variety": {
       "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+      "minLength": 1,
+      "maxLength": 120
     },
-    "stage": {
+    "startedAt": {
+      "$ref": "#/$defs/isoDate"
+    },
+    "propagationType": {
+      "$ref": "#/$defs/propagationType"
+    },
+    "startMethod": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "startLocation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "startQuantity": {
+      "$ref": "#/$defs/startQuantity"
+    },
+    "seedCountPlanned": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seedCountGerminated": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "plantCountAlive": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currentStage": {
       "type": "string",
       "minLength": 1,
       "maxLength": 80
@@ -31,70 +66,28 @@
     "stageEvents": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["stage", "occurredAt"],
-        "properties": {
-          "stage": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 80
-          },
-          "occurredAt": {
-            "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
-          }
-        }
+        "$ref": "#/$defs/stageEvent"
       }
     },
-    "assignments": {
+    "bedAssignments": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["bedId", "assignedAt"],
-        "properties": {
-          "bedId": {
-            "$ref": "#/$defs/id"
-          },
-          "assignedAt": {
-            "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
-          }
-        }
+        "$ref": "#/$defs/bedAssignment"
       }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
     },
     "photos": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "storageRef"],
-        "properties": {
-          "id": {
-            "$ref": "#/$defs/id"
-          },
-          "storageRef": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          },
-          "capturedAt": {
-            "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
-          },
-          "contentType": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "filename": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          }
-        }
+        "$ref": "#/$defs/photoMetadata"
       }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
     }
   },
   "$defs": {
@@ -102,6 +95,137 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128
+    },
+    "isoDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    },
+    "propagationType": {
+      "type": "string",
+      "enum": [
+        "seed",
+        "transplant",
+        "cutting",
+        "division",
+        "tuber",
+        "bulb",
+        "runner",
+        "graft",
+        "other"
+      ]
+    },
+    "startQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "unit"
+      ],
+      "properties": {
+        "count": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
+      }
+    },
+    "stageEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "occurredAt"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/isoDate"
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "bedAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bedId",
+        "assignedAt"
+      ],
+      "properties": {
+        "bedId": {
+          "$ref": "#/$defs/id"
+        },
+        "assignedAt": {
+          "$ref": "#/$defs/isoDate"
+        },
+        "removedAt": {
+          "$ref": "#/$defs/isoDate"
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "photoMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "storageRef"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "storageRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "capturedAt": {
+          "$ref": "#/$defs/isoDate"
+        },
+        "contentType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
     }
   }
 }
