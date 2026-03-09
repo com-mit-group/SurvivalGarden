@@ -23,8 +23,6 @@ export interface BatchBedAssignment {
   };
 }
 
-export interface BatchAssignment extends BatchBedAssignment {}
-
 export interface BatchPhotoMetadata {
   id: string;
   storageRef: string;
@@ -69,7 +67,7 @@ export interface Batch {
   stage?: string;
   stageEvents: BatchStageEvent[];
   bedAssignments: BatchBedAssignment[];
-  assignments?: BatchAssignment[];
+  assignments?: BatchBedAssignment[];
   notes?: string;
   photos: BatchPhotoMetadata[];
   meta?: {
