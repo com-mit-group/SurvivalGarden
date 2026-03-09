@@ -269,7 +269,7 @@ describe('batch normalization pipeline', () => {
       assignments: [],
       photos: [],
     });
-    expect(batches[0].stageEvents[0]).toMatchObject({ stage: 'sowing', occurredAt: '2026-01-01T00:00:00Z' });
+    expect(batches[0]!.stageEvents[0]!).toMatchObject({ stage: 'sowing', occurredAt: '2026-01-01T00:00:00Z' });
     expect(report.migrated).toBe(1);
     expect(report.invalidRecords).toEqual([]);
     expect(report.warnings.map((warning) => warning.code)).toContain('legacy_variety_cultivar');
