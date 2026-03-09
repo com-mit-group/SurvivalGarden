@@ -25,7 +25,8 @@
       "maxLength": 120
     },
     "startedAt": {
-      "$ref": "#/$defs/isoDate"
+      "$ref": "#/$defs/isoDate",
+      "description": "Canonical start anchor. Must match stageEvents[0].occurredAt."
     },
     "propagationType": {
       "$ref": "#/$defs/propagationType"
@@ -33,12 +34,14 @@
     "startMethod": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 80
+      "maxLength": 80,
+      "description": "Optional batch-level default for start method. When present, exporters should also set stageEvents[0].method."
     },
     "startLocation": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 120
+      "maxLength": 120,
+      "description": "Optional batch-level default for start location. When present, exporters should also set stageEvents[0].location."
     },
     "startQuantity": {
       "$ref": "#/$defs/startQuantity"
@@ -64,10 +67,13 @@
     "currentStage": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 80
+      "maxLength": 80,
+      "description": "Canonical current stage. Derived from the latest stage event during migration/import when omitted."
     },
     "stageEvents": {
       "type": "array",
+      "minItems": 1,
+      "description": "Canonical timeline. The first event represents batch start and should align with startedAt.",
       "items": {
         "$ref": "#/$defs/stageEvent"
       }
