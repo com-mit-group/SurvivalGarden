@@ -13,6 +13,10 @@
     "assignments"
   ],
   "properties": {
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Migration alias for batchId."
+    },
     "batchId": {
       "$ref": "#/$defs/id"
     },
@@ -30,6 +34,16 @@
     },
     "propagationType": {
       "$ref": "#/$defs/propagationType"
+    },
+    "lifecycleStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "harvested",
+        "failed",
+        "abandoned",
+        "completed"
+      ]
     },
     "startMethod": {
       "type": "string",
@@ -114,18 +128,21 @@
     },
     "isoDate": {
       "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$"
     },
     "propagationType": {
       "type": "string",
       "enum": [
         "seed",
+        "seedling",
         "transplant",
+        "clove",
         "cutting",
         "division",
         "tuber",
         "bulb",
         "runner",
+        "slip",
         "graft",
         "other"
       ]
@@ -157,10 +174,20 @@
         "occurredAt"
       ],
       "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Migration alias for stage."
+        },
         "stage": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80
+        },
+        "date": {
+          "$ref": "#/$defs/isoDate",
+          "description": "Migration alias for occurredAt."
         },
         "occurredAt": {
           "$ref": "#/$defs/isoDate"

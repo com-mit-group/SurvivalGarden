@@ -148,8 +148,10 @@ describe('AppState schema', () => {
           cropId: 'crop_tomato',
           startedAt: '2026-03-01T00:00:00Z',
           stage: 'sowing',
+          currentStage: 'sowing',
           stageEvents: [{ stage: 'sowing', occurredAt: '2026-03-01T00:00:00Z' }],
           assignments: [{ bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z' }],
+          bedAssignments: [{ bedId: 'bed_001', assignedAt: '2026-03-01T00:00:00Z' }],
         },
       ],
       tasks: [
