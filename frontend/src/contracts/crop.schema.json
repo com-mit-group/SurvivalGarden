@@ -5,8 +5,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "cropId",
-    "name",
     "createdAt",
     "updatedAt"
   ],
@@ -365,5 +363,45 @@
         }
       }
     }
-  }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "cropId"
+      ],
+      "properties": {
+        "cropId": {}
+      }
+    },
+    {
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {}
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {}
+          }
+        },
+        {
+          "required": [
+            "commonName"
+          ],
+          "properties": {
+            "commonName": {}
+          }
+        }
+      ]
+    }
+  ]
 }

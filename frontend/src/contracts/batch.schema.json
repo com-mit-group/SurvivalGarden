@@ -8,9 +8,9 @@
     "batchId",
     "cropId",
     "startedAt",
-    "currentStage",
+    "stage",
     "stageEvents",
-    "bedAssignments"
+    "assignments"
   ],
   "properties": {
     "id": {

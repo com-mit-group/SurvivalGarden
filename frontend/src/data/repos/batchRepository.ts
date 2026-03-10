@@ -134,28 +134,30 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
   }
 
   const canonicalStart = startedAt ?? asUtcIso((stageEvents[0] as Record<string, unknown> | undefined)?.occurredAt);
-  const bedAssignments = Array.isArray(candidate.bedAssignments)
-    ? candidate.bedAssignments
-    : Array.isArray(candidate.assignments)
-      ? candidate.assignments
+  const assignments = Array.isArray(candidate.assignments)
+    ? candidate.assignments
+    : Array.isArray(candidate.bedAssignments)
+      ? candidate.bedAssignments
       : [];
-  if (!Array.isArray(candidate.bedAssignments) && Array.isArray(candidate.assignments)) {
-    warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped assignments alias to bedAssignments.' });
+  if (!Array.isArray(candidate.assignments) && Array.isArray(candidate.bedAssignments)) {
+    warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped bedAssignments alias to assignments.' });
   }
 
   const normalized: Record<string, unknown> = {
     batchId: candidate.batchId ?? candidate.id,
     cropId: candidate.cropId,
     startedAt: canonicalStart,
-    currentStage: asString(candidate.currentStage) ?? stage,
     stage,
     stageEvents,
-    bedAssignments,
-    assignments: bedAssignments,
+    assignments,
   };
 
   if (candidate.currentStage !== undefined || forMigrationReport) {
     normalized.currentStage = asString(candidate.currentStage) ?? stage;
+  }
+
+  if (candidate.bedAssignments !== undefined) {
+    normalized.bedAssignments = candidate.bedAssignments;
   }
 
   if (Array.isArray(candidate.photos) || forMigrationReport) {
