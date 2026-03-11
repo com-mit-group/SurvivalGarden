@@ -1,0 +1,194 @@
+{
+  "batches": [
+    {
+      "assignments": [
+        {
+          "assignedAt": "2026-03-15T00:00:00Z",
+          "bedId": "bed_main"
+        }
+      ],
+      "batchId": "batch_seed_tomato",
+      "cropId": "crop_tomato",
+      "currentStage": "sowing",
+      "photos": [],
+      "plantCountAlive": 12,
+      "propagationType": "seed",
+      "seedCountGerminated": 18,
+      "seedCountPlanned": 24,
+      "stage": "sowing",
+      "stageEvents": [
+        {
+          "occurredAt": "2026-03-15T00:00:00Z",
+          "stage": "sowing"
+        }
+      ],
+      "startedAt": "2026-03-15T00:00:00Z",
+      "variety": "San Marzano"
+    },
+    {
+      "assignments": [
+        {
+          "assignedAt": "2026-02-20T00:00:00Z",
+          "bedId": "bed_main"
+        }
+      ],
+      "batchId": "batch_regrow_celery",
+      "cropId": "crop_celery",
+      "currentStage": "transplant",
+      "photos": [],
+      "propagationType": "runner",
+      "stage": "transplant",
+      "stageEvents": [
+        {
+          "occurredAt": "2026-02-20T00:00:00Z",
+          "stage": "transplant"
+        }
+      ],
+      "startedAt": "2026-02-20T00:00:00Z",
+      "variety": "Kitchen Regrow"
+    },
+    {
+      "assignments": [
+        {
+          "assignedAt": "2026-04-01T00:00:00Z",
+          "bedId": "bed_root"
+        }
+      ],
+      "batchId": "batch_tuber_potato",
+      "cropId": "crop_potato",
+      "currentStage": "sowing",
+      "photos": [],
+      "propagationType": "tuber",
+      "stage": "sowing",
+      "stageEvents": [
+        {
+          "occurredAt": "2026-04-01T00:00:00Z",
+          "stage": "sowing"
+        }
+      ],
+      "startedAt": "2026-04-01T00:00:00Z",
+      "variety": "Yukon Gold"
+    },
+    {
+      "assignments": [
+        {
+          "assignedAt": "2026-05-10T00:00:00Z",
+          "bedId": "bed_herbs"
+        }
+      ],
+      "batchId": "batch_cutting_mint",
+      "cropId": "crop_mint",
+      "currentStage": "sowing",
+      "photos": [],
+      "propagationType": "cutting",
+      "stage": "sowing",
+      "stageEvents": [
+        {
+          "occurredAt": "2026-05-10T00:00:00Z",
+          "stage": "sowing"
+        }
+      ],
+      "startedAt": "2026-05-10T00:00:00Z",
+      "variety": "Moroccan"
+    }
+  ],
+  "beds": [
+    {
+      "bedId": "bed_main",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "gardenId": "garden_trier",
+      "name": "Main Bed",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "bedId": "bed_root",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "gardenId": "garden_trier",
+      "name": "Root Bed",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "bedId": "bed_herbs",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "gardenId": "garden_trier",
+      "name": "Herb Bed",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "cropPlans": [],
+  "crops": [
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "cropId": "crop_tomato",
+      "name": "Tomato",
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 9,
+              "endWeek": 4,
+              "startMonth": 7,
+              "startWeek": 1
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 3,
+              "endWeek": 4,
+              "startMonth": 2,
+              "startWeek": 2
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 5,
+              "endWeek": 2,
+              "startMonth": 4,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "cropId": "crop_celery",
+      "name": "Celery",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "cropId": "crop_potato",
+      "name": "Potato",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "cropId": "crop_mint",
+      "name": "Mint",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "schemaVersion": 1,
+  "seedInventoryItems": [],
+  "settings": {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "locale": "de-DE",
+    "settingsId": "settings_trier",
+    "timezone": "Europe/Berlin",
+    "units": {
+      "temperature": "celsius",
+      "yield": "metric"
+    },
+    "updatedAt": "2026-01-01T00:00:00Z"
+  },
+  "tasks": []
+}

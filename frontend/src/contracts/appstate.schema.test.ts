@@ -237,6 +237,32 @@ describe('AppState schema', () => {
     }
   });
 
+
+
+  it('validates real normalized batches with propagation coverage from golden fixtures', () => {
+    const ajv = new Ajv2020({ strict: true });
+    const batchValidate = ajv.compile(batchSchema);
+
+    const fixture = goldenFixtures['../../../fixtures/golden/real-batches-v1.json'];
+    expect(fixture).toBeDefined();
+
+    const batches = (fixture as AppState).batches ?? [];
+    expect(batches.length).toBeGreaterThan(0);
+
+    for (let index = 0; index < batches.length; index += 1) {
+      const batch = batches[index];
+      const ok = batchValidate(batch);
+      expect(ok, `Batch /batches/${index} failed: ${formatAjvErrors(batchValidate.errors)}`).toBe(true);
+    }
+
+    const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
+    expect(nonSeed.length).toBeGreaterThan(0);
+    for (const batch of nonSeed) {
+      expect(batch.seedCountPlanned).toBeUndefined();
+      expect(batch.seedCountGerminated).toBeUndefined();
+    }
+  });
+
   it('keeps golden fixtures key-sorted for stable diffs', () => {
     for (const fixturePath of fixturePaths) {
       const fixture = goldenFixtures[fixturePath];
