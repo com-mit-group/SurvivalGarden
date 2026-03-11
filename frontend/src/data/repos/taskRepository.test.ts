@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState, Task } from '../../contracts';
 import {
+  generateCalendarTasksWithDiagnostics,
   generateOperationalTasks,
   generatePlannedTasks,
+  generatePlannedTasksWithDiagnostics,
   upsertGeneratedTasksInAppState,
 } from './taskRepository';
 
@@ -171,5 +173,94 @@ describe('taskRepository generation idempotence', () => {
     expect(new Set(keys).size).toBe(keys.length);
     expect(regenerated.tasks).toHaveLength(baselineMerged.tasks.length);
     expect(byTypeAndStatusCount(regenerated.tasks)).toEqual(byTypeAndStatusCount(baselineMerged.tasks));
+  });
+});
+
+
+describe('taskRepository generation diagnostics', () => {
+  it('skips crops with no rules and reports diagnostics without blocking other generation', () => {
+    const scenario = createGenerationScenario();
+    scenario.cropPlans = [
+      {
+        ...scenario.cropPlans[0]!,
+        planId: 'plan-supported',
+        cropId: 'crop_supported',
+        bedId: 'bed_001',
+        seasonYear: 2026,
+      },
+      {
+        ...scenario.cropPlans[0]!,
+        planId: 'plan-missing-rules',
+        cropId: 'crop_missing_rules',
+        bedId: 'bed_002',
+        seasonYear: 2026,
+      },
+    ];
+    const baseCrop = { ...scenario.crops[0]! };
+    delete (baseCrop as { taskRules?: unknown }).taskRules;
+    scenario.crops = [
+      ...scenario.crops,
+      {
+        ...baseCrop,
+        cropId: 'crop_supported',
+        name: 'Supported Crop',
+        taskRules: [
+          {
+            taskType: 'pre_sow',
+            sequence: 1,
+            windows: [{ startDate: '2026-03-01', endDate: '2026-03-10' }],
+          },
+        ],
+      },
+      {
+        ...baseCrop,
+        cropId: 'crop_missing_rules',
+        name: 'Missing Rules Crop',
+      },
+    ];
+
+    const result = generatePlannedTasksWithDiagnostics(scenario, 2026);
+
+    expect(result.tasks.some((task) => task.cropId === 'crop_supported')).toBe(true);
+    expect(result.tasks.some((task) => task.cropId === 'crop_missing_rules')).toBe(false);
+    expect(result.diagnostics).toContainEqual({
+      cropId: 'crop_missing_rules',
+      reason: 'no_rules',
+      detail: 'No task rules were provided for this crop.',
+    });
+  });
+
+  it('classifies invalid rule windows and still returns operational tasks', () => {
+    const scenario = createGenerationScenario();
+    scenario.cropPlans = [
+      {
+        ...scenario.cropPlans[0]!,
+        planId: 'plan-invalid-rules',
+        cropId: 'crop_invalid_rules',
+        bedId: 'bed_003',
+        seasonYear: 2026,
+      },
+    ];
+    scenario.crops = [
+      ...scenario.crops,
+      {
+        ...scenario.crops[0]!,
+        cropId: 'crop_invalid_rules',
+        name: 'Invalid Rules Crop',
+        taskRules: [
+          {
+            taskType: 'pre_sow',
+            sequence: 1,
+            windows: [{ startDate: '2026-04-15', endDate: '2026-03-15' }],
+          },
+        ],
+      },
+    ];
+
+    const result = generateCalendarTasksWithDiagnostics(scenario, 2026);
+
+    expect(result.tasks.some((task) => task.batchId === 'batch-alpha')).toBe(true);
+    expect(result.tasks.some((task) => task.cropId === 'crop_invalid_rules')).toBe(false);
+    expect(result.diagnostics.some((entry) => entry.cropId === 'crop_invalid_rules' && entry.reason === 'invalid_rules')).toBe(true);
   });
 });
