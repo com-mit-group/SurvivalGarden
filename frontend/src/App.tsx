@@ -21,6 +21,7 @@ import {
   upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
+  upsertCropInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
   assignBatchToBed,
@@ -1189,6 +1190,27 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
   return crop.name ?? crop.cropId;
 };
 
+const normalizeCropIdPart = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+const createUniqueUserCropId = (name: string, existingCropIds: string[]): string => {
+  const base = normalizeCropIdPart(name) || `crop-${Date.now()}`;
+  const existing = new Set(existingCropIds);
+  let candidate = `crop_user_${base}`;
+  let suffix = 2;
+
+  while (existing.has(candidate)) {
+    candidate = `crop_user_${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+};
+
 function BatchesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -1199,6 +1221,9 @@ function BatchesPage() {
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cropInput: '',
+    cropCategory: '',
+    cropScientificName: '',
+    cropAliases: '',
     variety: '',
     startedAt: getLocalDateTimeDefault(),
     seedCount: '',
@@ -1364,6 +1389,9 @@ function BatchesPage() {
         name: cropNames[batch.cropId],
         scientificName: cropScientificNames[batch.cropId],
       }),
+      cropCategory: '',
+      cropScientificName: '',
+      cropAliases: '',
       variety: '',
       startedAt,
       seedCount: '',
@@ -1377,6 +1405,9 @@ function BatchesPage() {
     setEditingBatchId(null);
     setFormValues({
       cropInput: '',
+      cropCategory: '',
+      cropScientificName: '',
+      cropAliases: '',
       variety: '',
       startedAt: getLocalDateTimeDefault(),
       seedCount: '',
@@ -1389,12 +1420,12 @@ function BatchesPage() {
     event.preventDefault();
     setSaveMessage(null);
     const errors: Record<string, string> = {};
-    const resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
+    let resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
 
     if (!formValues.cropInput.trim()) {
       errors.cropInput = 'Choose or type a crop.';
-    } else if (!resolvedCropId) {
-      errors.cropInput = 'Custom crop creation is not supported yet. Choose an existing crop.';
+    } else if (!resolvedCropId && !formValues.cropCategory.trim()) {
+      errors.cropCategory = 'Category is required for new crops.';
     }
 
     if (!formValues.startedAt) {
@@ -1426,13 +1457,40 @@ function BatchesPage() {
     try {
       const appState = await loadAppStateFromIndexedDb();
 
-      if (!appState || !resolvedCropId) {
+      if (!appState) {
         setSaveMessage('Unable to save because local app state is unavailable.');
         return;
       }
 
+      let workingState = appState;
+
+      if (!resolvedCropId) {
+        const createdAt = new Date().toISOString();
+        resolvedCropId = createUniqueUserCropId(formValues.cropInput, appState.crops.map((crop) => crop.cropId));
+        const aliases = formValues.cropAliases
+          .split(',')
+          .map((alias) => alias.trim())
+          .filter((alias) => alias.length > 0);
+
+        workingState = upsertCropInAppState(workingState, {
+          cropId: resolvedCropId,
+          name: formValues.cropInput.trim(),
+          scientificName: formValues.cropScientificName.trim() || undefined,
+          category: formValues.cropCategory.trim(),
+          aliases: aliases.length > 0 ? aliases : undefined,
+          isUserDefined: true,
+          createdAt,
+          updatedAt: createdAt,
+        });
+      }
+
+      if (!resolvedCropId) {
+        setSaveMessage('Unable to save because crop creation failed.');
+        return;
+      }
+
       const existingBatch = editingBatchId
-        ? appState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
+        ? workingState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
         : null;
       const startedAt = new Date(formValues.startedAt).toISOString();
       const batchId = existingBatch?.batchId ?? (globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`);
@@ -1451,9 +1509,19 @@ function BatchesPage() {
         assignments: existingBatch?.assignments ?? [],
       };
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
+      const nextState = upsertBatchInAppState(workingState, nextBatch);
       await saveAppStateToIndexedDb(nextState);
       setBatches(listBatchesFromAppState(nextState));
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const scientificName = (crop as { scientificName?: string }).scientificName;
+            return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
       setFormErrors({});
       setSaveMessage(editingBatchId ? 'Batch updated.' : 'Batch created.');
       resetForm();
@@ -1552,6 +1620,37 @@ function BatchesPage() {
           </label>
 
           <label>
+            New crop category
+            <input
+              type="text"
+              value={formValues.cropCategory}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropCategory: event.target.value }))}
+              placeholder="Required only for new crop"
+            />
+            {formErrors.cropCategory ? <span className="form-error">{formErrors.cropCategory}</span> : null}
+          </label>
+
+          <label>
+            New crop scientific name
+            <input
+              type="text"
+              value={formValues.cropScientificName}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropScientificName: event.target.value }))}
+              placeholder="Optional"
+            />
+          </label>
+
+          <label>
+            New crop aliases
+            <input
+              type="text"
+              value={formValues.cropAliases}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropAliases: event.target.value }))}
+              placeholder="Optional, comma-separated"
+            />
+          </label>
+
+          <label>
             Variety
             <input
               type="text"
@@ -1601,7 +1700,7 @@ function BatchesPage() {
           </label>
         </div>
         <p className="batch-form-note">
-          Custom crops, variety, seed counts, and non-sowing start transitions are shown here for workflow planning but are not yet persisted by the current schema/state machine.
+          New crops are saved immediately. Variety, seed counts, and non-sowing start transitions are still planning-only.
         </p>
         <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
