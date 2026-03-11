@@ -52,8 +52,8 @@ const getCropCapabilityLabels = ({
   isUserDefined,
   hasTaskRules,
 }: {
-  isUserDefined?: boolean;
-  hasTaskRules?: boolean;
+  isUserDefined: boolean | undefined;
+  hasTaskRules: boolean | undefined;
 }): string[] => {
   const labels: string[] = [];
 
