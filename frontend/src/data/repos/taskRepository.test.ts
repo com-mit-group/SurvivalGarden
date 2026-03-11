@@ -184,7 +184,7 @@ describe('taskRepository generation diagnostics', () => {
       {
         ...scenario.cropPlans[0]!,
         planId: 'plan-supported',
-        cropId: 'crop_potato',
+        cropId: 'crop_supported',
         bedId: 'bed_001',
         seasonYear: 2026,
       },
@@ -202,6 +202,18 @@ describe('taskRepository generation diagnostics', () => {
       ...scenario.crops,
       {
         ...baseCrop,
+        cropId: 'crop_supported',
+        name: 'Supported Crop',
+        taskRules: [
+          {
+            taskType: 'pre_sow',
+            sequence: 1,
+            windows: [{ startDate: '2026-03-01', endDate: '2026-03-10' }],
+          },
+        ],
+      },
+      {
+        ...baseCrop,
         cropId: 'crop_missing_rules',
         name: 'Missing Rules Crop',
       },
@@ -209,7 +221,7 @@ describe('taskRepository generation diagnostics', () => {
 
     const result = generatePlannedTasksWithDiagnostics(scenario, 2026);
 
-    expect(result.tasks.some((task) => task.cropId === 'crop_potato')).toBe(true);
+    expect(result.tasks.some((task) => task.cropId === 'crop_supported')).toBe(true);
     expect(result.tasks.some((task) => task.cropId === 'crop_missing_rules')).toBe(false);
     expect(result.diagnostics).toContainEqual({
       cropId: 'crop_missing_rules',
