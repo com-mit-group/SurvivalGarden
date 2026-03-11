@@ -1430,13 +1430,13 @@ function BatchesPage() {
       cropCategory: '',
       cropScientificName: '',
       cropAliases: '',
-      variety: '',
+      variety: batch.variety ?? '',
       startedAt,
       seedCount: '',
       initialMethod: batch.stage,
     });
     setFormErrors({});
-    setSaveMessage('Variety, seed count, and advanced method transitions are not supported by the current contract yet.');
+    setSaveMessage('Seed count and advanced method transitions are not supported by the current contract yet.');
   };
 
   const resetForm = () => {
@@ -1544,8 +1544,9 @@ function BatchesPage() {
       errors.startedAt = 'Enter a valid start date and time.';
     }
 
-    if (formValues.variety.trim().length > 0) {
-      errors.variety = 'Variety cannot be saved until contract support lands.';
+    const trimmedVariety = formValues.variety.trim();
+    if (trimmedVariety.length > 120) {
+      errors.variety = 'Variety must be 120 characters or fewer.';
     }
 
     if (formValues.seedCount.trim().length > 0) {
@@ -1587,6 +1588,7 @@ function BatchesPage() {
       const nextBatch: Batch = {
         batchId,
         cropId: resolvedCropId,
+        ...(trimmedVariety ? { variety: trimmedVariety } : {}),
         startedAt,
         stage: existingBatch?.stage ?? 'sowing',
         stageEvents:
@@ -1810,7 +1812,7 @@ function BatchesPage() {
           )}
         </div>
         <p className="batch-form-note">
-          Create new crops inline, then save the batch. Variety, seed counts, and non-sowing start transitions are still planning-only.
+          Create new crops inline, then save the batch. Seed counts and non-sowing start transitions are still planning-only.
         </p>
         <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
@@ -1841,6 +1843,7 @@ function BatchesPage() {
                   <p className="batch-item-meta">
                     Batch {batch.batchId} · Bed {getDerivedBedId(batch) ?? 'Unassigned'} · Started{' '}
                     {new Date(batch.startedAt).toLocaleString()}
+                    {batch.variety ? ` · Variety ${batch.variety}` : ''}
                   </p>
                 </div>
                 <span className="batch-stage-badge">{batch.stage}</span>
@@ -2266,6 +2269,12 @@ function BatchDetailPage() {
               <dt>Stage</dt>
               <dd>{batch.stage}</dd>
             </div>
+            {batch.variety ? (
+              <div>
+                <dt>Variety</dt>
+                <dd>{batch.variety}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Started</dt>
               <dd>{new Date(batch.startedAt).toLocaleString()}</dd>
