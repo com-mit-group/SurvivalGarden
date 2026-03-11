@@ -1263,7 +1263,9 @@ function BatchesPage() {
     cropAliases: '',
     variety: '',
     startedAt: getLocalDateTimeDefault(),
-    seedCount: '',
+    seedCountPlanned: '',
+    seedCountGerminated: '',
+    plantCountAlive: '',
     initialMethod: 'sowing',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -1432,11 +1434,13 @@ function BatchesPage() {
       cropAliases: '',
       variety: batch.variety ?? '',
       startedAt,
-      seedCount: '',
+      seedCountPlanned: batch.seedCountPlanned?.toString() ?? '',
+      seedCountGerminated: batch.seedCountGerminated?.toString() ?? '',
+      plantCountAlive: batch.plantCountAlive?.toString() ?? '',
       initialMethod: batch.stage,
     });
     setFormErrors({});
-    setSaveMessage('Seed count and advanced method transitions are not supported by the current contract yet.');
+    setSaveMessage(null);
   };
 
   const resetForm = () => {
@@ -1449,7 +1453,9 @@ function BatchesPage() {
       cropAliases: '',
       variety: '',
       startedAt: getLocalDateTimeDefault(),
-      seedCount: '',
+      seedCountPlanned: '',
+      seedCountGerminated: '',
+      plantCountAlive: '',
       initialMethod: 'sowing',
     });
     setFormErrors({});
@@ -1549,14 +1555,29 @@ function BatchesPage() {
       errors.variety = 'Variety must be 120 characters or fewer.';
     }
 
-    if (formValues.seedCount.trim().length > 0) {
-      const seedCount = Number(formValues.seedCount);
-      if (!Number.isFinite(seedCount) || seedCount <= 0) {
-        errors.seedCount = 'Seed count must be a positive number.';
-      } else {
-        errors.seedCount = 'Seed count cannot be saved until contract support lands.';
+    const parseOptionalCount = (value: string, fieldLabel: string): number | null => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
       }
-    }
+
+      if (!/^\d+$/.test(trimmed)) {
+        errors[fieldLabel] = 'Use a whole number greater than or equal to 0.';
+        return null;
+      }
+
+      const parsed = Number(trimmed);
+      if (!Number.isSafeInteger(parsed) || parsed < 0) {
+        errors[fieldLabel] = 'Use a whole number greater than or equal to 0.';
+        return null;
+      }
+
+      return parsed;
+    };
+
+    const seedCountPlanned = parseOptionalCount(formValues.seedCountPlanned, 'seedCountPlanned');
+    const seedCountGerminated = parseOptionalCount(formValues.seedCountGerminated, 'seedCountGerminated');
+    const plantCountAlive = parseOptionalCount(formValues.plantCountAlive, 'plantCountAlive');
 
     if (formValues.initialMethod !== 'sowing') {
       errors.initialMethod = 'Only sowing can be saved with current state transitions.';
@@ -1599,6 +1620,9 @@ function BatchesPage() {
             },
           ],
         assignments: existingBatch?.assignments ?? [],
+        ...(seedCountPlanned !== null ? { seedCountPlanned } : {}),
+        ...(seedCountGerminated !== null ? { seedCountGerminated } : {}),
+        ...(plantCountAlive !== null ? { plantCountAlive } : {}),
       };
 
       const nextState = upsertBatchInAppState(appState, nextBatch);
@@ -1784,15 +1808,39 @@ function BatchesPage() {
           </label>
 
           <label>
-            Seed count
+            Seed count planned
             <input
               type="number"
               min="0"
               step="1"
-              value={formValues.seedCount}
-              onChange={(event) => setFormValues((current) => ({ ...current, seedCount: event.target.value }))}
+              value={formValues.seedCountPlanned}
+              onChange={(event) => setFormValues((current) => ({ ...current, seedCountPlanned: event.target.value }))}
             />
-            {formErrors.seedCount ? <span className="form-error">{formErrors.seedCount}</span> : null}
+            {formErrors.seedCountPlanned ? <span className="form-error">{formErrors.seedCountPlanned}</span> : null}
+          </label>
+
+          <label>
+            Seed count germinated
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={formValues.seedCountGerminated}
+              onChange={(event) => setFormValues((current) => ({ ...current, seedCountGerminated: event.target.value }))}
+            />
+            {formErrors.seedCountGerminated ? <span className="form-error">{formErrors.seedCountGerminated}</span> : null}
+          </label>
+
+          <label>
+            Plant count alive
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={formValues.plantCountAlive}
+              onChange={(event) => setFormValues((current) => ({ ...current, plantCountAlive: event.target.value }))}
+            />
+            {formErrors.plantCountAlive ? <span className="form-error">{formErrors.plantCountAlive}</span> : null}
           </label>
         </div>
         <div className="batch-form-actions">
@@ -1812,7 +1860,7 @@ function BatchesPage() {
           )}
         </div>
         <p className="batch-form-note">
-          Create new crops inline, then save the batch. Seed counts and non-sowing start transitions are still planning-only.
+          Create new crops inline, then save the batch. Non-sowing start transitions are still planning-only.
         </p>
         <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
@@ -2296,6 +2344,18 @@ function BatchDetailPage() {
             <div>
               <dt>Current bed</dt>
               <dd>{getDerivedBedId(batch) ?? 'Unassigned'}</dd>
+            </div>
+            <div>
+              <dt>Seed count planned</dt>
+              <dd>{batch.seedCountPlanned ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Seed count germinated</dt>
+              <dd>{batch.seedCountGerminated ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Plant count alive</dt>
+              <dd>{batch.plantCountAlive ?? '—'}</dd>
             </div>
           </dl>
         </article>
