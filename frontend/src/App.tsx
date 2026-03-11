@@ -43,9 +43,9 @@ type BatchWithPhotos = Batch & { photos?: BatchPhoto[] };
 
 type CropIdentityLabelProps = {
   cropId: string;
-  name?: string;
-  scientificName?: string;
-  className?: string;
+  name?: string | undefined;
+  scientificName?: string | undefined;
+  className?: string | undefined;
 };
 
 function CropIdentityLabel({ cropId, name, scientificName, className }: CropIdentityLabelProps) {
