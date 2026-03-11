@@ -73,10 +73,23 @@ describe('crop.schema.json', () => {
   });
 
   it('rejects payloads missing required fields', () => {
-    const { cropId, ...payload } = validPayload;
+    const { cropId, name, ...payload } = validPayload;
 
     expect(cropId).toBeDefined();
+    expect(name).toBeDefined();
     expect(validate(payload)).toBe(false);
+  });
+
+
+  it('accepts partial crop payloads with minimal identity only', () => {
+    const payload = {
+      cropId: 'crop_partial',
+      name: 'Partial Crop',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+
+    expect(validate(payload)).toBe(true);
   });
 
 

@@ -143,6 +143,13 @@ const validCrop = {
   updatedAt: '2024-01-02T00:00:00Z',
 };
 
+const validPartialCrop = {
+  cropId: 'crop-partial',
+  name: 'Partial Crop',
+  createdAt: '2024-01-03T00:00:00Z',
+  updatedAt: '2024-01-03T00:00:00Z',
+};
+
 const validCropPlan = {
   planId: 'plan-1',
   cropId: 'crop-1',
@@ -651,6 +658,21 @@ describe('crop repository boundary helpers', () => {
 
     const removed = removeCropFromAppState(upserted, validCrop.cropId);
     expect(getCropFromAppState(removed, validCrop.cropId)).toBeNull();
+  });
+
+  it('accepts partial crops without rules, nutrition, or companions', () => {
+    const upserted = upsertCropInAppState(validAppState, validPartialCrop);
+
+    expect(getCropFromAppState(upserted, validPartialCrop.cropId)).toEqual(validPartialCrop);
+    expect(listCropsFromAppState(upserted)).toContainEqual(validPartialCrop);
+  });
+
+  it('roundtrips partial crops through export/import', () => {
+    const stateWithPartialCrop = upsertCropInAppState(validAppState, validPartialCrop);
+    const exported = serializeAppStateForExport(stateWithPartialCrop);
+    const imported = parseImportedAppState(exported);
+
+    expect(getCropFromAppState(imported, validPartialCrop.cropId)).toEqual(validPartialCrop);
   });
 });
 
