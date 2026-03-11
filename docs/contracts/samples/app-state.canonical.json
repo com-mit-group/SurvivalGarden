@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "beds": [
+    {
+      "bedId": "bed_001",
+      "gardenId": "garden_home",
+      "name": "South Bed",
+      "createdAt": "2026-01-01T08:00:00Z",
+      "updatedAt": "2026-01-01T08:00:00Z"
+    }
+  ],
+  "crops": [
+    {
+      "cropId": "crop_tomato",
+      "name": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "createdAt": "2026-01-10T09:00:00Z",
+      "updatedAt": "2026-02-01T09:00:00Z"
+    }
+  ],
+  "cropPlans": [
+    {
+      "planId": "plan_tomato_2026",
+      "cropId": "crop_tomato",
+      "bedId": "bed_001",
+      "seasonYear": 2026,
+      "plannedWindows": {
+        "sowing": [
+          {
+            "startMonth": 3,
+            "startWeek": 1,
+            "endMonth": 3,
+            "endWeek": 3
+          }
+        ],
+        "harvest": [
+          {
+            "startMonth": 7,
+            "startWeek": 1,
+            "endMonth": 9,
+            "endWeek": 4
+          }
+        ]
+      },
+      "expectedYield": {
+        "amount": 12,
+        "unit": "kg"
+      }
+    }
+  ],
+  "batches": [
+    {
+      "batchId": "batch_tomato_seed_2026",
+      "cropId": "crop_tomato",
+      "startedAt": "2026-03-01T08:00:00Z",
+      "propagationType": "seed",
+      "startQuantity": {
+        "count": 24,
+        "unit": "seeds"
+      },
+      "seedCountPlanned": 24,
+      "seedCountGerminated": 19,
+      "plantCountAlive": 18,
+      "stage": "seedling",
+      "currentStage": "seedling",
+      "stageEvents": [
+        {
+          "stage": "sown",
+          "occurredAt": "2026-03-01T08:00:00Z"
+        },
+        {
+          "stage": "seedling",
+          "occurredAt": "2026-03-18T08:00:00Z"
+        }
+      ],
+      "bedAssignments": [
+        {
+          "bedId": "bed_001",
+          "assignedAt": "2026-05-01T07:00:00Z"
+        }
+      ],
+      "assignments": [
+        {
+          "bedId": "bed_001",
+          "assignedAt": "2026-05-01T07:00:00Z"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_plant_tomato_2026_05_01",
+      "sourceKey": "batch_tomato_seed_2026|2026-05-01|crop_tomato|bed_001|transplant",
+      "date": "2026-05-01",
+      "type": "transplant",
+      "cropId": "crop_tomato",
+      "bedId": "bed_001",
+      "batchId": "batch_tomato_seed_2026",
+      "checklist": [
+        {
+          "label": "Harden off seedlings"
+        }
+      ],
+      "status": "open"
+    }
+  ],
+  "seedInventoryItems": [
+    {
+      "seedInventoryItemId": "seed_tomato_roma_001",
+      "cropId": "crop_tomato",
+      "variety": "Roma",
+      "quantity": 120,
+      "unit": "seeds",
+      "status": "available",
+      "createdAt": "2026-01-10T09:00:00Z",
+      "updatedAt": "2026-02-01T09:00:00Z"
+    }
+  ],
+  "settings": {
+    "settingsId": "settings_001",
+    "locale": "de-DE",
+    "timezone": "Europe/Berlin",
+    "weekStartsOn": "monday",
+    "units": {
+      "temperature": "celsius",
+      "yield": "metric"
+    },
+    "createdAt": "2026-01-01T00:00:00Z",
+    "updatedAt": "2026-01-01T00:00:00Z"
+  }
+}

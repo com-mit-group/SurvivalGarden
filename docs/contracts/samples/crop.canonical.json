@@ -1,0 +1,17 @@
+{
+  "cropId": "crop_tomato",
+  "name": "Tomato",
+  "scientificName": "Solanum lycopersicum",
+  "taxonomy": {
+    "family": "Solanaceae",
+    "genus": "Solanum",
+    "species": "lycopersicum"
+  },
+  "aliases": [
+    "Garden Tomato"
+  ],
+  "isUserDefined": true,
+  "category": "fruiting",
+  "createdAt": "2026-01-10T09:00:00Z",
+  "updatedAt": "2026-02-01T09:00:00Z"
+}

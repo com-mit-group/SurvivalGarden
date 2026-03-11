@@ -4,6 +4,19 @@
 
 `frontend/src/contracts/app-state.schema.json` defines the import/export `AppState` envelope and requires a numeric `schemaVersion` (integer, minimum `1`) for migration gating between persisted schema revisions.
 
+
+## Import/export contract docs & canonical payload samples
+
+For vNext contract details and migration mappings, see `docs/contracts/import-export-vnext.md`.
+
+Canonical sample payloads live in `docs/contracts/samples/`:
+- `crop.canonical.json`
+- `batch.seed.canonical.json`
+- `batch.regrow-runner.canonical.json`
+- `batch.tuber.canonical.json`
+- `task.canonical.json`
+- `app-state.canonical.json`
+
 ## Identifier & key strategy
 
 - Use UUID v4 IDs (`crypto.randomUUID`) for user-authored entities created at runtime.
