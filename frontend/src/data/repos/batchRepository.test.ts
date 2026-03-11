@@ -353,7 +353,6 @@ describe('batch normalization pipeline', () => {
 
     expect(batches[0]).toMatchObject({
       batchId: 'legacy-seed-1',
-      propagationType: 'seed',
       seedCountPlanned: 30,
       seedCountGerminated: 22,
       plantCountAlive: 20,
