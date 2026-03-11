@@ -196,7 +196,8 @@ describe('taskRepository generation diagnostics', () => {
         seasonYear: 2026,
       },
     ];
-    const { taskRules: _ignoredTaskRules, ...baseCrop } = scenario.crops[0]!;
+    const baseCrop = { ...scenario.crops[0]! };
+    delete (baseCrop as { taskRules?: unknown }).taskRules;
     scenario.crops = [
       ...scenario.crops,
       {
