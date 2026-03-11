@@ -45,6 +45,7 @@ export {
   saveSettingsInAppState,
 } from './repos/settingsRepository';
 export {
+  generateCalendarTasksWithDiagnostics,
   generateOperationalTasks,
   generatePlannedTasks,
   getTaskFromAppState,

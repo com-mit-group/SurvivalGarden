@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import type { Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
 import {
-  generateOperationalTasks,
+  generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
   initializeAppStateStorage,
   listBedsFromAppState,
@@ -662,7 +662,7 @@ function CalendarPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [isRegeneratingTasks, setIsRegeneratingTasks] = useState(false);
-  const [regenerationSummary, setRegenerationSummary] = useState<{ added: number; updated: number; unchanged: number } | null>(null);
+  const [regenerationSummary, setRegenerationSummary] = useState<{ added: number; updated: number; unchanged: number; warnings: string[] } | null>(null);
   const [regenerationError, setRegenerationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -838,7 +838,9 @@ function CalendarPage() {
       }
 
       const tasksBeforeBySourceKey = new Map(listTasksFromAppState(appState).map((task) => [task.sourceKey, task]));
-      const generatedTasks = generateOperationalTasks(appState);
+      const currentYear = new Date().getUTCFullYear();
+      const generationResult = generateCalendarTasksWithDiagnostics(appState, currentYear);
+      const generatedTasks = generationResult.tasks;
       const nextState = upsertGeneratedTasksInAppState(appState, generatedTasks);
       const tasksAfter = listTasksFromAppState(nextState);
       const tasksAfterBySourceKey = new Map(tasksAfter.map((task) => [task.sourceKey, task]));
@@ -875,7 +877,8 @@ function CalendarPage() {
 
       await saveAppStateToIndexedDb(nextState);
       setTasks(tasksAfter);
-      setRegenerationSummary({ added, updated, unchanged });
+      const warnings = generationResult.diagnostics.map((entry) => `${entry.cropId}: ${entry.reason}`);
+      setRegenerationSummary({ added, updated, unchanged, warnings });
     } catch (error) {
       if (error instanceof SchemaValidationError && error.issues.length > 0) {
         setRegenerationError(`${error.message}: ${error.issues.map((issue) => issue.path || issue.message).join('; ')}`);
@@ -918,6 +921,9 @@ function CalendarPage() {
         <p className="batch-stage-warning">
           Regenerated tasks — Added: {regenerationSummary.added}, Updated: {regenerationSummary.updated}, Unchanged:{' '}
           {regenerationSummary.unchanged}
+          {regenerationSummary.warnings.length > 0
+            ? `, Skipped crops: ${regenerationSummary.warnings.join('; ')}`
+            : ''}
         </p>
       ) : null}
       {regenerationError ? <p className="batch-stage-warning">Regeneration failed: {regenerationError}</p> : null}

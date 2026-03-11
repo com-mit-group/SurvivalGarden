@@ -252,7 +252,23 @@ const buildOperationalTaskSourceKey = (
   stageEventIndex: number,
 ): string => ['batch', batchId, taskType, anchorOccurredAt, stageEventIndex].join('_').toLowerCase();
 
-export const generatePlannedTasks = (appState: unknown, year: number): Task[] => {
+export const generatePlannedTasks = (appState: unknown, year: number): Task[] =>
+  generatePlannedTasksWithDiagnostics(appState, year).tasks;
+
+export type CalendarGenerationSkipReason = 'no_rules' | 'invalid_rules';
+
+export type CalendarGenerationDiagnostic = {
+  cropId: string;
+  reason: CalendarGenerationSkipReason;
+  detail: string;
+};
+
+export type CalendarGenerationResult = {
+  tasks: Task[];
+  diagnostics: CalendarGenerationDiagnostic[];
+};
+
+export const generatePlannedTasksWithDiagnostics = (appState: unknown, year: number): CalendarGenerationResult => {
   const state = assertValid('appState', appState);
   const cropsById = new Map(state.crops.map((crop) => [crop.cropId, crop]));
   const sortedPlans = [...state.cropPlans]
@@ -267,6 +283,7 @@ export const generatePlannedTasks = (appState: unknown, year: number): Task[] =>
 
   const successionIndexByPlanId = new Map<string, number>();
   const successionCounters = new Map<string, number>();
+  const diagnosticsByCropId = new Map<string, CalendarGenerationDiagnostic>();
 
   for (const plan of sortedPlans) {
     const key = `${plan.bedId}:${plan.cropId}`;
@@ -280,7 +297,18 @@ export const generatePlannedTasks = (appState: unknown, year: number): Task[] =>
   for (const plan of sortedPlans) {
     const crop = cropsById.get(plan.cropId);
 
-    if (!crop || !crop.taskRules || crop.taskRules.length === 0 || !plan.bedId) {
+    if (!crop || !plan.bedId) {
+      continue;
+    }
+
+    if (!crop.taskRules || crop.taskRules.length === 0) {
+      if (!diagnosticsByCropId.has(plan.cropId)) {
+        diagnosticsByCropId.set(plan.cropId, {
+          cropId: plan.cropId,
+          reason: 'no_rules',
+          detail: 'No task rules were provided for this crop.',
+        });
+      }
       continue;
     }
 
@@ -296,45 +324,64 @@ export const generatePlannedTasks = (appState: unknown, year: number): Task[] =>
       continue;
     }
 
-    for (const taskRule of sortedTaskRules) {
-      const windowsWithIndex = taskRule.windows.map((window, windowIndex) => ({ window, windowIndex }));
+    try {
+      for (const taskRule of sortedTaskRules) {
+        const windowsWithIndex = taskRule.windows.map((window, windowIndex) => ({ window, windowIndex }));
 
-      for (const { window, windowIndex } of windowsWithIndex) {
-        const [date] = expandTaskRuleWindowsToLocalDates([window], year);
+        for (const { window, windowIndex } of windowsWithIndex) {
+          const [date] = expandTaskRuleWindowsToLocalDates([window], year);
 
-        if (!date) {
-          continue;
+          if (!date) {
+            continue;
+          }
+
+          const sourceKey = buildPlannedTaskSourceKey(
+            year,
+            plan.bedId,
+            plan.cropId,
+            successionIndex,
+            taskRule.taskType,
+            windowIndex,
+          );
+
+          plannedTasks.push({
+            id: sourceKey,
+            sourceKey,
+            date,
+            type: toTaskType(taskRule.taskType),
+            cropId: plan.cropId,
+            bedId: plan.bedId,
+            batchId: `planned_${year}_${plan.bedId}_${plan.cropId}_${successionIndex}`.toLowerCase(),
+            checklist: [],
+            status: 'pending',
+          });
         }
-
-        const sourceKey = buildPlannedTaskSourceKey(
-          year,
-          plan.bedId,
-          plan.cropId,
-          successionIndex,
-          taskRule.taskType,
-          windowIndex,
-        );
-
-        plannedTasks.push({
-          id: sourceKey,
-          sourceKey,
-          date,
-          type: toTaskType(taskRule.taskType),
+      }
+    } catch (error) {
+      if (!diagnosticsByCropId.has(plan.cropId)) {
+        diagnosticsByCropId.set(plan.cropId, {
           cropId: plan.cropId,
-          bedId: plan.bedId,
-          batchId: `planned_${year}_${plan.bedId}_${plan.cropId}_${successionIndex}`.toLowerCase(),
-          checklist: [],
-          status: 'pending',
+          reason: 'invalid_rules',
+          detail: error instanceof Error ? error.message : 'Unable to expand one or more task rule windows.',
         });
       }
     }
   }
 
-  return plannedTasks.sort((left, right) =>
-    left.date === right.date
-      ? left.sourceKey.localeCompare(right.sourceKey)
-      : left.date.localeCompare(right.date),
-  );
+  return {
+    tasks: plannedTasks.sort((left, right) =>
+      left.date === right.date
+        ? left.sourceKey.localeCompare(right.sourceKey)
+        : left.date.localeCompare(right.date),
+    ),
+    diagnostics: [...diagnosticsByCropId.values()].sort((left, right) => left.cropId.localeCompare(right.cropId)),
+  };
+};
+
+export const generateCalendarTasksWithDiagnostics = (appState: unknown, year: number): CalendarGenerationResult => {
+  const planned = generatePlannedTasksWithDiagnostics(appState, year);
+  const operational = generateOperationalTasks(appState);
+  return { tasks: [...planned.tasks, ...operational], diagnostics: planned.diagnostics };
 };
 
 export const generateOperationalTasks = (appState: unknown): Task[] => {
