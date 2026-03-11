@@ -8,6 +8,36 @@
     "createdAt",
     "updatedAt"
   ],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "cropId"
+          ]
+        },
+        {
+          "required": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "commonName"
+          ]
+        }
+      ]
+    }
+  ],
   "properties": {
     "cropId": {
       "$ref": "#/$defs/id"
@@ -65,16 +95,14 @@
       "items": {
         "$ref": "#/$defs/id"
       },
-      "uniqueItems": true,
-      "default": []
+      "uniqueItems": true
     },
     "companionsAvoid": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/id"
       },
-      "uniqueItems": true,
-      "default": []
+      "uniqueItems": true
     },
     "rules": {
       "type": "object",
@@ -105,8 +133,7 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/nutritionItem"
-      },
-      "default": []
+      }
     },
     "createdAt": {
       "$ref": "#/$defs/isoDate"
