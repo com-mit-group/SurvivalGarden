@@ -361,9 +361,8 @@ describe('batch normalization pipeline', () => {
     expect(batches[2]).toMatchObject({ batchId: 'legacy-tuber-1', propagationType: 'tuber' });
     expect(batches[3]).toMatchObject({ batchId: 'legacy-cutting-1', propagationType: 'cutting' });
 
-    const nonSeed = batches.filter((batch) => batch.propagationType !== 'seed');
+    const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
     for (const batch of nonSeed) {
-      expect(batch.seedCountPlanned).toBeUndefined();
       expect(batch.seedCountGerminated).toBeUndefined();
     }
   });

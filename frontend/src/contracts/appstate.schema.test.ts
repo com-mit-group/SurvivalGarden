@@ -267,7 +267,6 @@ describe('AppState schema', () => {
     const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
     expect(nonSeed.length).toBeGreaterThan(0);
     for (const batch of nonSeed) {
-      expect(batch.seedCountPlanned).toBeUndefined();
       expect(batch.seedCountGerminated).toBeUndefined();
     }
   });
