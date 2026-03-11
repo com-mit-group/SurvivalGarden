@@ -254,15 +254,15 @@ describe('removeBatchFromBed', () => {
 
 
 describe('batch normalization pipeline', () => {
-  it('normalizes provided real-world batch dump and reports schema-invalid records with pointers', () => {
+  it('normalizes provided real-world batch dump into canonical schema-valid records', () => {
     const fixture = realBatchFixtures['../../../../fixtures/real/actual-batches-vnext-2026-03-07.json'];
     expect(fixture).toBeDefined();
 
     const { batches, report } = normalizeBatchesWithReport(fixture?.batches ?? []);
 
     expect(report.migrated).toBeGreaterThan(0);
-    expect(report.invalidRecords.length).toBeGreaterThan(0);
-    expect(report.invalidRecords.some((record) => record.issues.some((issue) => issue.includes('/cropId')))).toBe(true);
+    expect(report.invalidRecords).toEqual([]);
+    expect(report.warnings).toEqual([]);
 
     const hasRegrowLike = batches.some(
       (batch) => batch.propagationType === 'runner' || batch.startMethod?.includes('regrow'),

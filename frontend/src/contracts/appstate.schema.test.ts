@@ -244,7 +244,7 @@ describe('AppState schema', () => {
 
 
 
-  it('normalizes and validates batches from real-world dump with pointer-rich errors', () => {
+  it('normalizes and validates batches from real-world dump without migration errors', () => {
     const ajv = new Ajv2020({ strict: true });
     const batchValidate = ajv.compile(batchSchema);
 
@@ -256,7 +256,8 @@ describe('AppState schema', () => {
 
     const { batches, report } = normalizeBatchesWithReport(sourceBatches);
     expect(report.migrated).toBeGreaterThan(0);
-    expect(report.invalidRecords.length).toBeGreaterThan(0);
+    expect(report.invalidRecords).toEqual([]);
+    expect(report.warnings).toEqual([]);
 
     for (let index = 0; index < batches.length; index += 1) {
       const batch = batches[index];
