@@ -1,0 +1,18 @@
+{
+  "id": "task_plant_tomato_2026_05_01",
+  "sourceKey": "batch_tomato_seed_2026|2026-05-01|crop_tomato|bed_001|transplant",
+  "date": "2026-05-01",
+  "type": "transplant",
+  "cropId": "crop_tomato",
+  "bedId": "bed_001",
+  "batchId": "batch_tomato_seed_2026",
+  "checklist": [
+    {
+      "label": "Harden off seedlings"
+    },
+    {
+      "label": "Water in after transplant"
+    }
+  ],
+  "status": "open"
+}

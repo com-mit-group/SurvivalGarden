@@ -1,0 +1,52 @@
+{
+  "batchId": "batch_tomato_seed_2026",
+  "cropId": "crop_tomato",
+  "variety": "Roma",
+  "startedAt": "2026-03-01T08:00:00Z",
+  "propagationType": "seed",
+  "startMethod": "indoor tray",
+  "startLocation": "greenhouse bench A",
+  "startQuantity": {
+    "count": 24,
+    "unit": "seeds"
+  },
+  "seedCountPlanned": 24,
+  "seedCountGerminated": 19,
+  "plantCountAlive": 18,
+  "stage": "seedling",
+  "currentStage": "seedling",
+  "stageEvents": [
+    {
+      "stage": "sown",
+      "occurredAt": "2026-03-01T08:00:00Z",
+      "location": "greenhouse bench A",
+      "method": "indoor tray",
+      "meta": {
+        "confidence": "exact"
+      }
+    },
+    {
+      "stage": "seedling",
+      "occurredAt": "2026-03-18T08:00:00Z",
+      "meta": {
+        "confidence": "estimated"
+      }
+    }
+  ],
+  "bedAssignments": [
+    {
+      "bedId": "bed_001",
+      "assignedAt": "2026-05-01T07:00:00Z"
+    }
+  ],
+  "assignments": [
+    {
+      "bedId": "bed_001",
+      "assignedAt": "2026-05-01T07:00:00Z"
+    }
+  ],
+  "notes": "Main spring tomato sowing.",
+  "meta": {
+    "confidence": "exact"
+  }
+}
