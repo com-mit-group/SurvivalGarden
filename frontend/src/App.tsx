@@ -2738,6 +2738,11 @@ const toYieldGrams = (plan: CropPlan): number | null => {
   return null;
 };
 
+const getNutritionPlanLabel = (plan: CropPlan, crop?: Crop): string => {
+  const baseName = crop?.name?.trim() ? crop.name : plan.cropId;
+  return `${baseName} (${plan.planId})`;
+};
+
 const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSummary => {
   const cropById = new Map(crops.map((crop) => [crop.cropId, crop]));
   const totals = Object.fromEntries(NUTRITION_METRICS.map((metric) => [metric.key, 0])) as Record<string, number>;
@@ -2746,11 +2751,28 @@ const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSumm
 
   for (const plan of cropPlans) {
     const crop = cropById.get(plan.cropId);
-    const yieldGrams = toYieldGrams(plan);
-    if (!crop || yieldGrams === null) {
-      excluded.add(crop?.name ?? plan.cropId);
+    const planLabel = getNutritionPlanLabel(plan, crop);
+
+    if (!crop || !crop.nutritionProfile || crop.nutritionProfile.length === 0) {
+      excluded.add(`${planLabel} — missing nutrition profile`);
       continue;
     }
+
+    const hasPerServingNutrition = crop.nutritionProfile.some((item) => item.assumptions.trim().toLowerCase().includes('per serving'));
+    if (hasPerServingNutrition) {
+      if (!plan.expectedYield || !Number.isFinite(plan.expectedYield.amount) || plan.expectedYield.amount <= 0 || plan.expectedYield.unit !== 'pieces') {
+        excluded.add(`${planLabel} — missing piece-based expected yield`);
+        continue;
+      }
+    } else {
+      const yieldGrams = toYieldGrams(plan);
+      if (yieldGrams === null) {
+        excluded.add(`${planLabel} — missing mass expected yield`);
+        continue;
+      }
+    }
+
+    const yieldGrams = toYieldGrams(plan);
 
     for (const item of crop.nutritionProfile) {
       if (!(item.nutrient in totals)) {
@@ -2761,13 +2783,8 @@ const summarizeNutrition = (cropPlans: CropPlan[], crops: Crop[]): NutritionSumm
       const perServing = assumptions.includes('per serving');
 
       if (perServing) {
-        if (plan.expectedYield.unit !== 'pieces') {
-          excluded.add(crop.name);
-          continue;
-        }
-
         totals[item.nutrient] = (totals[item.nutrient] ?? 0) + item.value * plan.expectedYield.amount;
-      } else {
+      } else if (yieldGrams !== null) {
         totals[item.nutrient] = (totals[item.nutrient] ?? 0) + (yieldGrams / 100) * item.value;
       }
 
@@ -2812,28 +2829,7 @@ function NutritionPage() {
   const macroMetrics = NUTRITION_METRICS.filter((metric) => ['kcal', 'protein', 'fat'].includes(metric.key));
   const microMetrics = NUTRITION_METRICS.filter((metric) => ['vitamin_c', 'vitamin_a', 'vitamin_k'].includes(metric.key));
   const flagsToShow = summary.flags.filter((flag) => flag.title.includes('B12') || flag.title.includes('Iodine'));
-  const missingDataWarnings = useMemo(() => {
-    const warnings = new Set(summary.excludedCrops);
-    const cropById = new Map(crops.map((crop) => [crop.cropId, crop]));
-
-    for (const plan of cropPlans) {
-      const crop = cropById.get(plan.cropId);
-      if (!crop) {
-        warnings.add(plan.cropId);
-        continue;
-      }
-
-      if (!crop.nutritionProfile || crop.nutritionProfile.length === 0) {
-        warnings.add(`${crop.name} (missing nutrition profile)`);
-      }
-
-      if (!plan.expectedYield || !Number.isFinite(plan.expectedYield.amount) || plan.expectedYield.amount <= 0) {
-        warnings.add(`${crop.name} (missing expected yield)`);
-      }
-    }
-
-    return [...warnings].sort((left, right) => left.localeCompare(right));
-  }, [cropPlans, crops, summary.excludedCrops]);
+  const missingNutritionWarnings = summary.excludedCrops;
 
   return (
     <section className="data-page">
@@ -2928,15 +2924,15 @@ function NutritionPage() {
               <li>Per serving entries require piece-based yield; otherwise crop is listed below.</li>
               <li>Rounding: kcal rounded to whole numbers, other nutrients rounded to 2 decimals.</li>
             </ul>
-            <h4>Missing-data warning</h4>
-            {missingDataWarnings.length > 0 ? (
+            <h4>Excluded crops (missing nutrition data)</h4>
+            {missingNutritionWarnings.length > 0 ? (
               <ul className="nutrition-warning-list">
-                {missingDataWarnings.map((name) => (
+                {missingNutritionWarnings.map((name) => (
                   <li key={name}>{name}</li>
                 ))}
               </ul>
             ) : (
-              <p className="nutrition-card-note">Missing-data warning: none.</p>
+              <p className="nutrition-card-note">Excluded crops warning: none.</p>
             )}
           </article>
 
