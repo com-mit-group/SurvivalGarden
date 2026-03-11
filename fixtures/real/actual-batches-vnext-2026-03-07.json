@@ -3,7 +3,7 @@
   "generatedAt": "2026-03-07",
   "batches": [
     {
-      "id": "batch-basil-genoveser-2026-01",
+      "batchId": "batch-basil-genoveser-2026-01",
       "cropId": "crop_basil",
       "variety": "Genoveser",
       "startedAt": "2026-03-05T12:00:00+01:00",
@@ -11,21 +11,21 @@
       "startLocation": "indoor",
       "seedCountPlanned": 16,
       "currentStage": "pre_sown",
-      "lifecycleStatus": "planned",
+      "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "pre_sown",
-          "date": "2026-03-05T12:00:00+01:00",
+          "stage": "pre_sown",
+          "occurredAt": "2026-03-05T12:00:00+01:00",
           "location": "indoor",
           "method": "pre_sow_indoor"
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "batch-garlic-2026-03-06-01",
+      "batchId": "batch-garlic-2026-03-06-01",
       "cropId": "crop_garlic",
-      "scientificName": "Allium sativum",
-      "variety": null,
+      "variety": "Unknown",
       "startedAt": "2026-03-06T18:10:00+01:00",
       "startMethod": "pre_sow",
       "propagationType": "clove",
@@ -35,53 +35,57 @@
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "pre_sown",
-          "date": "2026-03-06T18:10:00+01:00",
+          "stage": "pre_sown",
+          "occurredAt": "2026-03-06T18:10:00+01:00",
           "location": "indoor",
           "method": "tray"
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "celery-regrow-2026-02-20-01",
+      "batchId": "celery-regrow-2026-02-20-01",
       "cropId": "crop_celery",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-20T12:00:00+01:00",
       "startMethod": "regrow_water",
       "startLocation": "indoor",
+      "propagationType": "runner",
       "currentStage": "transplanted",
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "started",
-          "date": "2026-02-20T12:00:00+01:00",
+          "stage": "started",
+          "occurredAt": "2026-02-20T12:00:00+01:00",
           "location": "indoor",
           "method": "regrow_water"
         },
         {
-          "type": "transplanted",
-          "dateOptions": [
-            "2026-02-28T12:00:00+01:00",
-            "2026-03-01T12:00:00+01:00"
-          ],
+          "stage": "transplanted",
+          "occurredAt": "2026-03-01T12:00:00+01:00",
           "location": "soil_tray",
-          "method": "transplant_from_water"
+          "method": "transplant_from_water",
+          "meta": {
+            "confidence": "estimated"
+          }
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "potato-cutting-2026-02-18-01",
+      "batchId": "potato-cutting-2026-02-18-01",
       "cropId": "crop_potato",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-18T12:00:00+01:00",
       "startMethod": "regrow_water",
       "startLocation": "indoor",
+      "propagationType": "tuber",
       "currentStage": "started",
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "started",
-          "date": "2026-02-18T12:00:00+01:00",
+          "stage": "started",
+          "occurredAt": "2026-02-18T12:00:00+01:00",
           "location": "indoor",
           "method": "regrow_water",
           "meta": {
@@ -89,34 +93,37 @@
           }
         }
       ],
-      "notes": "Origin: Tuber cutting. Method: Placed in water."
+      "notes": "Origin: Tuber cutting. Method: Placed in water.",
+      "assignments": []
     },
     {
-      "id": "onion-regrow-2026-02-18-01",
+      "batchId": "onion-regrow-2026-02-18-01",
       "cropId": "crop_onion",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-18T12:00:00+01:00",
       "startMethod": "regrow_water",
       "startLocation": "indoor",
+      "propagationType": "runner",
       "currentStage": "failed",
-      "lifecycleStatus": "inactive",
+      "lifecycleStatus": "failed",
       "stageEvents": [
         {
-          "type": "started",
-          "date": "2026-02-18T12:00:00+01:00",
+          "stage": "started",
+          "occurredAt": "2026-02-18T12:00:00+01:00",
           "location": "indoor",
           "method": "regrow_water"
         },
         {
-          "type": "failed",
-          "date": "2026-03-06"
+          "stage": "failed",
+          "occurredAt": "2026-03-06T12:00:00+01:00"
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "batch-pea-2026-03-06-01",
+      "batchId": "batch-pea-2026-03-06-01",
       "cropId": "crop_pea",
-      "variety": null,
+      "variety": "Unknown",
       "startedAt": "2026-03-06T18:05:00+01:00",
       "startMethod": "pre_sow",
       "propagationType": "seed",
@@ -126,40 +133,43 @@
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "pre_sown",
-          "date": "2026-03-06T18:05:00+01:00",
+          "stage": "pre_sown",
+          "occurredAt": "2026-03-06T18:05:00+01:00",
           "location": "indoor",
           "method": "tray"
         },
         {
-          "type": "transplanted",
-          "date": "2026-03-07T14:29:00+01:00",
+          "stage": "transplanted",
+          "occurredAt": "2026-03-07T14:29:00+01:00",
           "location": "mini_greenhouse",
           "method": "into_soil"
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "pakchoi-regrow-2026-02-16-01",
+      "batchId": "pakchoi-regrow-2026-02-16-01",
       "cropId": "crop_pak_choi",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-16T12:00:00+01:00",
       "startMethod": "regrow_water",
       "startLocation": "indoor",
+      "propagationType": "runner",
       "currentStage": "started",
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "started",
-          "date": "2026-02-16T12:00:00+01:00",
+          "stage": "started",
+          "occurredAt": "2026-02-16T12:00:00+01:00",
           "location": "indoor",
           "method": "regrow_water"
         }
-      ]
+      ],
+      "assignments": []
     },
     {
-      "id": "batch-lettuce-2026-03-06-01",
-      "cropId": null,
+      "batchId": "batch-lettuce-2026-03-06-01",
+      "cropId": "crop_lettuce",
       "variety": "Romaine",
       "startedAt": "2026-03-06T18:30:00+01:00",
       "startMethod": "pre_sow",
@@ -170,12 +180,22 @@
       "lifecycleStatus": "active",
       "stageEvents": [
         {
-          "type": "pre_sown",
-          "date": "2026-03-06T18:30:00+01:00",
+          "stage": "pre_sown",
+          "occurredAt": "2026-03-06T18:30:00+01:00",
           "location": "indoor",
           "method": "paper_towel"
+        },
+        {
+          "stage": "transplanted",
+          "occurredAt": "2026-03-07T14:35:00+01:00",
+          "location": "mini_greenhouse",
+          "method": "into_soil",
+          "meta": {
+            "confidence": "estimated"
+          }
         }
-      ]
+      ],
+      "assignments": []
     }
   ]
 }
