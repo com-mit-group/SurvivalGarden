@@ -10,6 +10,20 @@ import {
   removeBatchFromBed,
 } from './batchRepository';
 
+declare global {
+  interface ImportMeta {
+    glob: (
+      pattern: string,
+      options?: { eager?: boolean; import?: string },
+    ) => Record<string, unknown>;
+  }
+}
+
+const realBatchFixtures = import.meta.glob('../../../../fixtures/real/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, { batches?: unknown[] }>;
+
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
     batchId: 'batch-1',
@@ -240,6 +254,28 @@ describe('removeBatchFromBed', () => {
 
 
 describe('batch normalization pipeline', () => {
+  it('normalizes provided real-world batch dump and reports schema-invalid records with pointers', () => {
+    const fixture = realBatchFixtures['../../../../fixtures/real/actual-batches-vnext-2026-03-07.json'];
+    expect(fixture).toBeDefined();
+
+    const { batches, report } = normalizeBatchesWithReport(fixture?.batches ?? []);
+
+    expect(report.migrated).toBeGreaterThan(0);
+    expect(report.invalidRecords.length).toBeGreaterThan(0);
+    expect(report.invalidRecords.some((record) => record.issues.some((issue) => issue.includes('/cropId')))).toBe(true);
+
+    const hasRegrowLike = batches.some(
+      (batch) => batch.propagationType === 'runner' || batch.startMethod?.includes('regrow'),
+    );
+    expect(hasRegrowLike).toBe(true);
+
+    const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
+    expect(nonSeed.length).toBeGreaterThan(0);
+    for (const batch of nonSeed) {
+      expect(batch.seedCountGerminated).toBeUndefined();
+    }
+  });
+
   it('normalizes legacy shapes and returns migration report', () => {
     const input = [
       {
@@ -275,6 +311,60 @@ describe('batch normalization pipeline', () => {
     expect(report.warnings.map((warning) => warning.code)).toContain('legacy_variety_cultivar');
     expect(report.warnings.map((warning) => warning.code)).toContain('legacy_counts_mapped');
     expect(report.warnings.map((warning) => warning.code)).toContain('legacy_propagation_heuristic');
+  });
+
+
+  it('normalizes seed/regrow/tuber/cutting examples with non-seed seed-count omission', () => {
+    const input = [
+      {
+        batchId: 'legacy-seed-1',
+        cropId: 'crop-1',
+        start: { at: '2026-03-01T00:00:00Z' },
+        status: { state: 'sowing' },
+        counts: { seedsSown: 30, seedsGerminated: 22, plantsAlive: 20 },
+      },
+      {
+        batchId: 'legacy-regrow-1',
+        cropId: 'crop-1',
+        start: { at: '2026-03-05T00:00:00Z' },
+        status: { state: 'transplant' },
+        propagationType: 'runner',
+      },
+      {
+        batchId: 'legacy-tuber-1',
+        cropId: 'crop-1',
+        start: { at: '2026-03-07T00:00:00Z' },
+        status: { state: 'sowing' },
+        propagationType: 'tuber',
+      },
+      {
+        batchId: 'legacy-cutting-1',
+        cropId: 'crop-1',
+        start: { at: '2026-03-10T00:00:00Z' },
+        status: { state: 'sowing' },
+        cuttings: true,
+      },
+    ];
+
+    const { batches, report } = normalizeBatchesWithReport(input);
+
+    expect(report.invalidRecords).toEqual([]);
+    expect(batches).toHaveLength(4);
+
+    expect(batches[0]).toMatchObject({
+      batchId: 'legacy-seed-1',
+      seedCountPlanned: 30,
+      seedCountGerminated: 22,
+      plantCountAlive: 20,
+    });
+    expect(batches[1]).toMatchObject({ batchId: 'legacy-regrow-1', propagationType: 'runner' });
+    expect(batches[2]).toMatchObject({ batchId: 'legacy-tuber-1', propagationType: 'tuber' });
+    expect(batches[3]).toMatchObject({ batchId: 'legacy-cutting-1', propagationType: 'cutting' });
+
+    const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
+    for (const batch of nonSeed) {
+      expect(batch.seedCountGerminated).toBeUndefined();
+    }
   });
 
   it('reports invalid records without silently dropping in report', () => {

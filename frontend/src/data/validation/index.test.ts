@@ -355,6 +355,58 @@ describe('data boundary validation', () => {
     expect(canonicalizeForComparison(imported)).toEqual(canonicalizeForComparison(JSON.parse(exported)));
   });
 
+
+  it('normalizes legacy imported batches into canonical schema-valid records', () => {
+    const legacyImport = JSON.stringify({
+      ...validAppState,
+      batches: [
+        {
+          batchId: 'legacy-seed',
+          cropId: 'crop-1',
+          startedAt: '2026-03-01T00:00:00Z',
+          stage: 'sowing',
+          currentStage: 'sowing',
+          seedCountPlanned: 20,
+          seedCountGerminated: 16,
+          plantCountAlive: 14,
+          stageEvents: [{ stage: 'sowing', occurredAt: '2026-03-01T00:00:00Z' }],
+          assignments: [],
+        },
+        {
+          batchId: 'legacy-cutting',
+          cropId: 'crop-1',
+          startedAt: '2026-04-10T00:00:00Z',
+          stage: 'transplant',
+          currentStage: 'transplant',
+          propagationType: 'cutting',
+          stageEvents: [{ stage: 'transplant', occurredAt: '2026-04-10T00:00:00Z' }],
+          assignments: [],
+        },
+      ],
+    });
+
+    const parsed = parseImportedAppState(legacyImport);
+
+    expect(() => assertValid('appState', parsed)).not.toThrow();
+    expect(parsed.batches).toHaveLength(2);
+    expect(parsed.batches[0]).toMatchObject({
+      batchId: 'legacy-seed',
+      seedCountPlanned: 20,
+      seedCountGerminated: 16,
+      plantCountAlive: 14,
+      startedAt: '2026-03-01T00:00:00Z',
+      currentStage: 'sowing',
+    });
+    expect(parsed.batches[1]).toMatchObject({
+      batchId: 'legacy-cutting',
+      propagationType: 'cutting',
+      startedAt: '2026-04-10T00:00:00Z',
+      currentStage: 'transplant',
+    });
+    expect(parsed.batches[1]?.seedCountPlanned).toBeUndefined();
+    expect(parsed.batches[1]?.seedCountGerminated).toBeUndefined();
+  });
+
   it('canonicalizes export ordering and keeps photo data metadata-only', () => {
     const unorderedState = {
       ...validAppState,

@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020';
 import cropSchema from './crop.schema.json';
 
+declare global {
+  interface ImportMeta {
+    glob: (
+      pattern: string,
+      options?: { eager?: boolean; import?: string },
+    ) => Record<string, unknown>;
+  }
+}
+
+const goldenFixtures = import.meta.glob('../../../fixtures/golden/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, { crops?: unknown[] }>;
+
 describe('crop.schema.json', () => {
   const ajv = new Ajv2020({ strict: true });
   const validate = ajv.compile(cropSchema);
@@ -130,5 +144,29 @@ describe('crop.schema.json', () => {
     };
 
     expect(validate(payload)).toBe(false);
+  });
+
+  it('accepts all crop records from real golden datasets', () => {
+    const fixturePaths = Object.keys(goldenFixtures).sort();
+
+    expect(fixturePaths.length).toBeGreaterThan(0);
+
+    for (const fixturePath of fixturePaths) {
+      const crops = goldenFixtures[fixturePath]?.crops ?? [];
+      const fixtureName = fixturePath.replace('../../../fixtures/golden/', '');
+
+      for (let index = 0; index < crops.length; index += 1) {
+        const crop = crops[index];
+        const isValid = validate(crop);
+        const formattedErrors = (validate.errors ?? [])
+          .map((error) => `${error.instancePath || '/'} ${error.message}`)
+          .join('; ');
+
+        expect(
+          isValid,
+          `Fixture ${fixtureName} crops/${index} failed: ${formattedErrors}`,
+        ).toBe(true);
+      }
+    }
   });
 });
