@@ -369,13 +369,13 @@ describe('App', () => {
         return element?.tagName === 'LI' && text.includes('protein') && text.includes('total 1136 g') && text.includes('per day 3.11 g') && text.includes('coverage vs generic target: 6%');
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Missing-data warning: none.')).toBeInTheDocument();
+    expect(screen.getByText('Excluded crops warning: none.')).toBeInTheDocument();
     expect(screen.getByText('Key micronutrients')).toBeInTheDocument();
     expect(screen.getByText(/coverage labels use generic targets only/i)).toBeInTheDocument();
     expect(screen.getByText(/Generic targets are for reference labels only and this estimate is rough/i)).toBeInTheDocument();
   });
 
-  it('flags plans with insufficient yield data in nutrition assumptions', async () => {
+  it('excludes crops with missing nutrition inputs and lists deterministic warning entries', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
       beds: [],
@@ -390,7 +390,38 @@ describe('App', () => {
         createdAt: '2026-01-01T00:00:00Z',
         updatedAt: '2026-01-01T00:00:00Z',
       },
-      crops: [],
+      crops: [
+        {
+          cropId: 'crop_unknown',
+          name: 'Mystery Crop',
+          companionsGood: [],
+          companionsAvoid: [],
+          rules: {
+            sowing: { sequence: 1, windows: [] },
+            transplant: { sequence: 2, windows: [] },
+            harvest: { sequence: 3, windows: [] },
+            storage: { sequence: 4, windows: [] },
+          },
+          nutritionProfile: [],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+        {
+          cropId: 'crop_tomato',
+          name: 'Tomato',
+          companionsGood: [],
+          companionsAvoid: [],
+          rules: {
+            sowing: { sequence: 1, windows: [] },
+            transplant: { sequence: 2, windows: [] },
+            harvest: { sequence: 3, windows: [] },
+            storage: { sequence: 4, windows: [] },
+          },
+          nutritionProfile: [{ nutrient: 'kcal', value: 18, unit: 'kcal', source: 'USDA', assumptions: 'Per 100g edible portion.' }],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
       cropPlans: [
         {
           planId: 'plan_unknown',
@@ -398,6 +429,13 @@ describe('App', () => {
           seasonYear: 2026,
           plannedWindows: { sowing: [], harvest: [] },
           expectedYield: { amount: 12, unit: 'kg' },
+        },
+        {
+          planId: 'plan_tomato_missing_mass',
+          cropId: 'crop_tomato',
+          seasonYear: 2026,
+          plannedWindows: { sowing: [], harvest: [] },
+          expectedYield: { amount: 8, unit: 'pieces' },
         },
       ],
     } as never);
@@ -409,10 +447,11 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Missing-data warning')).toBeInTheDocument();
+      expect(screen.getByText('Excluded crops (missing nutrition data)')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('crop_unknown')).toBeInTheDocument();
+    expect(screen.getByText('Mystery Crop (plan_unknown) — missing nutrition profile')).toBeInTheDocument();
+    expect(screen.getByText('Tomato (plan_tomato_missing_mass) — missing mass expected yield')).toBeInTheDocument();
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
