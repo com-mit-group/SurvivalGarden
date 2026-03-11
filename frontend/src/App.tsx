@@ -48,6 +48,26 @@ type CropIdentityLabelProps = {
   className?: string | undefined;
 };
 
+const getCropCapabilityLabels = ({
+  isUserDefined,
+  hasTaskRules,
+}: {
+  isUserDefined?: boolean;
+  hasTaskRules?: boolean;
+}): string[] => {
+  const labels: string[] = [];
+
+  if (isUserDefined) {
+    labels.push('Custom crop');
+  }
+
+  if (hasTaskRules === false) {
+    labels.push('No rules yet');
+  }
+
+  return labels;
+};
+
 function CropIdentityLabel({ cropId, name, scientificName, className }: CropIdentityLabelProps) {
   const secondary = scientificName?.trim();
 
@@ -131,6 +151,7 @@ function BedDetailPage() {
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
   const [cropHasTaskRules, setCropHasTaskRules] = useState<Record<string, boolean>>({});
+  const [userDefinedCropIds, setUserDefinedCropIds] = useState<Record<string, boolean>>({});
   const [assignBatchId, setAssignBatchId] = useState('');
   const [assignDate, setAssignDate] = useState(getLocalDateTimeDefault());
   const [assignMeta, setAssignMeta] = useState('');
@@ -168,6 +189,7 @@ function BedDetailPage() {
         setCropNames({});
         setCropScientificNames({});
         setCropHasTaskRules({});
+        setUserDefinedCropIds({});
         setIsLoading(false);
         return;
       }
@@ -186,6 +208,14 @@ function BedDetailPage() {
           appState.crops.map((crop) => {
             const taskRules = (crop as { taskRules?: unknown }).taskRules;
             return [crop.cropId, Array.isArray(taskRules) && taskRules.length > 0];
+          }),
+        ),
+      );
+      setUserDefinedCropIds(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
+            return [crop.cropId, isUserDefined === true];
           }),
         ),
       );
@@ -510,6 +540,16 @@ function BedDetailPage() {
                       scientificName={cropScientificNames[batch.cropId]}
                     />
                   </Link>
+                  <span className="crop-capability-badges" aria-label="Crop capabilities">
+                    {getCropCapabilityLabels({
+                      isUserDefined: userDefinedCropIds[batch.cropId],
+                      hasTaskRules: cropHasTaskRules[batch.cropId],
+                    }).map((label) => (
+                      <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
+                        {label}
+                      </span>
+                    ))}
+                  </span>
                   <span className="batch-stage-badge">{batch.stage}</span>
                   <button
                     type="button"
@@ -1284,6 +1324,7 @@ function BatchesPage() {
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
   const [cropAliases, setCropAliases] = useState<Record<string, string[]>>({});
   const [cropHasTaskRules, setCropHasTaskRules] = useState<Record<string, boolean>>({});
+  const [userDefinedCropIds, setUserDefinedCropIds] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
@@ -1313,6 +1354,7 @@ function BatchesPage() {
         setCropScientificNames({});
         setCropAliases({});
         setCropHasTaskRules({});
+        setUserDefinedCropIds({});
         setIsLoading(false);
         return;
       }
@@ -1343,6 +1385,14 @@ function BatchesPage() {
           appState.crops.map((crop) => {
             const taskRules = (crop as { taskRules?: unknown }).taskRules;
             return [crop.cropId, Array.isArray(taskRules) && taskRules.length > 0];
+          }),
+        ),
+      );
+      setUserDefinedCropIds(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
+            return [crop.cropId, isUserDefined === true];
           }),
         ),
       );
@@ -1805,7 +1855,10 @@ function BatchesPage() {
             />
             <datalist id="batch-crop-options">
               {cropInputOptions.map((crop) => (
-                <option key={crop.cropId} value={crop.label} />
+                <option
+                  key={crop.cropId}
+                  value={`${crop.label}${cropHasTaskRules[crop.cropId] === false ? ' · No rules yet' : userDefinedCropIds[crop.cropId] ? ' · Custom crop' : ''}`}
+                />
               ))}
             </datalist>
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
@@ -1964,6 +2017,16 @@ function BatchesPage() {
                       name={cropNames[batch.cropId]}
                       scientificName={cropScientificNames[batch.cropId]}
                     />
+                    <span className="crop-capability-badges" aria-label="Crop capabilities">
+                      {getCropCapabilityLabels({
+                        isUserDefined: userDefinedCropIds[batch.cropId],
+                        hasTaskRules: cropHasTaskRules[batch.cropId],
+                      }).map((label) => (
+                        <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
+                          {label}
+                        </span>
+                      ))}
+                    </span>
                   </p>
                   <p className="batch-item-meta">
                     Batch {batch.batchId} · Bed {getDerivedBedId(batch) ?? 'Unassigned'} · Started{' '}
@@ -1994,6 +2057,8 @@ function BatchDetailPage() {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [cropName, setCropName] = useState<string | null>(null);
   const [cropScientificName, setCropScientificName] = useState<string | null>(null);
+  const [cropHasTaskRules, setCropHasTaskRules] = useState<boolean | undefined>(undefined);
+  const [cropIsUserDefined, setCropIsUserDefined] = useState<boolean | undefined>(undefined);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
@@ -2011,6 +2076,8 @@ function BatchDetailPage() {
         setBatch(null);
         setCropName(null);
         setCropScientificName(null);
+        setCropHasTaskRules(undefined);
+        setCropIsUserDefined(undefined);
         setIsLoading(false);
         return;
       }
@@ -2022,6 +2089,8 @@ function BatchDetailPage() {
         setBatch(null);
         setCropName(null);
         setCropScientificName(null);
+        setCropHasTaskRules(undefined);
+        setCropIsUserDefined(undefined);
         setIsLoading(false);
         return;
       }
@@ -2032,6 +2101,8 @@ function BatchDetailPage() {
       if (!nextBatch) {
         setCropName(null);
         setCropScientificName(null);
+        setCropHasTaskRules(undefined);
+        setCropIsUserDefined(undefined);
         setIsLoading(false);
         return;
       }
@@ -2039,6 +2110,9 @@ function BatchDetailPage() {
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
       setCropScientificName((crop as { scientificName?: string } | undefined)?.scientificName ?? null);
+      const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
+      setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
+      setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
         transplant: dateDefault,
@@ -2377,6 +2451,13 @@ function BatchDetailPage() {
       <h2>
         <CropIdentityLabel cropId={batch.cropId} name={cropName ?? undefined} scientificName={cropScientificName ?? undefined} />
       </h2>
+      <p className="crop-capability-badges" aria-label="Crop capabilities">
+        {getCropCapabilityLabels({ isUserDefined: cropIsUserDefined, hasTaskRules: cropHasTaskRules }).map((label) => (
+          <span key={`detail-${label}`} className="crop-capability-badge">
+            {label}
+          </span>
+        ))}
+      </p>
 
       <div className="batch-detail-grid">
         <article className="batch-detail-card">
