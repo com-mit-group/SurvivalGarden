@@ -335,6 +335,32 @@ summary:focus-visible {
   font-weight: 600;
 }
 
+.crop-identity {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.crop-identity-primary {
+  font-weight: 600;
+  color: #111827;
+}
+
+.crop-identity-secondary {
+  color: #6b7280;
+  font-size: 0.78em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crop-identity-inline {
+  display: inline-flex;
+  margin-left: 0.15rem;
+  vertical-align: top;
+}
+
 .batches-page h2 {
   margin: 0;
   font-size: 1.2rem;

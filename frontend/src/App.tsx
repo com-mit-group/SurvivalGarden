@@ -41,6 +41,24 @@ type BatchPhoto = {
 
 type BatchWithPhotos = Batch & { photos?: BatchPhoto[] };
 
+type CropIdentityLabelProps = {
+  cropId: string;
+  name?: string;
+  scientificName?: string;
+  className?: string;
+};
+
+function CropIdentityLabel({ cropId, name, scientificName, className }: CropIdentityLabelProps) {
+  const secondary = scientificName?.trim();
+
+  return (
+    <span className={className ? `crop-identity ${className}` : 'crop-identity'}>
+      <span className="crop-identity-primary">{name ?? cropId}</span>
+      {secondary ? <span className="crop-identity-secondary">{secondary}</span> : null}
+    </span>
+  );
+}
+
 function BedsPage() {
   const [beds, setBeds] = useState<Bed[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -467,11 +485,11 @@ function BedDetailPage() {
               <li key={batch.batchId}>
                 <div className="bed-detail-batch-head">
                   <Link to={`/batches/${batch.batchId}`}>
-                    {formatCropOptionLabel({
-                      cropId: batch.cropId,
-                      name: cropNames[batch.cropId],
-                      scientificName: cropScientificNames[batch.cropId],
-                    }) || batch.cropId || batch.batchId}
+                    <CropIdentityLabel
+                      cropId={batch.cropId || batch.batchId}
+                      name={cropNames[batch.cropId]}
+                      scientificName={cropScientificNames[batch.cropId]}
+                    />
                   </Link>
                   <span className="batch-stage-badge">{batch.stage}</span>
                   <button
@@ -620,6 +638,7 @@ function CalendarPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [bedNames, setBedNames] = useState<Record<string, string>>({});
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
+  const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [isRegeneratingTasks, setIsRegeneratingTasks] = useState(false);
@@ -634,6 +653,7 @@ function CalendarPage() {
         setTasks([]);
         setBedNames({});
         setCropNames({});
+        setCropScientificNames({});
         setIsLoading(false);
         return;
       }
@@ -641,6 +661,14 @@ function CalendarPage() {
       setTasks(listTasksFromAppState(appState));
       setBedNames(Object.fromEntries(appState.beds.map((bed) => [bed.bedId, bed.name])));
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const scientificName = (crop as { scientificName?: string }).scientificName;
+            return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
       setIsLoading(false);
     };
 
@@ -693,8 +721,11 @@ function CalendarPage() {
     () =>
       Array.from(new Set(tasks.map((task) => task.cropId).filter(Boolean)))
         .sort((left, right) => (cropNames[left] ?? left).localeCompare(cropNames[right] ?? right))
-        .map((cropId) => ({ value: cropId, label: cropNames[cropId] ?? cropId })),
-    [cropNames, tasks],
+        .map((cropId) => ({
+          value: cropId,
+          label: formatCropOptionLabel({ cropId, name: cropNames[cropId], scientificName: cropScientificNames[cropId] }),
+        })),
+    [cropNames, cropScientificNames, tasks],
   );
 
   const statusOptions = useMemo(
@@ -935,7 +966,13 @@ function CalendarPage() {
                     <span className={`task-status-badge${isDone ? ' is-done' : ''}`}>{task.status}</span>
                   </div>
                   <p className="task-row-meta">
-                    Bed: {(bedNames[task.bedId] ?? task.bedId) || '—'} · Crop: {(cropNames[task.cropId] ?? task.cropId) || '—'}
+                    Bed: {(bedNames[task.bedId] ?? task.bedId) || '—'} · Crop:{' '}
+                    <CropIdentityLabel
+                      cropId={task.cropId || '—'}
+                      name={task.cropId ? cropNames[task.cropId] : undefined}
+                      scientificName={task.cropId ? cropScientificNames[task.cropId] : undefined}
+                      className="crop-identity-inline"
+                    />
                   </p>
                   {task.batchId ? (
                     <p className="task-row-meta">
@@ -1795,11 +1832,11 @@ function BatchesPage() {
               <Link to={`/batches/${batch.batchId}`} className="batch-item-link">
                 <div>
                   <p className="batch-item-title">
-                    {formatCropOptionLabel({
-                      cropId: batch.cropId,
-                      name: cropNames[batch.cropId],
-                      scientificName: cropScientificNames[batch.cropId],
-                    })}
+                    <CropIdentityLabel
+                      cropId={batch.cropId}
+                      name={cropNames[batch.cropId]}
+                      scientificName={cropScientificNames[batch.cropId]}
+                    />
                   </p>
                   <p className="batch-item-meta">
                     Batch {batch.batchId} · Bed {getDerivedBedId(batch) ?? 'Unassigned'} · Started{' '}
@@ -1828,6 +1865,7 @@ function BatchDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [batch, setBatch] = useState<Batch | null>(null);
   const [cropName, setCropName] = useState<string | null>(null);
+  const [cropScientificName, setCropScientificName] = useState<string | null>(null);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
@@ -1844,6 +1882,7 @@ function BatchDetailPage() {
       if (!batchId) {
         setBatch(null);
         setCropName(null);
+        setCropScientificName(null);
         setIsLoading(false);
         return;
       }
@@ -1854,6 +1893,7 @@ function BatchDetailPage() {
       if (!appState) {
         setBatch(null);
         setCropName(null);
+        setCropScientificName(null);
         setIsLoading(false);
         return;
       }
@@ -1863,12 +1903,14 @@ function BatchDetailPage() {
 
       if (!nextBatch) {
         setCropName(null);
+        setCropScientificName(null);
         setIsLoading(false);
         return;
       }
 
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
+      setCropScientificName((crop as { scientificName?: string } | undefined)?.scientificName ?? null);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
         transplant: dateDefault,
@@ -2204,7 +2246,9 @@ function BatchDetailPage() {
       <Link to="/batches" className="batch-detail-back-link">
         ← Back to batches
       </Link>
-      <h2>{cropName ?? batch.cropId}</h2>
+      <h2>
+        <CropIdentityLabel cropId={batch.cropId} name={cropName ?? undefined} scientificName={cropScientificName ?? undefined} />
+      </h2>
 
       <div className="batch-detail-grid">
         <article className="batch-detail-card">
