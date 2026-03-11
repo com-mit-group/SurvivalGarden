@@ -116,11 +116,28 @@
       }
     },
     "meta": {
-      "type": "object",
-      "additionalProperties": true
+      "$ref": "#/$defs/metaWithConfidence"
     }
   },
   "$defs": {
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "estimated",
+        "unknown"
+      ],
+      "description": "Confidence annotation for a fact value. Use exact for source-backed values, estimated for inferred/approximate values, and unknown when confidence cannot be determined."
+    },
+    "metaWithConfidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
     "id": {
       "type": "string",
       "minLength": 1,
@@ -203,8 +220,7 @@
           "maxLength": 80
         },
         "meta": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/metaWithConfidence"
         }
       }
     },

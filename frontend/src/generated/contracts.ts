@@ -4,12 +4,15 @@
  */
 
 
+export type BatchConfidence = 'exact' | 'estimated' | 'unknown';
+
 export interface BatchStageEvent {
   stage: string;
   occurredAt: string;
   location?: string;
   method?: string;
   meta?: {
+    confidence?: BatchConfidence;
     [k: string]: unknown;
   };
 }
@@ -71,6 +74,7 @@ export interface Batch {
   notes?: string;
   photos?: BatchPhotoMetadata[] | unknown[] | undefined;
   meta?: {
+    confidence?: BatchConfidence;
     [k: string]: unknown;
   };
 }
