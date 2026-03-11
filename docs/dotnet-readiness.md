@@ -158,6 +158,8 @@ Batch timeline canonicalization (vNext):
   - `start.location` -> `stageEvents[0].location` (or `stageEvents[0].meta.location` if needed for source fidelity)
   - `start.method` -> `stageEvents[0].method` (or `stageEvents[0].meta.method` if needed for source fidelity)
 - `currentStage` should resolve to the latest stage event stage after mapping/import.
+- Confidence metadata may annotate uncertainty without removing values: use `batch.meta.confidence` and/or `stageEvents[i].meta.confidence` with `exact`, `estimated`, or `unknown`.
+- When propagation classification or first-stage mapping is inferred during migration, tag the inferred fact as `estimated` in the corresponding `meta.confidence` field.
 - First-event guidance by propagation type:
   - `seed`: prefer `sowing`/`seeding` when known; otherwise use a neutral initiation stage and preserve source stage text in `stageEvents[0].meta`.
   - non-seed (`transplant`, `cutting`, `division`, `tuber`, `bulb`, `runner`, `graft`, `other`): prefer a propagation-appropriate first stage when known; otherwise use a neutral initiation stage and preserve source detail in `meta`.

@@ -45,11 +45,12 @@ Photo/blob payload data is intentionally excluded from roundtrip guarantees. If 
 - `propagationType: "seed" | "transplant" | "cutting" | "division" | "tuber" | "bulb" | "runner" | "graft" | "other"`
 - `startQuantity: { count: number; unit: string }`
 - `currentStage: string`
-- `stageEvents: Array<{ stage; occurredAt; location?; method?; meta? }>`
+- `stageEvents: Array<{ stage; occurredAt; location?; method?; meta?: { confidence?: "exact" | "estimated" | "unknown"; ... } }>`
 - `bedAssignments: Array<{ bedId; assignedAt; removedAt?; meta? }>`
 - `photos: Array<{ id; storageRef; ...metadata }>`
 - Optional seed-specific counts: `seedCountPlanned?`, `seedCountGerminated?`
 - Optional universal count: `plantCountAlive?`
+- Confidence metadata can be attached at `batch.meta.confidence` and `stageEvents[i].meta.confidence` to annotate certainty of recorded facts (`exact`, `estimated`, `unknown`) without replacing the underlying value.
 
 Migration mapping guidance:
 - `batch.stage` -> `batch.currentStage`
