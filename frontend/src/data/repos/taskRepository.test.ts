@@ -182,14 +182,14 @@ describe('taskRepository generation diagnostics', () => {
     const scenario = createGenerationScenario();
     scenario.cropPlans = [
       {
-        ...scenario.cropPlans[0],
+        ...scenario.cropPlans[0]!,
         planId: 'plan-supported',
         cropId: 'crop_potato',
         bedId: 'bed_001',
         seasonYear: 2026,
       },
       {
-        ...scenario.cropPlans[0],
+        ...scenario.cropPlans[0]!,
         planId: 'plan-missing-rules',
         cropId: 'crop_missing_rules',
         bedId: 'bed_002',
@@ -199,7 +199,7 @@ describe('taskRepository generation diagnostics', () => {
     scenario.crops = [
       ...scenario.crops,
       {
-        ...scenario.crops[0],
+        ...scenario.crops[0]!,
         cropId: 'crop_missing_rules',
         name: 'Missing Rules Crop',
         taskRules: [],
@@ -221,7 +221,7 @@ describe('taskRepository generation diagnostics', () => {
     const scenario = createGenerationScenario();
     scenario.cropPlans = [
       {
-        ...scenario.cropPlans[0],
+        ...scenario.cropPlans[0]!,
         planId: 'plan-invalid-rules',
         cropId: 'crop_invalid_rules',
         bedId: 'bed_003',
@@ -231,7 +231,7 @@ describe('taskRepository generation diagnostics', () => {
     scenario.crops = [
       ...scenario.crops,
       {
-        ...scenario.crops[0],
+        ...scenario.crops[0]!,
         cropId: 'crop_invalid_rules',
         name: 'Invalid Rules Crop',
         taskRules: [
