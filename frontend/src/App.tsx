@@ -1231,6 +1231,7 @@ function BatchesPage() {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -1403,6 +1404,7 @@ function BatchesPage() {
 
   const resetForm = () => {
     setEditingBatchId(null);
+    setIsAddingNewCrop(false);
     setFormValues({
       cropInput: '',
       cropCategory: '',
@@ -1416,16 +1418,89 @@ function BatchesPage() {
     setFormErrors({});
   };
 
+  const handleCreateCropInline = async () => {
+    const errors: Record<string, string> = {};
+    const cropName = formValues.cropInput.trim();
+
+    if (!cropName) {
+      errors.cropInput = 'Enter a crop name.';
+    }
+
+    if (!formValues.cropCategory.trim()) {
+      errors.cropCategory = 'Category is required for new crops.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors((current) => ({ ...current, ...errors }));
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setSaveMessage('Unable to create crop because local app state is unavailable.');
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const cropId = createUniqueUserCropId(cropName, appState.crops.map((crop) => crop.cropId));
+      const aliases = formValues.cropAliases
+        .split(',')
+        .map((alias) => alias.trim())
+        .filter((alias) => alias.length > 0);
+
+      const nextState = upsertCropInAppState(appState, {
+        cropId,
+        name: cropName,
+        scientificName: formValues.cropScientificName.trim() || undefined,
+        category: formValues.cropCategory.trim(),
+        aliases: aliases.length > 0 ? aliases : undefined,
+        isUserDefined: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      await saveAppStateToIndexedDb(nextState);
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const scientificName = (crop as { scientificName?: string }).scientificName;
+            return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
+      setFormValues((current) => ({
+        ...current,
+        cropInput: formatCropOptionLabel({ cropId, name: cropName, scientificName: formValues.cropScientificName.trim() || undefined }),
+        cropCategory: '',
+        cropScientificName: '',
+        cropAliases: '',
+      }));
+      setFormErrors((current) => ({
+        ...current,
+        cropInput: '',
+        cropCategory: '',
+      }));
+      setIsAddingNewCrop(false);
+      setSaveMessage('Crop created and selected.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create crop.';
+      setSaveMessage(message);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSaveMessage(null);
     const errors: Record<string, string> = {};
-    let resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
+    const resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
 
     if (!formValues.cropInput.trim()) {
       errors.cropInput = 'Choose or type a crop.';
-    } else if (!resolvedCropId && !formValues.cropCategory.trim()) {
-      errors.cropCategory = 'Category is required for new crops.';
+    } else if (!resolvedCropId) {
+      errors.cropInput = 'Choose an existing crop or create one inline.';
     }
 
     if (!formValues.startedAt) {
@@ -1462,35 +1537,13 @@ function BatchesPage() {
         return;
       }
 
-      let workingState = appState;
-
       if (!resolvedCropId) {
-        const createdAt = new Date().toISOString();
-        resolvedCropId = createUniqueUserCropId(formValues.cropInput, appState.crops.map((crop) => crop.cropId));
-        const aliases = formValues.cropAliases
-          .split(',')
-          .map((alias) => alias.trim())
-          .filter((alias) => alias.length > 0);
-
-        workingState = upsertCropInAppState(workingState, {
-          cropId: resolvedCropId,
-          name: formValues.cropInput.trim(),
-          scientificName: formValues.cropScientificName.trim() || undefined,
-          category: formValues.cropCategory.trim(),
-          aliases: aliases.length > 0 ? aliases : undefined,
-          isUserDefined: true,
-          createdAt,
-          updatedAt: createdAt,
-        });
-      }
-
-      if (!resolvedCropId) {
-        setSaveMessage('Unable to save because crop creation failed.');
+        setSaveMessage('Unable to save because crop is not selected.');
         return;
       }
 
       const existingBatch = editingBatchId
-        ? workingState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
+        ? appState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
         : null;
       const startedAt = new Date(formValues.startedAt).toISOString();
       const batchId = existingBatch?.batchId ?? (globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`);
@@ -1509,7 +1562,7 @@ function BatchesPage() {
         assignments: existingBatch?.assignments ?? [],
       };
 
-      const nextState = upsertBatchInAppState(workingState, nextBatch);
+      const nextState = upsertBatchInAppState(appState, nextBatch);
       await saveAppStateToIndexedDb(nextState);
       setBatches(listBatchesFromAppState(nextState));
       setCropIds(nextState.crops.map((crop) => crop.cropId));
@@ -1619,36 +1672,40 @@ function BatchesPage() {
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
           </label>
 
-          <label>
-            New crop category
-            <input
-              type="text"
-              value={formValues.cropCategory}
-              onChange={(event) => setFormValues((current) => ({ ...current, cropCategory: event.target.value }))}
-              placeholder="Required only for new crop"
-            />
-            {formErrors.cropCategory ? <span className="form-error">{formErrors.cropCategory}</span> : null}
-          </label>
+          {isAddingNewCrop ? (
+            <>
+              <label>
+                New crop category
+                <input
+                  type="text"
+                  value={formValues.cropCategory}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropCategory: event.target.value }))}
+                  placeholder="Required"
+                />
+                {formErrors.cropCategory ? <span className="form-error">{formErrors.cropCategory}</span> : null}
+              </label>
 
-          <label>
-            New crop scientific name
-            <input
-              type="text"
-              value={formValues.cropScientificName}
-              onChange={(event) => setFormValues((current) => ({ ...current, cropScientificName: event.target.value }))}
-              placeholder="Optional"
-            />
-          </label>
+              <label>
+                New crop scientific name
+                <input
+                  type="text"
+                  value={formValues.cropScientificName}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropScientificName: event.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
 
-          <label>
-            New crop aliases
-            <input
-              type="text"
-              value={formValues.cropAliases}
-              onChange={(event) => setFormValues((current) => ({ ...current, cropAliases: event.target.value }))}
-              placeholder="Optional, comma-separated"
-            />
-          </label>
+              <label>
+                New crop aliases
+                <input
+                  type="text"
+                  value={formValues.cropAliases}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropAliases: event.target.value }))}
+                  placeholder="Optional, comma-separated"
+                />
+              </label>
+            </>
+          ) : null}
 
           <label>
             Variety
@@ -1699,8 +1756,24 @@ function BatchesPage() {
             {formErrors.seedCount ? <span className="form-error">{formErrors.seedCount}</span> : null}
           </label>
         </div>
+        <div className="batch-form-actions">
+          {isAddingNewCrop ? (
+            <>
+              <button type="button" onClick={() => setIsAddingNewCrop(false)}>
+                Cancel new crop
+              </button>
+              <button type="button" onClick={() => void handleCreateCropInline()}>
+                Create crop
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setIsAddingNewCrop(true)}>
+              Add new crop
+            </button>
+          )}
+        </div>
         <p className="batch-form-note">
-          New crops are saved immediately. Variety, seed counts, and non-sowing start transitions are still planning-only.
+          Create new crops inline, then save the batch. Variety, seed counts, and non-sowing start transitions are still planning-only.
         </p>
         <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
