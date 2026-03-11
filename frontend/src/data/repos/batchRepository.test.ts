@@ -10,6 +10,20 @@ import {
   removeBatchFromBed,
 } from './batchRepository';
 
+declare global {
+  interface ImportMeta {
+    glob: (
+      pattern: string,
+      options?: { eager?: boolean; import?: string },
+    ) => Record<string, unknown>;
+  }
+}
+
+const realBatchFixtures = import.meta.glob('../../../../fixtures/real/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, { batches?: unknown[] }>;
+
 const createBatch = (assignments: Array<{ bedId: string; assignedAt: string; fromDate?: string; toDate?: string | null }>): Batch =>
   ({
     batchId: 'batch-1',
@@ -240,6 +254,28 @@ describe('removeBatchFromBed', () => {
 
 
 describe('batch normalization pipeline', () => {
+  it('normalizes provided real-world batch dump and reports schema-invalid records with pointers', () => {
+    const fixture = realBatchFixtures['../../../../fixtures/real/actual-batches-vnext-2026-03-07.json'];
+    expect(fixture).toBeDefined();
+
+    const { batches, report } = normalizeBatchesWithReport(fixture?.batches ?? []);
+
+    expect(report.migrated).toBeGreaterThan(0);
+    expect(report.invalidRecords.length).toBeGreaterThan(0);
+    expect(report.invalidRecords.some((record) => record.issues.some((issue) => issue.includes('/cropId')))).toBe(true);
+
+    const hasRegrowLike = batches.some(
+      (batch) => batch.propagationType === 'runner' || batch.startMethod?.includes('regrow'),
+    );
+    expect(hasRegrowLike).toBe(true);
+
+    const nonSeed = batches.filter((batch) => batch.propagationType && batch.propagationType !== 'seed');
+    expect(nonSeed.length).toBeGreaterThan(0);
+    for (const batch of nonSeed) {
+      expect(batch.seedCountGerminated).toBeUndefined();
+    }
+  });
+
   it('normalizes legacy shapes and returns migration report', () => {
     const input = [
       {

@@ -18,11 +18,16 @@ import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
+import { normalizeBatchesWithReport } from '../data/repos/batchRepository';
 
 const goldenFixtures = import.meta.glob('../../../fixtures/golden/*.json', {
   eager: true,
   import: 'default',
 }) as Record<string, AppState>;
+const realBatchFixtures = import.meta.glob('../../../fixtures/real/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, { batches?: unknown[] }>;
 const fixturePaths = Object.keys(goldenFixtures).sort();
 
 const stableSortValue = (value: unknown): unknown => {
@@ -239,15 +244,19 @@ describe('AppState schema', () => {
 
 
 
-  it('validates real normalized batches with propagation coverage from golden fixtures', () => {
+  it('normalizes and validates batches from real-world dump with pointer-rich errors', () => {
     const ajv = new Ajv2020({ strict: true });
     const batchValidate = ajv.compile(batchSchema);
 
-    const fixture = goldenFixtures['../../../fixtures/golden/real-batches-v1.json'];
+    const fixture = realBatchFixtures['../../../fixtures/real/actual-batches-vnext-2026-03-07.json'];
     expect(fixture).toBeDefined();
 
-    const batches = (fixture as AppState).batches ?? [];
-    expect(batches.length).toBeGreaterThan(0);
+    const sourceBatches = fixture?.batches ?? [];
+    expect(sourceBatches.length).toBeGreaterThan(0);
+
+    const { batches, report } = normalizeBatchesWithReport(sourceBatches);
+    expect(report.migrated).toBeGreaterThan(0);
+    expect(report.invalidRecords.length).toBeGreaterThan(0);
 
     for (let index = 0; index < batches.length; index += 1) {
       const batch = batches[index];
