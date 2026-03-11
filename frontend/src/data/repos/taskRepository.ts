@@ -329,6 +329,10 @@ export const generatePlannedTasksWithDiagnostics = (appState: unknown, year: num
         const windowsWithIndex = taskRule.windows.map((window, windowIndex) => ({ window, windowIndex }));
 
         for (const { window, windowIndex } of windowsWithIndex) {
+          if ('startDate' in window && window.endDate < window.startDate) {
+            throw new Error('Invalid date range window: endDate is before startDate.');
+          }
+
           const [date] = expandTaskRuleWindowsToLocalDates([window], year);
 
           if (!date) {

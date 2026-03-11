@@ -196,13 +196,13 @@ describe('taskRepository generation diagnostics', () => {
         seasonYear: 2026,
       },
     ];
+    const { taskRules: _ignoredTaskRules, ...baseCrop } = scenario.crops[0]!;
     scenario.crops = [
       ...scenario.crops,
       {
-        ...scenario.crops[0]!,
+        ...baseCrop,
         cropId: 'crop_missing_rules',
         name: 'Missing Rules Crop',
-        taskRules: [],
       },
     ];
 
@@ -238,7 +238,7 @@ describe('taskRepository generation diagnostics', () => {
           {
             taskType: 'pre_sow',
             sequence: 1,
-            windows: [{ startDate: 'bad-date', endDate: '2026-03-15' }],
+            windows: [{ startDate: '2026-04-15', endDate: '2026-03-15' }],
           },
         ],
       },
