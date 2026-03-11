@@ -1227,6 +1227,8 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
   return crop.name ?? crop.cropId;
 };
 
+const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
+
 const normalizeCropIdPart = (value: string): string =>
   value
     .toLowerCase()
@@ -1254,6 +1256,7 @@ function BatchesPage() {
   const [cropIds, setCropIds] = useState<string[]>([]);
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
+  const [cropAliases, setCropAliases] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
@@ -1281,6 +1284,7 @@ function BatchesPage() {
         setCropIds([]);
         setCropNames({});
         setCropScientificNames({});
+        setCropAliases({});
         setIsLoading(false);
         return;
       }
@@ -1293,6 +1297,16 @@ function BatchesPage() {
           appState.crops.map((crop) => {
             const scientificName = (crop as { scientificName?: string }).scientificName;
             return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
+      setCropAliases(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const aliases = Array.isArray((crop as { aliases?: string[] }).aliases)
+              ? (crop as { aliases?: string[] }).aliases ?? []
+              : [];
+            return [crop.cropId, aliases];
           }),
         ),
       );
@@ -1352,9 +1366,12 @@ function BatchesPage() {
             name: cropNames[cropId],
             scientificName: cropScientificNames[cropId],
           }),
+          name: cropNames[cropId] ?? '',
+          scientificName: cropScientificNames[cropId] ?? '',
+          aliases: cropAliases[cropId] ?? [],
         }))
         .sort((left, right) => left.label.localeCompare(right.label)),
-    [cropIds, cropNames, cropScientificNames],
+    [cropAliases, cropIds, cropNames, cropScientificNames],
   );
 
   const filteredBatches = useMemo(
@@ -1401,17 +1418,34 @@ function BatchesPage() {
   };
 
   const resolveCropIdFromInput = (cropInput: string): string | null => {
-    const normalizedInput = cropInput.trim().toLowerCase();
+    const normalizedInput = normalizeCropSearchValue(cropInput);
     if (!normalizedInput) {
       return null;
     }
 
-    const match = cropInputOptions.find(
-      (option) =>
-        option.cropId.toLowerCase() === normalizedInput || option.label.toLowerCase() === normalizedInput,
-    );
+    const exactMatch = cropInputOptions.find((option) => {
+      const aliases = option.aliases.map((alias) => normalizeCropSearchValue(alias));
+      return (
+        normalizeCropSearchValue(option.cropId) === normalizedInput ||
+        normalizeCropSearchValue(option.label) === normalizedInput ||
+        normalizeCropSearchValue(option.name) === normalizedInput ||
+        normalizeCropSearchValue(option.scientificName) === normalizedInput ||
+        aliases.includes(normalizedInput)
+      );
+    });
 
-    return match?.cropId ?? null;
+    if (exactMatch) {
+      return exactMatch.cropId;
+    }
+
+    const containsMatch = cropInputOptions.find((option) => {
+      const searchFields = [option.cropId, option.name, option.scientificName, ...option.aliases]
+        .map((value) => normalizeCropSearchValue(value))
+        .filter(Boolean);
+      return searchFields.some((field) => field.includes(normalizedInput));
+    });
+
+    return containsMatch?.cropId ?? null;
   };
 
   const startEdit = (batch: Batch) => {
