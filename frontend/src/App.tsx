@@ -130,6 +130,7 @@ function BedDetailPage() {
   const [candidateBatches, setCandidateBatches] = useState<Batch[]>([]);
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
+  const [cropHasTaskRules, setCropHasTaskRules] = useState<Record<string, boolean>>({});
   const [assignBatchId, setAssignBatchId] = useState('');
   const [assignDate, setAssignDate] = useState(getLocalDateTimeDefault());
   const [assignMeta, setAssignMeta] = useState('');
@@ -166,6 +167,7 @@ function BedDetailPage() {
         setCandidateBatches([]);
         setCropNames({});
         setCropScientificNames({});
+        setCropHasTaskRules({});
         setIsLoading(false);
         return;
       }
@@ -176,6 +178,14 @@ function BedDetailPage() {
           appState.crops.map((crop) => {
             const scientificName = (crop as { scientificName?: string }).scientificName;
             return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
+      setCropHasTaskRules(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const taskRules = (crop as { taskRules?: unknown }).taskRules;
+            return [crop.cropId, Array.isArray(taskRules) && taskRules.length > 0];
           }),
         ),
       );
@@ -209,6 +219,15 @@ function BedDetailPage() {
 
     void load();
   }, [bedId, includeEndedFailed]);
+
+  const selectedAssignBatch = useMemo(
+    () => candidateBatches.find((batch) => batch.batchId === assignBatchId) ?? null,
+    [assignBatchId, candidateBatches],
+  );
+  const assignRuleWarning =
+    selectedAssignBatch && cropHasTaskRules[selectedAssignBatch.cropId] === false
+      ? 'Warning: selected crop has no task rules. Bed assignment will still be saved.'
+      : null;
 
   const refreshBedBatches = useCallback(
     (nextState: Awaited<ReturnType<typeof loadAppStateFromIndexedDb>>) => {
@@ -627,6 +646,7 @@ function BedDetailPage() {
             Include ended/failed
           </label>
           {assignBatchMessage ? <p className="batch-stage-warning">{assignBatchMessage}</p> : null}
+          {assignRuleWarning ? <p className="batch-stage-warning">{assignRuleWarning}</p> : null}
         </div>
       </article>
     </section>
@@ -1257,6 +1277,7 @@ function BatchesPage() {
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [cropScientificNames, setCropScientificNames] = useState<Record<string, string>>({});
   const [cropAliases, setCropAliases] = useState<Record<string, string[]>>({});
+  const [cropHasTaskRules, setCropHasTaskRules] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
@@ -1285,6 +1306,7 @@ function BatchesPage() {
         setCropNames({});
         setCropScientificNames({});
         setCropAliases({});
+        setCropHasTaskRules({});
         setIsLoading(false);
         return;
       }
@@ -1307,6 +1329,14 @@ function BatchesPage() {
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
             return [crop.cropId, aliases];
+          }),
+        ),
+      );
+      setCropHasTaskRules(
+        Object.fromEntries(
+          appState.crops.map((crop) => {
+            const taskRules = (crop as { taskRules?: unknown }).taskRules;
+            return [crop.cropId, Array.isArray(taskRules) && taskRules.length > 0];
           }),
         ),
       );
@@ -1448,6 +1478,12 @@ function BatchesPage() {
     return containsMatch?.cropId ?? null;
   };
 
+  const selectedCropId = useMemo(() => resolveCropIdFromInput(formValues.cropInput), [cropInputOptions, formValues.cropInput]);
+  const selectedCropRuleWarning =
+    selectedCropId && cropHasTaskRules[selectedCropId] === false
+      ? 'Warning: this crop has no task rules. You can still create and edit batches.'
+      : null;
+
   const startEdit = (batch: Batch) => {
     setEditingBatchId(batch.batchId);
     const startedAtDate = new Date(batch.startedAt);
@@ -1561,7 +1597,7 @@ function BatchesPage() {
         cropCategory: '',
       }));
       setIsAddingNewCrop(false);
-      setSaveMessage('Crop created and selected.');
+      setSaveMessage('Crop created and selected. Warning: task rules are missing for this crop, but batch operations are still allowed.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create crop.';
       setSaveMessage(message);
@@ -1896,6 +1932,7 @@ function BatchesPage() {
         <p className="batch-form-note">
           Create new crops inline, then save the batch. Non-sowing start transitions are still planning-only.
         </p>
+        {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
