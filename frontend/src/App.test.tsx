@@ -20,6 +20,14 @@ vi.mock('./data', () => ({
   parseImportedAppState: vi.fn(),
   saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
   serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
+  upsertCropInAppState: vi.fn((appState: { crops?: Array<{ cropId: string }> }, crop: { cropId: string }) => ({
+    ...appState,
+    crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
+  })),
+  upsertBatchInAppState: vi.fn((appState: { batches?: Array<{ batchId: string }> }, batch: { batchId: string }) => ({
+    ...appState,
+    batches: [...(appState.batches ?? []).filter((entry: { batchId: string }) => entry.batchId !== batch.batchId), batch],
+  })),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
   listTasksFromAppState: vi.fn().mockReturnValue([]),
@@ -452,6 +460,80 @@ describe('App', () => {
 
     expect(screen.getByText('Mystery Crop (plan_unknown) — missing nutrition profile')).toBeInTheDocument();
     expect(screen.getByText('Tomato (plan_tomato_missing_mass) — missing mass expected yield')).toBeInTheDocument();
+  });
+
+
+  it('supports custom crop flow in batches with scientific-name-only identity and variety/seed counts', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [
+        {
+          bedId: 'bed_1',
+          gardenId: 'garden_1',
+          name: 'North Bed',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      crops: [],
+      cropPlans: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add new crop' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add new crop' }));
+    fireEvent.change(screen.getByLabelText('Crop (search or type)'), { target: { value: 'Custom Runner' } });
+    fireEvent.change(screen.getByLabelText('New crop category'), { target: { value: 'leafy' } });
+    fireEvent.change(screen.getByLabelText('New crop scientific name'), { target: { value: 'Brassica' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create crop' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Crop created and selected/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Variety'), { target: { value: 'Early Purple' } });
+    fireEvent.change(screen.getByLabelText('Seed count planned'), { target: { value: '24' } });
+    fireEvent.change(screen.getByLabelText('Seed count germinated'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create batch' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalled();
+      expect(screen.getByText('Batch created.')).toBeInTheDocument();
+    });
+
+    const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map((call) => call[0] as { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> });
+    expect(
+      savedStates.some((state: { crops?: Array<{ name?: string; scientificName?: string }> }) =>
+        state?.crops?.some((crop: { name?: string; scientificName?: string }) => crop.name === 'Custom Runner' && crop.scientificName === 'Brassica'),
+      ),
+    ).toBe(true);
+    expect(
+      savedStates.some((state: { batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
+        state?.batches?.some(
+          (batch: { variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }) =>
+            batch.variety === 'Early Purple' && batch.seedCountPlanned === 24 && batch.seedCountGerminated === 20,
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {

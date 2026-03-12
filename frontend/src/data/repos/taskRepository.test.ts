@@ -178,6 +178,43 @@ describe('taskRepository generation idempotence', () => {
 
 
 describe('taskRepository generation diagnostics', () => {
+  it('keeps planned-task generation operational for user-defined crops with partial scientific metadata', () => {
+    const scenario = createGenerationScenario();
+    scenario.cropPlans = [
+      {
+        ...scenario.cropPlans[0]!,
+        planId: 'plan-custom-partial',
+        cropId: 'crop_custom_partial',
+        bedId: 'bed_001',
+        seasonYear: 2026,
+      },
+    ];
+    scenario.crops = [
+      ...scenario.crops,
+      {
+        ...scenario.crops[0]!,
+        cropId: 'crop_custom_partial',
+        name: 'Custom Partial Crop',
+        scientificName: 'Solanum',
+        taxonomy: {
+          family: 'Solanaceae',
+        },
+        taskRules: [
+          {
+            taskType: 'pre_sow',
+            sequence: 1,
+            windows: [{ startDate: '2026-03-01', endDate: '2026-03-10' }],
+          },
+        ],
+      },
+    ];
+
+    const result = generatePlannedTasksWithDiagnostics(scenario, 2026);
+
+    expect(result.tasks.some((task) => task.cropId === 'crop_custom_partial')).toBe(true);
+    expect(result.diagnostics.some((entry) => entry.cropId === 'crop_custom_partial')).toBe(false);
+  });
+
   it('skips crops with no rules and reports diagnostics without blocking other generation', () => {
     const scenario = createGenerationScenario();
     scenario.cropPlans = [
