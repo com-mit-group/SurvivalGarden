@@ -736,6 +736,37 @@ textarea {
   color: #6b7280;
 }
 
+
+.batch-timeline-row {
+  align-items: flex-start;
+}
+
+.batch-timeline-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.batch-timeline-edit-row input,
+.batch-timeline-edit-row select {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  background: #fff;
+}
+
+.batch-timeline-edit-row button {
+  border: 1px solid #c7d2fe;
+  border-radius: 0.45rem;
+  background: #eef2ff;
+  color: #1e3a8a;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
 .batch-detail-current-bed,
 .batch-detail-empty {
   margin: 0;
