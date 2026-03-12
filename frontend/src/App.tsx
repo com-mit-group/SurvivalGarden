@@ -2149,6 +2149,19 @@ function BatchDetailPage() {
       .map(({ event }) => event);
   }, [batch]);
 
+  const countConfidence = useMemo(() => {
+    if (!batch) {
+      return {};
+    }
+
+    const meta = (batch.meta ?? {}) as Record<string, unknown>;
+
+    return {
+      seedCountGerminated: typeof meta.seedCountGerminatedConfidence === 'string' ? meta.seedCountGerminatedConfidence : null,
+      plantCountAlive: typeof meta.plantCountAliveConfidence === 'string' ? meta.plantCountAliveConfidence : null,
+    };
+  }, [batch]);
+
   const assignmentHistory = useMemo(() => {
     if (!batch) {
       return [];
@@ -2509,11 +2522,17 @@ function BatchDetailPage() {
             </div>
             <div>
               <dt>Seed count germinated</dt>
-              <dd>{batch.seedCountGerminated ?? '—'}</dd>
+              <dd>
+                {batch.seedCountGerminated ?? '—'}
+                {countConfidence.seedCountGerminated ? ` (${countConfidence.seedCountGerminated})` : ''}
+              </dd>
             </div>
             <div>
               <dt>Plant count alive</dt>
-              <dd>{batch.plantCountAlive ?? '—'}</dd>
+              <dd>
+                {batch.plantCountAlive ?? '—'}
+                {countConfidence.plantCountAlive ? ` (${countConfidence.plantCountAlive})` : ''}
+              </dd>
             </div>
           </dl>
         </article>
@@ -2558,6 +2577,9 @@ function BatchDetailPage() {
               <li key={`${event.occurredAt}-${event.stage}-${index}`}>
                 <span className="batch-detail-pill">{event.stage}</span>
                 <span>{new Date(event.occurredAt).toLocaleString()}</span>
+                {(event.meta as { confidence?: string } | undefined)?.confidence ? (
+                  <span className="batch-detail-muted">confidence: {(event.meta as { confidence?: string }).confidence}</span>
+                ) : null}
               </li>
             ))}
           </ol>

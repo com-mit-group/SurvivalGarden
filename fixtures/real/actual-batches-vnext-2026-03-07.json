@@ -10,6 +10,8 @@
       "startMethod": "pre_sow_indoor",
       "startLocation": "indoor",
       "seedCountPlanned": 16,
+      "seedCountGerminated": 14,
+      "plantCountAlive": 14,
       "currentStage": "pre_sown",
       "lifecycleStatus": "active",
       "stageEvents": [
@@ -20,6 +22,11 @@
           "method": "pre_sow_indoor"
         }
       ],
+      "meta": {
+        "seedCountGerminatedConfidence": "estimated",
+        "plantCountAliveConfidence": "estimated",
+        "countBackfillNote": "Counts are a visual tray estimate from seedling inspection."
+      },
       "assignments": []
     },
     {
@@ -31,6 +38,7 @@
       "propagationType": "clove",
       "startLocation": "indoor",
       "seedCountPlanned": 6,
+      "plantCountAlive": 6,
       "currentStage": "pre_sown",
       "lifecycleStatus": "active",
       "stageEvents": [
@@ -41,6 +49,10 @@
           "method": "tray"
         }
       ],
+      "meta": {
+        "plantCountAliveConfidence": "exact",
+        "countBackfillNote": "One clove per cell, all six cells occupied."
+      },
       "assignments": []
     },
     {
@@ -51,6 +63,7 @@
       "startMethod": "regrow_water",
       "startLocation": "indoor",
       "propagationType": "runner",
+      "plantCountAlive": 1,
       "currentStage": "transplanted",
       "lifecycleStatus": "active",
       "stageEvents": [
@@ -70,6 +83,9 @@
           }
         }
       ],
+      "meta": {
+        "plantCountAliveConfidence": "exact"
+      },
       "assignments": []
     },
     {
@@ -129,6 +145,8 @@
       "propagationType": "seed",
       "startLocation": "indoor",
       "seedCountPlanned": 12,
+      "seedCountGerminated": 10,
+      "plantCountAlive": 10,
       "currentStage": "transplanted",
       "lifecycleStatus": "active",
       "stageEvents": [
@@ -139,12 +157,25 @@
           "method": "tray"
         },
         {
+          "stage": "germinated",
+          "occurredAt": "2026-03-07T09:00:00+01:00",
+          "location": "indoor",
+          "method": "tray",
+          "meta": {
+            "confidence": "estimated"
+          }
+        },
+        {
           "stage": "transplanted",
           "occurredAt": "2026-03-07T14:29:00+01:00",
           "location": "mini_greenhouse",
           "method": "into_soil"
         }
       ],
+      "meta": {
+        "seedCountGerminatedConfidence": "estimated",
+        "plantCountAliveConfidence": "estimated"
+      },
       "assignments": []
     },
     {
@@ -176,6 +207,8 @@
       "propagationType": "seed",
       "startLocation": "indoor",
       "seedCountPlanned": 16,
+      "seedCountGerminated": 15,
+      "plantCountAlive": 15,
       "currentStage": "transplanted",
       "lifecycleStatus": "active",
       "stageEvents": [
@@ -184,6 +217,15 @@
           "occurredAt": "2026-03-06T18:30:00+01:00",
           "location": "indoor",
           "method": "paper_towel"
+        },
+        {
+          "stage": "germinated",
+          "occurredAt": "2026-03-07T10:00:00+01:00",
+          "location": "indoor",
+          "method": "paper_towel",
+          "meta": {
+            "confidence": "estimated"
+          }
         },
         {
           "stage": "transplanted",
@@ -195,6 +237,10 @@
           }
         }
       ],
+      "meta": {
+        "seedCountGerminatedConfidence": "estimated",
+        "plantCountAliveConfidence": "estimated"
+      },
       "assignments": []
     }
   ]
