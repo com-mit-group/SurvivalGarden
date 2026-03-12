@@ -522,13 +522,16 @@ describe('App', () => {
 
     const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map((call) => call[0] as { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> });
     expect(
-      savedStates.some(
-        (state: { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
-          state?.crops?.some((crop: { name?: string; scientificName?: string }) => crop.name === 'Custom Runner' && crop.scientificName === 'Brassica') &&
-          state?.batches?.some(
-            (batch: { variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }) =>
-              batch.variety === 'Early Purple' && batch.seedCountPlanned === 24 && batch.seedCountGerminated === 20,
-          ),
+      savedStates.some((state: { crops?: Array<{ name?: string; scientificName?: string }> }) =>
+        state?.crops?.some((crop: { name?: string; scientificName?: string }) => crop.name === 'Custom Runner' && crop.scientificName === 'Brassica'),
+      ),
+    ).toBe(true);
+    expect(
+      savedStates.some((state: { batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
+        state?.batches?.some(
+          (batch: { variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }) =>
+            batch.variety === 'Early Purple' && batch.seedCountPlanned === 24 && batch.seedCountGerminated === 20,
+        ),
       ),
     ).toBe(true);
   });
