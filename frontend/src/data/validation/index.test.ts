@@ -77,6 +77,9 @@ const validBed = {
 const validCrop = {
   cropId: 'crop-1',
   name: 'Carrot',
+  scientificName: 'Daucus carota',
+  aliases: ['Garden carrot', 'Nantes carrot'],
+  isUserDefined: true,
   category: 'root',
   companionsGood: ['onion'],
   companionsAvoid: ['dill'],
@@ -183,8 +186,14 @@ const validCropPlan = {
 const validBatch = {
   batchId: 'batch-1',
   cropId: 'crop-1',
+  variety: 'Nantes',
   startedAt: '2024-03-01T00:00:00Z',
   stage: 'sowing',
+  currentStage: 'sowing',
+  seedCountPlanned: 120,
+  seedCountGerminated: 98,
+  plantCountAlive: 94,
+  meta: { confidence: 'exact' },
   stageEvents: [{ stage: 'sowing', occurredAt: '2024-03-01T00:00:00Z' }],
   assignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
   photos: [{ id: 'photo-1', storageRef: 'photo-1', contentType: 'image/jpeg' }],
@@ -345,6 +354,7 @@ describe('data boundary validation', () => {
     for (const fixturePath of fixturePaths) {
       const fixture = goldenFixtures[fixturePath];
       const firstExport = serializeAppStateForExport(fixture);
+      expect(() => assertValid('appState', JSON.parse(firstExport))).not.toThrow();
       const imported = parseImportedAppState(firstExport);
       const secondExport = serializeAppStateForExport(imported);
 
@@ -360,6 +370,81 @@ describe('data boundary validation', () => {
     const imported = parseImportedAppState(exported);
 
     expect(canonicalizeForComparison(imported)).toEqual(canonicalizeForComparison(JSON.parse(exported)));
+  });
+
+  it('roundtrips vNext crop identity and batch count/confidence fields exactly', () => {
+    const state = {
+      ...validAppState,
+      crops: [
+        {
+          ...validCrop,
+          cropId: 'crop-vnext',
+          name: 'Custom Tomato',
+          scientificName: 'Solanum lycopersicum',
+          aliases: ['Tomate', 'Garden tomato'],
+          isUserDefined: true,
+        },
+      ],
+      batches: [
+        {
+          ...validBatch,
+          batchId: 'batch-vnext',
+          cropId: 'crop-vnext',
+          variety: 'Black Cherry',
+          seedCountPlanned: 48,
+          seedCountGerminated: 36,
+          plantCountAlive: 30,
+          stageEvents: [{ stage: 'sowing', occurredAt: '2026-02-01T00:00:00Z', meta: { confidence: 'estimated' } }],
+          assignments: [{ bedId: 'bed-1', assignedAt: '2026-02-01T00:00:00Z' }],
+          meta: { confidence: 'estimated' },
+        },
+        {
+          ...validBatch,
+          batchId: 'batch-vnext-no-counts',
+          cropId: 'crop-vnext',
+          variety: 'Sun Gold',
+          seedCountPlanned: undefined,
+          seedCountGerminated: undefined,
+          plantCountAlive: undefined,
+          meta: { confidence: 'unknown' },
+        },
+      ],
+    };
+
+    const exported = serializeAppStateForExport(state);
+    const exportedPayload = JSON.parse(exported);
+    expect(() => assertValid('appState', exportedPayload)).not.toThrow();
+
+    const imported = parseImportedAppState(exported);
+    const reExportedPayload = JSON.parse(serializeAppStateForExport(imported));
+
+    expect(canonicalizeForComparison(reExportedPayload)).toEqual(canonicalizeForComparison(exportedPayload));
+
+    const importedCrop = imported.crops.find((crop) => crop.cropId === 'crop-vnext');
+    expect(importedCrop).toMatchObject({
+      scientificName: 'Solanum lycopersicum',
+      aliases: ['Tomate', 'Garden tomato'],
+      isUserDefined: true,
+    });
+
+    const importedBatch = imported.batches.find((batch) => batch.batchId === 'batch-vnext');
+    expect(importedBatch).toMatchObject({
+      variety: 'Black Cherry',
+      seedCountPlanned: 48,
+      seedCountGerminated: 36,
+      plantCountAlive: 30,
+      meta: { confidence: 'estimated' },
+    });
+    expect(importedBatch?.stageEvents[0]).toMatchObject({ meta: { confidence: 'estimated' } });
+
+    const importedBatchWithoutCounts = imported.batches.find((batch) => batch.batchId === 'batch-vnext-no-counts');
+    expect(importedBatchWithoutCounts).toMatchObject({
+      variety: 'Sun Gold',
+      meta: { confidence: 'unknown' },
+    });
+    expect(importedBatchWithoutCounts?.seedCountPlanned).toBeUndefined();
+    expect(importedBatchWithoutCounts?.seedCountGerminated).toBeUndefined();
+    expect(importedBatchWithoutCounts?.plantCountAlive).toBeUndefined();
   });
 
 
@@ -722,6 +807,7 @@ describe('batch repository boundary helpers', () => {
       upsertBatchInAppState(validAppState, {
         ...validBatch,
         stage: 'ended',
+        currentStage: 'ended',
         stageEvents: [
           ...validBatch.stageEvents,
           { stage: 'ended', occurredAt: '2024-03-10T00:00:00Z' },
@@ -734,6 +820,7 @@ describe('batch repository boundary helpers', () => {
     const failedBatch = {
       ...validBatch,
       stage: 'failed',
+      currentStage: 'failed',
       stageEvents: [...validBatch.stageEvents, { stage: 'failed', occurredAt: '2024-03-10T00:00:00Z' }],
     };
 
@@ -742,6 +829,7 @@ describe('batch repository boundary helpers', () => {
     const endedBatch = {
       ...failedBatch,
       stage: 'ended',
+      currentStage: 'ended',
       stageEvents: [...failedBatch.stageEvents, { stage: 'ended', occurredAt: '2024-03-20T00:00:00Z' }],
     };
 
@@ -754,6 +842,7 @@ describe('batch repository boundary helpers', () => {
       upsertBatchInAppState(validAppState, {
         ...validBatch,
         stage: 'transplant',
+        currentStage: 'transplant',
         stageEvents: [...validBatch.stageEvents, { stage: 'harvest', occurredAt: '2024-03-10T00:00:00Z' }],
       }),
     ).toThrowError('stage_event_stage_mismatch');
