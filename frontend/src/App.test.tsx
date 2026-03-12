@@ -20,7 +20,7 @@ vi.mock('./data', () => ({
   parseImportedAppState: vi.fn(),
   saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
   serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
-  upsertCropInAppState: vi.fn((appState: any, crop: any) => ({
+  upsertCropInAppState: vi.fn((appState: { crops?: Array<{ cropId: string }> }, crop: { cropId: string }) => ({
     ...appState,
     crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
   })),
