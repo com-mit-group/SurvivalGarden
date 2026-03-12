@@ -28,6 +28,8 @@ Canonical samples:
 
 - Canonical vNext payloads use `AppState.schemaVersion = 2`.
 - Crop now supports richer metadata (`scientificName`, `taxonomy`, `aliases`, `isUserDefined`).
+- Crop also supports **partial records** for staged data entry/sync: only identity (`cropId` or `id`, `name` or `commonName`) plus timestamps are required.
+- `rules`, `taskRules`, and `nutritionProfile` are optional and may be omitted for user-defined crops.
 - Batch modeling shifts from implicit nested legacy structures to explicit event/quantity fields:
   - timeline in `stageEvents`
   - placement in `bedAssignments`
@@ -123,6 +125,26 @@ After (canonical export):
 }
 ```
 
+### 3) Partial user-defined crop (canonical)
+
+```json
+{
+  "cropId": "crop_user_herb_mix",
+  "name": "Herb Mix",
+  "isUserDefined": true,
+  "aliases": ["Kitchen Herb Mix", "Mixed Herbs"],
+  "scientificName": "Mentha spp. blend",
+  "createdAt": "2026-01-15T10:00:00Z",
+  "updatedAt": "2026-01-15T10:00:00Z"
+}
+```
+
+Behavior note:
+
+- If `rules`/`taskRules` are omitted, calendar/task derivation should treat the crop as "no schedule metadata available" and skip rule-driven task generation for that crop.
+- If `nutritionProfile` is omitted, nutrition rollups should ignore crop-level nutrient contribution rather than failing validation/import.
+- Do not over-validate user-defined crops beyond schema requirements.
+
 ## Propagation modeling rules
 
 ### When to use `startQuantity`
@@ -154,6 +176,19 @@ Use `meta.confidence` / `stageEvents[].meta.confidence` when the value quality m
 - `exact`
 - `estimated`
 - `unknown`
+
+## Backend/C# mapping notes (contract-preserving)
+
+- Keep JSON Schema canonical while backend stabilizes; C# DTOs should map 1:1 to schema fields.
+- Preserve legacy alias read-support during import (`id`, `commonName`, `stage`, `assignments`), but emit canonical names on export.
+- Recommended C# handling for crop identity/metadata:
+  - `CropId = crop.cropId ?? crop.id`
+  - `Name = crop.name ?? crop.commonName`
+  - Map `ScientificName` and `Aliases` as optional values (nullable string + collection).
+- Recommended C# handling for batch timeline/state:
+  - Require persisted `StartedAt`, `StageEvents`, and legacy-required `Stage` + `Assignments` until schema requirement changes.
+  - Compute/validate `CurrentStage` from latest `StageEvents[*].Stage` when absent.
+  - Keep alias parity between `bedAssignments` and `assignments` in write paths until migration-only aliases are formally removed.
 
 ## Minimal canonical payload set
 

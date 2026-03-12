@@ -34,6 +34,7 @@ If any criterion is unmet, stay JSON Schema-first.
 
 - Domain entities/value objects mirror schema-generated records:
   - `Bed`, `Crop`, `CropPlan`, `Batch`, `Task`, `SeedInventoryItem`, `Settings`, plus aggregate `AppState`.
+- Crop ingest must accept minimal/partial crop payloads (identity + timestamps) so user-defined crops can exist before full rule/nutrition metadata is available.
 - Domain services host business rules currently used by TS logic (task derivation windows, stage transitions, status changes, etc.).
 - Domain layer has no HTTP, storage, or UI dependencies.
 
@@ -45,6 +46,7 @@ If any criterion is unmet, stay JSON Schema-first.
   - `ListTasksByDateAndStatus`
   - `SaveSettings`, etc.
 - DTOs stay schema-aligned to avoid adapter bloat.
+- Avoid backend-side over-validation for optional crop metadata (`rules`, `taskRules`, `nutritionProfile`, `scientificName`, `aliases`, `taxonomy`).
 
 ### Persistence layer (HTTP + storage adapters)
 
@@ -152,6 +154,7 @@ Example `GET /api/crop-plans?cropId=crop_potato&seasonYear=2026` response item:
 Batch timeline canonicalization (vNext):
 
 - Canonical export does not include a separate required `start` object; start semantics are represented by `startedAt` + `stageEvents[0]`.
+- Current schema still requires legacy `stage` + `assignments`; backend should continue dual-field writes (`currentStage` + `stage`, `bedAssignments` + `assignments`) until alias removal is finalized.
 - Mapping from legacy `start.*`:
   - `start.date` -> `startedAt` and `stageEvents[0].occurredAt`
   - `start.stage` -> `stageEvents[0].stage` and `currentStage` when no later stage events exist
@@ -279,3 +282,61 @@ If either language fails parity, block release.
 - Agreed endpoint naming and filter semantics for repository parity.
 - Golden vector ownership/versioning documented and enforced.
 - Initial CI gate draft covers schema conformance + parity checks.
+
+
+## C# mapping examples for finalized vNext contracts
+
+### Crop mapping (aliases + optional metadata)
+
+```csharp
+public sealed record CropDto(
+    string? cropId,
+    string? id,
+    string? name,
+    string? commonName,
+    string? scientificName,
+    IReadOnlyList<string>? aliases,
+    bool? isUserDefined,
+    object? rules,
+    IReadOnlyList<object>? taskRules,
+    IReadOnlyList<object>? nutritionProfile,
+    DateTimeOffset createdAt,
+    DateTimeOffset updatedAt
+);
+
+var canonicalCropId = dto.cropId ?? dto.id
+    ?? throw new ValidationException("cropId/id required");
+var canonicalName = dto.name ?? dto.commonName
+    ?? throw new ValidationException("name/commonName required");
+
+// Optional metadata stays nullable/empty to support partial user-defined crops.
+var scientificName = dto.scientificName;
+var aliases = dto.aliases ?? Array.Empty<string>();
+```
+
+### Batch mapping (canonical timeline + legacy parity fields)
+
+```csharp
+public sealed record BatchDto(
+    string batchId,
+    string cropId,
+    DateTimeOffset startedAt,
+    string stage,
+    string? currentStage,
+    IReadOnlyList<StageEventDto> stageEvents,
+    IReadOnlyList<BedAssignmentDto> assignments,
+    IReadOnlyList<BedAssignmentDto>? bedAssignments
+);
+
+var canonicalAssignments = dto.bedAssignments ?? dto.assignments;
+var canonicalCurrentStage = dto.currentStage
+    ?? dto.stageEvents[^1].stage;
+
+// While aliases remain required in schema, write both canonical + alias fields.
+```
+
+### Optional rules behavior in processing pipelines
+
+- Calendar/task processors should short-circuit rule-derived task generation when crop `rules`/`taskRules` are absent.
+- Nutrition processors should skip crop-level nutrition contribution when `nutritionProfile` is absent.
+- Missing optional metadata is a valid contract state, not a backend validation error.
