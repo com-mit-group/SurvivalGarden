@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
+import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
@@ -1285,6 +1285,30 @@ const getLocalDateTimeDefault = () => {
   return new Date(date.getTime() - localOffsetMs).toISOString().slice(0, 16);
 };
 
+const CONFIDENCE_OPTIONS: BatchConfidence[] = ['exact', 'estimated', 'unknown'];
+
+const toLocalDateTimeInput = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+
+const fromLocalDateTimeInput = (value: string): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+};
+
 const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined; scientificName: string | undefined }) => {
   if (crop.name && crop.scientificName) {
     return `${crop.name} (${crop.scientificName})`;
@@ -1336,7 +1360,9 @@ function BatchesPage() {
     startedAt: getLocalDateTimeDefault(),
     seedCountPlanned: '',
     seedCountGerminated: '',
+    seedCountGerminatedConfidence: '',
     plantCountAlive: '',
+    plantCountAliveConfidence: '',
     initialMethod: 'sowing',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -1542,12 +1568,8 @@ function BatchesPage() {
 
   const startEdit = (batch: Batch) => {
     setEditingBatchId(batch.batchId);
-    const startedAtDate = new Date(batch.startedAt);
-    const startedAt = Number.isNaN(startedAtDate.getTime())
-      ? getLocalDateTimeDefault()
-      : new Date(startedAtDate.getTime() - startedAtDate.getTimezoneOffset() * 60_000)
-          .toISOString()
-          .slice(0, 16);
+    const startedAt = toLocalDateTimeInput(batch.startedAt) || getLocalDateTimeDefault();
+    const meta = (batch.meta ?? {}) as Record<string, unknown>;
 
     setFormValues({
       cropInput: formatCropOptionLabel({
@@ -1562,7 +1584,10 @@ function BatchesPage() {
       startedAt,
       seedCountPlanned: batch.seedCountPlanned?.toString() ?? '',
       seedCountGerminated: batch.seedCountGerminated?.toString() ?? '',
+      seedCountGerminatedConfidence:
+        typeof meta.seedCountGerminatedConfidence === 'string' ? meta.seedCountGerminatedConfidence : '',
       plantCountAlive: batch.plantCountAlive?.toString() ?? '',
+      plantCountAliveConfidence: typeof meta.plantCountAliveConfidence === 'string' ? meta.plantCountAliveConfidence : '',
       initialMethod: batch.stage,
     });
     setFormErrors({});
@@ -1581,7 +1606,9 @@ function BatchesPage() {
       startedAt: getLocalDateTimeDefault(),
       seedCountPlanned: '',
       seedCountGerminated: '',
+      seedCountGerminatedConfidence: '',
       plantCountAlive: '',
+      plantCountAliveConfidence: '',
       initialMethod: 'sowing',
     });
     setFormErrors({});
@@ -1705,6 +1732,29 @@ function BatchesPage() {
     const seedCountGerminated = parseOptionalCount(formValues.seedCountGerminated, 'seedCountGerminated');
     const plantCountAlive = parseOptionalCount(formValues.plantCountAlive, 'plantCountAlive');
 
+    const parseOptionalConfidence = (value: string, fieldLabel: string): BatchConfidence | null => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      if (CONFIDENCE_OPTIONS.includes(trimmed as BatchConfidence)) {
+        return trimmed as BatchConfidence;
+      }
+
+      errors[fieldLabel] = 'Choose exact, estimated, unknown, or leave unset.';
+      return null;
+    };
+
+    const seedCountGerminatedConfidence = parseOptionalConfidence(
+      formValues.seedCountGerminatedConfidence,
+      'seedCountGerminatedConfidence',
+    );
+    const plantCountAliveConfidence = parseOptionalConfidence(
+      formValues.plantCountAliveConfidence,
+      'plantCountAliveConfidence',
+    );
+
     if (formValues.initialMethod !== 'sowing') {
       errors.initialMethod = 'Only sowing can be saved with current state transitions.';
     }
@@ -1730,8 +1780,19 @@ function BatchesPage() {
       const existingBatch = editingBatchId
         ? appState.batches.find((batch) => batch.batchId === editingBatchId) ?? null
         : null;
-      const startedAt = new Date(formValues.startedAt).toISOString();
+      const startedAt = fromLocalDateTimeInput(formValues.startedAt);
+      if (!startedAt) {
+        setFormErrors({ ...errors, startedAt: 'Enter a valid start date and time.' });
+        return;
+      }
       const batchId = existingBatch?.batchId ?? (globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`);
+      const existingMeta = ((existingBatch?.meta ?? {}) as Record<string, unknown>) ?? {};
+      const nextMeta: Record<string, unknown> = {
+        ...existingMeta,
+        ...(seedCountGerminatedConfidence !== null ? { seedCountGerminatedConfidence } : {}),
+        ...(plantCountAliveConfidence !== null ? { plantCountAliveConfidence } : {}),
+      };
+
       const nextBatch: Batch = {
         batchId,
         cropId: resolvedCropId,
@@ -1749,6 +1810,7 @@ function BatchesPage() {
         ...(seedCountPlanned !== null ? { seedCountPlanned } : {}),
         ...(seedCountGerminated !== null ? { seedCountGerminated } : {}),
         ...(plantCountAlive !== null ? { plantCountAlive } : {}),
+        ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
       };
 
       const nextState = upsertBatchInAppState(appState, nextBatch);
@@ -1961,6 +2023,20 @@ function BatchesPage() {
           </label>
 
           <label>
+            Seed germinated confidence
+            <select
+              value={formValues.seedCountGerminatedConfidence}
+              onChange={(event) => setFormValues((current) => ({ ...current, seedCountGerminatedConfidence: event.target.value }))}
+            >
+              <option value="">Unset</option>
+              <option value="exact">exact</option>
+              <option value="estimated">estimated</option>
+              <option value="unknown">unknown</option>
+            </select>
+            {formErrors.seedCountGerminatedConfidence ? <span className="form-error">{formErrors.seedCountGerminatedConfidence}</span> : null}
+          </label>
+
+          <label>
             Plant count alive
             <input
               type="number"
@@ -1970,6 +2046,20 @@ function BatchesPage() {
               onChange={(event) => setFormValues((current) => ({ ...current, plantCountAlive: event.target.value }))}
             />
             {formErrors.plantCountAlive ? <span className="form-error">{formErrors.plantCountAlive}</span> : null}
+          </label>
+
+          <label>
+            Plant alive confidence
+            <select
+              value={formValues.plantCountAliveConfidence}
+              onChange={(event) => setFormValues((current) => ({ ...current, plantCountAliveConfidence: event.target.value }))}
+            >
+              <option value="">Unset</option>
+              <option value="exact">exact</option>
+              <option value="estimated">estimated</option>
+              <option value="unknown">unknown</option>
+            </select>
+            {formErrors.plantCountAliveConfidence ? <span className="form-error">{formErrors.plantCountAliveConfidence}</span> : null}
           </label>
         </div>
         <div className="batch-form-actions">
@@ -2051,6 +2141,8 @@ function BatchesPage() {
   );
 }
 
+type TimelineEditState = { occurredAt: string; confidence: string; error?: string | undefined; isSaving?: boolean | undefined };
+
 function BatchDetailPage() {
   const { batchId } = useParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -2061,6 +2153,10 @@ function BatchDetailPage() {
   const [cropIsUserDefined, setCropIsUserDefined] = useState<boolean | undefined>(undefined);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
+  const [timelineEdits, setTimelineEdits] = useState<
+    Record<string, TimelineEditState>
+  >({});
+  const [timelineMessage, setTimelineMessage] = useState<string | null>(null);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
   const [removeFromBedMessage, setRemoveFromBedMessage] = useState<string | null>(null);
   const [isSavingRemoveFromBed, setIsSavingRemoveFromBed] = useState(false);
@@ -2121,6 +2217,8 @@ function BatchDetailPage() {
         ended: dateDefault,
       });
       setStageActionMessage(null);
+      setTimelineEdits({});
+      setTimelineMessage(null);
       setRemoveFromBedDate(dateDefault);
       setRemoveFromBedMessage(null);
       setPhotoActionMessage(null);
@@ -2137,16 +2235,15 @@ function BatchDetailPage() {
     }
 
     return batch.stageEvents
-      .map((event, index) => ({ event, index }))
+      .map((event, originalIndex) => ({ event, originalIndex }))
       .sort((left, right) => {
         const timestampCompare = left.event.occurredAt.localeCompare(right.event.occurredAt);
         if (timestampCompare !== 0) {
           return timestampCompare;
         }
 
-        return left.index - right.index;
-      })
-      .map(({ event }) => event);
+        return left.originalIndex - right.originalIndex;
+      });
   }, [batch]);
 
   const countConfidence = useMemo(() => {
@@ -2226,7 +2323,11 @@ function BatchDetailPage() {
       return;
     }
 
-    const occurredAt = new Date(inputValue).toISOString();
+    const occurredAt = fromLocalDateTimeInput(inputValue);
+    if (!occurredAt) {
+      setStageActionMessage('Enter a valid date and time before applying a stage action.');
+      return;
+    }
     const transition = applyStageEvent(batch, { stage: nextStage, occurredAt });
     if (!transition.ok) {
       setStageActionMessage(`Unable to apply stage event: ${transition.reason}.`);
@@ -2268,6 +2369,95 @@ function BatchDetailPage() {
   };
 
 
+  const handleTimelineEditSave = async (originalIndex: number) => {
+    if (!batch || !batchId) {
+      return;
+    }
+
+    const key = String(originalIndex);
+    const edit = timelineEdits[key];
+    if (!edit) {
+      return;
+    }
+
+    const occurredAt = fromLocalDateTimeInput(edit.occurredAt);
+    const confidence = edit.confidence.trim();
+    const validConfidence = confidence === '' || CONFIDENCE_OPTIONS.includes(confidence as BatchConfidence);
+    const confidenceValue = confidence === '' ? null : (confidence as BatchConfidence);
+
+    if (!occurredAt) {
+      setTimelineEdits((current) => ({
+        ...current,
+        [key]: { ...(current[key] ?? edit), error: 'Enter a valid date and time.' },
+      }));
+      return;
+    }
+
+    if (!validConfidence) {
+      setTimelineEdits((current) => ({
+        ...current,
+        [key]: { ...(current[key] ?? edit), error: 'Choose exact, estimated, unknown, or leave unset.' },
+      }));
+      return;
+    }
+
+    setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), error: '', isSaving: true } }));
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setTimelineMessage('Unable to save because local app state is unavailable.');
+        setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), isSaving: false } }));
+        return;
+      }
+
+      const nextStageEvents = batch.stageEvents.map((event, index) => {
+        if (index !== originalIndex) {
+          return event;
+        }
+
+        const nextMeta = {
+          ...((event.meta ?? {}) as Record<string, unknown>),
+          ...(confidenceValue ? { confidence: confidenceValue } : {}),
+        };
+
+        if (!confidence) {
+          delete nextMeta.confidence;
+        }
+
+        return {
+          ...event,
+          occurredAt,
+          ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
+        };
+      });
+
+      const nextBatch: Batch = {
+        ...batch,
+        stageEvents: nextStageEvents,
+      };
+
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(refreshedBatch);
+      setTimelineMessage(
+        latestStageEventAt && occurredAt < latestStageEventAt
+          ? 'Warning: this stage event is earlier than newer timeline events and was saved retroactively.'
+          : null,
+      );
+      setTimelineEdits((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save stage timeline event.';
+      setTimelineMessage(message);
+      setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), isSaving: false } }));
+    }
+  };
+
   const handleRemoveFromBed = async () => {
     if (!batch || !batchId) {
       return;
@@ -2278,7 +2468,11 @@ function BatchDetailPage() {
       return;
     }
 
-    const endDate = new Date(removeFromBedDate).toISOString();
+    const endDate = fromLocalDateTimeInput(removeFromBedDate);
+    if (!endDate) {
+      setRemoveFromBedMessage('Enter a valid date and time before removing from bed.');
+      return;
+    }
     const nextBatch = removeBatchFromBed(batch, endDate);
 
     setIsSavingRemoveFromBed(true);
@@ -2573,17 +2767,64 @@ function BatchDetailPage() {
           <p className="batch-detail-empty">No stage events yet.</p>
         ) : (
           <ol className="batch-detail-list">
-            {orderedStageEvents.map((event, index) => (
-              <li key={`${event.occurredAt}-${event.stage}-${index}`}>
-                <span className="batch-detail-pill">{event.stage}</span>
-                <span>{new Date(event.occurredAt).toLocaleString()}</span>
-                {(event.meta as { confidence?: string } | undefined)?.confidence ? (
-                  <span className="batch-detail-muted">confidence: {(event.meta as { confidence?: string }).confidence}</span>
-                ) : null}
-              </li>
-            ))}
+            {orderedStageEvents.map(({ event, originalIndex }) => {
+              const eventMeta = (event.meta as { confidence?: string } | undefined) ?? {};
+              const key = String(originalIndex);
+              const edit = timelineEdits[key];
+              const currentConfidence = edit?.confidence ?? (typeof eventMeta.confidence === 'string' ? eventMeta.confidence : '');
+              const currentOccurredAt = edit?.occurredAt ?? toLocalDateTimeInput(event.occurredAt);
+
+              return (
+                <li key={`${event.occurredAt}-${event.stage}-${originalIndex}`} className="batch-timeline-row">
+                  <span className="batch-detail-pill">{event.stage}</span>
+                  <span>{new Date(event.occurredAt).toLocaleString()}</span>
+                  {eventMeta.confidence ? <span className="batch-detail-muted">confidence: {eventMeta.confidence}</span> : null}
+                  <div className="batch-timeline-edit-row">
+                    <input
+                      type="datetime-local"
+                      value={currentOccurredAt}
+                      onChange={(inputEvent) =>
+                        setTimelineEdits((current) => ({
+                          ...current,
+                          [key]: {
+                            occurredAt: inputEvent.target.value,
+                            confidence: currentConfidence,
+                            error: '',
+                            isSaving: current[key]?.isSaving ?? false,
+                          },
+                        }))
+                      }
+                    />
+                    <select
+                      value={currentConfidence}
+                      onChange={(inputEvent) =>
+                        setTimelineEdits((current) => ({
+                          ...current,
+                          [key]: {
+                            occurredAt: currentOccurredAt,
+                            confidence: inputEvent.target.value,
+                            error: '',
+                            isSaving: current[key]?.isSaving ?? false,
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">Unset</option>
+                      <option value="exact">exact</option>
+                      <option value="estimated">estimated</option>
+                      <option value="unknown">unknown</option>
+                    </select>
+                    <button type="button" onClick={() => void handleTimelineEditSave(originalIndex)} disabled={edit?.isSaving === true}>
+                      Save
+                    </button>
+                  </div>
+                  {edit?.error ? <span className="form-error">{edit.error}</span> : null}
+                </li>
+              );
+            })}
           </ol>
         )}
+        {timelineMessage ? <p className="batch-stage-warning">{timelineMessage}</p> : null}
       </article>
 
       <article className="batch-detail-card">
