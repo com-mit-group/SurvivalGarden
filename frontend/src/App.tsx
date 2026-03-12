@@ -2141,6 +2141,8 @@ function BatchesPage() {
   );
 }
 
+type TimelineEditState = { occurredAt: string; confidence: string; error?: string | undefined; isSaving?: boolean | undefined };
+
 function BatchDetailPage() {
   const { batchId } = useParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -2152,7 +2154,7 @@ function BatchDetailPage() {
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [timelineEdits, setTimelineEdits] = useState<
-    Record<string, { occurredAt: string; confidence: string; error?: string; isSaving?: boolean }>
+    Record<string, TimelineEditState>
   >({});
   const [timelineMessage, setTimelineMessage] = useState<string | null>(null);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
@@ -2381,11 +2383,12 @@ function BatchDetailPage() {
     const occurredAt = fromLocalDateTimeInput(edit.occurredAt);
     const confidence = edit.confidence.trim();
     const validConfidence = confidence === '' || CONFIDENCE_OPTIONS.includes(confidence as BatchConfidence);
+    const confidenceValue = confidence === '' ? null : (confidence as BatchConfidence);
 
     if (!occurredAt) {
       setTimelineEdits((current) => ({
         ...current,
-        [key]: { ...current[key], error: 'Enter a valid date and time.' },
+        [key]: { ...(current[key] ?? edit), error: 'Enter a valid date and time.' },
       }));
       return;
     }
@@ -2393,18 +2396,18 @@ function BatchDetailPage() {
     if (!validConfidence) {
       setTimelineEdits((current) => ({
         ...current,
-        [key]: { ...current[key], error: 'Choose exact, estimated, unknown, or leave unset.' },
+        [key]: { ...(current[key] ?? edit), error: 'Choose exact, estimated, unknown, or leave unset.' },
       }));
       return;
     }
 
-    setTimelineEdits((current) => ({ ...current, [key]: { ...current[key], error: '', isSaving: true } }));
+    setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), error: '', isSaving: true } }));
 
     try {
       const appState = await loadAppStateFromIndexedDb();
       if (!appState) {
         setTimelineMessage('Unable to save because local app state is unavailable.');
-        setTimelineEdits((current) => ({ ...current, [key]: { ...current[key], isSaving: false } }));
+        setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), isSaving: false } }));
         return;
       }
 
@@ -2415,7 +2418,7 @@ function BatchDetailPage() {
 
         const nextMeta = {
           ...((event.meta ?? {}) as Record<string, unknown>),
-          ...(confidence ? { confidence } : {}),
+          ...(confidenceValue ? { confidence: confidenceValue } : {}),
         };
 
         if (!confidence) {
@@ -2451,7 +2454,7 @@ function BatchDetailPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save stage timeline event.';
       setTimelineMessage(message);
-      setTimelineEdits((current) => ({ ...current, [key]: { ...current[key], isSaving: false } }));
+      setTimelineEdits((current) => ({ ...current, [key]: { ...(current[key] ?? edit), isSaving: false } }));
     }
   };
 
@@ -2787,7 +2790,7 @@ function BatchDetailPage() {
                             occurredAt: inputEvent.target.value,
                             confidence: currentConfidence,
                             error: '',
-                            isSaving: current[key]?.isSaving,
+                            isSaving: current[key]?.isSaving ?? false,
                           },
                         }))
                       }
@@ -2801,7 +2804,7 @@ function BatchDetailPage() {
                             occurredAt: currentOccurredAt,
                             confidence: inputEvent.target.value,
                             error: '',
-                            isSaving: current[key]?.isSaving,
+                            isSaving: current[key]?.isSaving ?? false,
                           },
                         }))
                       }
