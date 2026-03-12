@@ -520,7 +520,7 @@ describe('App', () => {
       expect(screen.getByText('Batch created.')).toBeInTheDocument();
     });
 
-    const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map(([state]: [{ crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }]) => state);
+    const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map((call) => call[0] as { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> });
     expect(
       savedStates.some(
         (state: { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
