@@ -24,6 +24,10 @@ vi.mock('./data', () => ({
     ...appState,
     crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
   })),
+  upsertBatchInAppState: vi.fn((appState: { batches?: Array<{ batchId: string }> }, batch: { batchId: string }) => ({
+    ...appState,
+    batches: [...(appState.batches ?? []).filter((entry: { batchId: string }) => entry.batchId !== batch.batchId), batch],
+  })),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
   listTasksFromAppState: vi.fn().mockReturnValue([]),
