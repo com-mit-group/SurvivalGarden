@@ -454,6 +454,68 @@ describe('App', () => {
     expect(screen.getByText('Tomato (plan_tomato_missing_mass) — missing mass expected yield')).toBeInTheDocument();
   });
 
+
+  it('supports custom crop flow in batches with scientific-name-only identity and variety/seed counts', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [
+        {
+          bedId: 'bed_1',
+          gardenId: 'garden_1',
+          name: 'North Bed',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      crops: [],
+      cropPlans: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add new crop' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add new crop' }));
+    fireEvent.change(screen.getByLabelText('Crop (search or type)'), { target: { value: 'Custom Runner' } });
+    fireEvent.change(screen.getByLabelText('New crop category'), { target: { value: 'leafy' } });
+    fireEvent.change(screen.getByLabelText('New crop scientific name'), { target: { value: 'Brassica' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create crop' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Crop created and selected/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Variety'), { target: { value: 'Early Purple' } });
+    fireEvent.change(screen.getByLabelText('Seed count planned'), { target: { value: '24' } });
+    fireEvent.change(screen.getByLabelText('Seed count germinated'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create batch' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalled();
+      expect(screen.getByText('Batch created.')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Custom Runner \(Brassica\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Variety Early Purple/)).toBeInTheDocument();
+  });
+
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
