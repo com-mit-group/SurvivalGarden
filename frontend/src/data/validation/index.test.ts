@@ -807,6 +807,7 @@ describe('batch repository boundary helpers', () => {
       upsertBatchInAppState(validAppState, {
         ...validBatch,
         stage: 'ended',
+        currentStage: 'ended',
         stageEvents: [
           ...validBatch.stageEvents,
           { stage: 'ended', occurredAt: '2024-03-10T00:00:00Z' },
@@ -819,6 +820,7 @@ describe('batch repository boundary helpers', () => {
     const failedBatch = {
       ...validBatch,
       stage: 'failed',
+      currentStage: 'failed',
       stageEvents: [...validBatch.stageEvents, { stage: 'failed', occurredAt: '2024-03-10T00:00:00Z' }],
     };
 
@@ -827,6 +829,7 @@ describe('batch repository boundary helpers', () => {
     const endedBatch = {
       ...failedBatch,
       stage: 'ended',
+      currentStage: 'ended',
       stageEvents: [...failedBatch.stageEvents, { stage: 'ended', occurredAt: '2024-03-20T00:00:00Z' }],
     };
 
@@ -839,6 +842,7 @@ describe('batch repository boundary helpers', () => {
       upsertBatchInAppState(validAppState, {
         ...validBatch,
         stage: 'transplant',
+        currentStage: 'transplant',
         stageEvents: [...validBatch.stageEvents, { stage: 'harvest', occurredAt: '2024-03-10T00:00:00Z' }],
       }),
     ).toThrowError('stage_event_stage_mismatch');
