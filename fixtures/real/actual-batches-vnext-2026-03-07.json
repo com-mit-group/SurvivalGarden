@@ -38,7 +38,6 @@
       "propagationType": "clove",
       "startLocation": "indoor",
       "seedCountPlanned": 6,
-      "seedCountGerminated": 6,
       "plantCountAlive": 6,
       "currentStage": "pre_sown",
       "lifecycleStatus": "active",
@@ -51,7 +50,6 @@
         }
       ],
       "meta": {
-        "seedCountGerminatedConfidence": "exact",
         "plantCountAliveConfidence": "exact",
         "countBackfillNote": "One clove per cell, all six cells occupied."
       },
