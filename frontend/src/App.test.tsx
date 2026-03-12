@@ -520,8 +520,17 @@ describe('App', () => {
       expect(screen.getByText('Batch created.')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Custom Runner \(Brassica\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Variety Early Purple/)).toBeInTheDocument();
+    const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map(([state]: [{ crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }]) => state);
+    expect(
+      savedStates.some(
+        (state: { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
+          state?.crops?.some((crop: { name?: string; scientificName?: string }) => crop.name === 'Custom Runner' && crop.scientificName === 'Brassica') &&
+          state?.batches?.some(
+            (batch: { variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }) =>
+              batch.variety === 'Early Purple' && batch.seedCountPlanned === 24 && batch.seedCountGerminated === 20,
+          ),
+      ),
+    ).toBe(true);
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
