@@ -730,6 +730,12 @@ textarea {
   background: #f9fafb;
 }
 
+
+.batch-detail-muted {
+  font-size: 0.74rem;
+  color: #6b7280;
+}
+
 .batch-detail-current-bed,
 .batch-detail-empty {
   margin: 0;
