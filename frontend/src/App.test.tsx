@@ -306,6 +306,7 @@ describe('App', () => {
 
     const input = screen.getByLabelText('Import Batch JSON');
     const file = new File(['{"batches":[{"batchId":"batch-1"}]}'], 'batches.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"batches":[{"batchId":"batch-1"}]}');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
