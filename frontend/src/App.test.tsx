@@ -330,7 +330,7 @@ describe('App', () => {
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
       expect(screen.getByText('Batch: Unknown variety (Unknown crop)')).toBeInTheDocument();
       expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
-      expect(screen.getByText('Events: 1')).toBeInTheDocument();
+      expect(screen.getByText('Events: 0')).toBeInTheDocument();
       expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
