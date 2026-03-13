@@ -285,7 +285,7 @@ describe('App', () => {
   });
 
   it('imports batch json with partial success and reports validation failures per batch', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
     const validationError = new SchemaValidationError('batch', [
       {
         schemaName: 'batch',
