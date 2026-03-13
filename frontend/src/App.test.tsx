@@ -285,7 +285,7 @@ describe('App', () => {
   });
 
   it('imports batch json with partial success and reports validation failures per batch', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
     const validationError = new SchemaValidationError('batch', [
       {
         schemaName: 'batch',
@@ -346,6 +346,61 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
+    });
+
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+  });
+
+  it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
+    vi.mocked(parseImportedAppState).mockImplementation((payload: string) => {
+      if (payload.includes('"batches":[{"batchId":"batch-1"}]')) {
+        return validOnlyState as never;
+      }
+      return {
+        schemaVersion: 1,
+        beds: [],
+        crops: [],
+        cropPlans: [],
+        batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }],
+        seedInventoryItems: [],
+        tasks: [],
+      } as never;
+    });
+
+    const deepLinkPayload = btoa(JSON.stringify({
+      batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }],
+    }));
+
+    render(
+      <MemoryRouter initialEntries={[`/import-batches?data=${deepLinkPayload}`]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Deep link ready: 1 valid batch\(es\) from 1 payload batch\(es\)\./)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Deep-link preview batches: batch-1')).toBeInTheDocument();
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm batch import' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
+    });
+  });
+
+  it('shows deep-link import error when payload is malformed', async () => {
+    render(
+      <MemoryRouter initialEntries={['/import-batches?data=%%%'] }>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Deep-link import failed. Payload was invalid or too large.')).toBeInTheDocument();
     });
 
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
