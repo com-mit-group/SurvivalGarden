@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
@@ -3368,12 +3368,16 @@ export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
 }
 
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [importErrors, setImportErrors] = useState<Array<{ path: string; message: string }>>([]);
   const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
+  const [pendingBatchImportState, setPendingBatchImportState] = useState<unknown | null>(null);
+  const [pendingBatchImportSummary, setPendingBatchImportSummary] = useState<string | null>(null);
 
   const buildBatchValidationMessages = useCallback((error: unknown, batchId: string, batchIndex: number): Array<{ path: string; message: string }> => {
     const fallbackPath = `/batches/${batchIndex}`;
@@ -3460,6 +3464,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportMessage(null);
     setImportErrors([]);
     setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportSummary(null);
 
     try {
       const payload = await file.text();
@@ -3582,6 +3588,119 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError, pendingImportState]);
 
+  const handleConfirmBatchImport = useCallback(async () => {
+    if (!pendingBatchImportState || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+
+    try {
+      const report = await saveAppStateToIndexedDb(pendingBatchImportState, { mode: 'merge' });
+      const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
+      const created = report?.batches.added ?? appStateWithBatches.batches?.length ?? 0;
+      const merged = report?.batches.updated ?? 0;
+      const skipped = report?.batches.unchanged ?? 0;
+      const rejectedConflict = report?.conflicts.length ?? 0;
+      const conflictDetail = rejectedConflict > 0
+        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
+        : '';
+      setImportMessage(
+        `Batch import complete. Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}.`
+        + conflictDetail,
+      );
+      setPendingBatchImportState(null);
+      setPendingBatchImportSummary(null);
+    } catch (error) {
+      setImportMessage('Import failed while saving.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError, pendingBatchImportState]);
+
+  useEffect(() => {
+    const search = new URLSearchParams(location.search);
+    const encodedPayload = search.get('data');
+
+    if (!encodedPayload) {
+      return;
+    }
+
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportSummary(null);
+
+    try {
+      const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+      const padLength = normalizedPayload.length % 4;
+      const paddedPayload = padLength === 0 ? normalizedPayload : `${normalizedPayload}${'='.repeat(4 - padLength)}`;
+      const decodedPayload = atob(paddedPayload);
+      const rawParsed = JSON.parse(decodedPayload) as { batches?: unknown[] };
+
+      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.batches)) {
+        throw new Error('Deep-link payload must decode to an object with a batches array.');
+      }
+
+      const validBatches: unknown[] = [];
+      const validationErrors: Array<{ path: string; message: string }> = [];
+
+      rawParsed.batches.forEach((candidate, index) => {
+        const batchId =
+          candidate && typeof candidate === 'object' && 'batchId' in candidate && typeof candidate.batchId === 'string'
+            ? candidate.batchId
+            : `index-${index}`;
+
+        try {
+          const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+            schemaVersion: 1,
+            beds: [],
+            crops: [],
+            cropPlans: [],
+            batches: [candidate],
+            seedInventoryItems: [],
+            tasks: [],
+          }));
+          validBatches.push(validatedSingleBatch.batches[0]);
+        } catch (validationError) {
+          validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
+        }
+      });
+
+      if (validBatches.length === 0) {
+        setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
+        setImportErrors(validationErrors);
+      } else {
+        const validatedBatchImportState = parseImportedAppState(JSON.stringify({
+          schemaVersion: 1,
+          beds: [],
+          crops: [],
+          cropPlans: [],
+          batches: validBatches,
+          seedInventoryItems: [],
+          tasks: [],
+        }));
+        const previewBatchIds = validBatches
+          .slice(0, 3)
+          .map((batch) => (batch as { batchId?: string }).batchId ?? 'unknown')
+          .join(', ');
+        setPendingBatchImportState(validatedBatchImportState);
+        setPendingBatchImportSummary(previewBatchIds.length > 0 ? previewBatchIds : null);
+        setImportMessage(`Deep link ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es). Confirm to import.`);
+        setImportErrors(validationErrors);
+      }
+    } catch (error) {
+      setImportMessage('Deep-link import failed. Payload was invalid or too large.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      navigate('/data', { replace: true });
+    }
+  }, [buildBatchValidationMessages, location.search, mapImportError, navigate]);
+
   return (
     <>
       <h2 data-route-focus="true">Data</h2>
@@ -3616,6 +3735,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           {isImporting ? 'Replacing data…' : 'Replace existing data'}
         </button>
       ) : null}
+      {pendingBatchImportState ? (
+        <>
+          {pendingBatchImportSummary ? <p>Deep-link preview batches: {pendingBatchImportSummary}</p> : null}
+          <button type="button" onClick={() => void handleConfirmBatchImport()} disabled={isImporting}>
+            {isImporting ? 'Importing batches…' : 'Confirm batch import'}
+          </button>
+        </>
+      ) : null}
       {importMessage ? <p>{importMessage}</p> : null}
       {importErrors.length > 0 ? (
         <ul>
@@ -3633,6 +3760,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       ) : null}
     </>
   );
+}
+
+function ImportBatchesDeepLinkRoute() {
+  const location = useLocation();
+  return <Navigate to={`/data${location.search}`} replace />;
 }
 
 function App() {
@@ -3746,6 +3878,7 @@ function App() {
               />
             }
           />
+          <Route path="/import-batches" element={<ImportBatchesDeepLinkRoute />} />
           <Route path="*" element={<Navigate to="/beds" replace />} />
         </Routes>
       </main>
