@@ -3546,7 +3546,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       const previewItems = validatedBatchImportState.batches.map((batch) => ({
         batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
         seedCount: batch.seedCountPlanned ?? 0,
-        eventCount: batch.stageEvents.length,
+        eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
       }));
       const previewSummary = previewItems
         .slice(0, 3)
@@ -3689,7 +3689,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           .map((batch) => ({
             batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
             seedCount: batch.seedCountPlanned ?? 0,
-            eventCount: batch.stageEvents.length,
+            eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
           }));
         setPendingBatchImportState(validatedBatchImportState);
         setPendingBatchImportPreview(previewBatchIds);
