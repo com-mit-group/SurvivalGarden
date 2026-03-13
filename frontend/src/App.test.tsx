@@ -352,7 +352,7 @@ describe('App', () => {
   });
 
   it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
     vi.mocked(parseImportedAppState).mockImplementation((payload: string) => {
       if (payload.includes('"batches":[{"batchId":"batch-1"}]')) {
         return validOnlyState as never;
