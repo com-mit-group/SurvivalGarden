@@ -3685,7 +3685,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           seedInventoryItems: [],
           tasks: [],
         }));
-        const previewBatchIds = validBatches
+        const previewBatchIds = validatedBatchImportState.batches
           .map((batch) => ({
             batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
             seedCount: batch.seedCountPlanned ?? 0,
