@@ -284,7 +284,7 @@ describe('App', () => {
     });
   });
 
-  it('imports batch json in merge mode and shows summary', async () => {
+  it('imports batch json in merge mode and shows deterministic merge summary with conflicts', async () => {
     const importedState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
     vi.mocked(parseImportedAppState).mockReturnValue(importedState as never);
     vi.mocked(saveAppStateToIndexedDb).mockResolvedValue({
@@ -294,7 +294,7 @@ describe('App', () => {
       batches: { added: 2, updated: 1, unchanged: 0 },
       tasks: { added: 0, updated: 0, unchanged: 0 },
       seedInventoryItems: { added: 0, updated: 0, unchanged: 0 },
-      conflicts: [],
+      conflicts: ['batches:batch-1 immutable field mismatch: cropId'],
       warnings: [],
     } as never);
 
@@ -311,7 +311,9 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState, { mode: 'merge' });
-      expect(screen.getByText('Batch import complete. Imported: 2, merged: 1, skipped: 0.')).toBeInTheDocument();
+      expect(screen.getByText(/Batch import complete\. Created: 2, merged: 1, rejected-conflict: 1, skipped: 0\./)).toBeInTheDocument();
+      expect(screen.getByText(/stageEvents dedupe key = type \+ date \+ location/)).toBeInTheDocument();
+      expect(screen.getByText(/immutable field mismatch: cropId/)).toBeInTheDocument();
     });
   });
 

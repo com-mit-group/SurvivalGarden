@@ -3488,10 +3488,20 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         tasks: [],
       }));
       const report = await saveAppStateToIndexedDb(validatedBatchImportState, { mode: 'merge' });
-      const imported = report?.batches.added ?? validatedBatchImportState.batches.length;
+      const created = report?.batches.added ?? validatedBatchImportState.batches.length;
       const merged = report?.batches.updated ?? 0;
       const skipped = report?.batches.unchanged ?? 0;
-      setImportMessage(`Batch import complete. Imported: ${imported}, merged: ${merged}, skipped: ${skipped}.`);
+      const rejectedConflict = report?.conflicts.length ?? 0;
+      const conflictDetail = rejectedConflict > 0
+        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
+        : '';
+      setImportMessage(
+        `Batch import complete. Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}. `
+        + 'Merge behavior: stageEvents dedupe key = type + date + location; new events append. '
+        + 'Immutable field mismatches (cropId, startedAt, startMethod, startLocation) are rejected. '
+        + 'currentStage is recomputed from the latest event.'
+        + conflictDetail,
+      );
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
@@ -3542,6 +3552,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
+      <p>
+        Merge behavior: existing batches are matched by <code>batchId</code>; stage events use deterministic dedupe by{' '}
+        <code>type + date + location</code>; immutable fields (<code>cropId</code>, <code>startedAt</code>,{' '}
+        <code>startMethod</code>, <code>startLocation</code>) cannot change; <code>currentStage</code> follows the latest event.
+      </p>
       {pendingImportState ? (
         <button type="button" onClick={() => void handleConfirmReplace()} disabled={isImporting}>
           {isImporting ? 'Replacing data…' : 'Replace existing data'}
