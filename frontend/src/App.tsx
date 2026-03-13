@@ -3375,6 +3375,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [importErrors, setImportErrors] = useState<Array<{ path: string; message: string }>>([]);
   const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
 
+  const buildBatchValidationMessages = useCallback((error: unknown, batchId: string, batchIndex: number): Array<{ path: string; message: string }> => {
+    const fallbackPath = `/batches/${batchIndex}`;
+
+    if (error instanceof SchemaValidationError && error.issues.length > 0) {
+      return error.issues.map((issue) => {
+        const pathParts = issue.path.split('/').filter(Boolean);
+        const field = pathParts[pathParts.length - 1] ?? 'unknown';
+        return {
+          path: fallbackPath,
+          message: `schema_validation_failed (batchId: ${batchId}, field: ${field}) - ${issue.message}`,
+        };
+      });
+    }
+
+    return [{ path: fallbackPath, message: `schema_validation_failed (batchId: ${batchId}) - ${error instanceof Error ? error.message : 'Unknown import error.'}` }];
+  }, []);
+
   const mapImportError = useCallback((error: unknown): Array<{ path: string; message: string }> => {
     if (error instanceof SchemaValidationError && error.issues.length > 0) {
       return error.issues.map((issue) => ({
@@ -3478,12 +3495,43 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         throw new Error('Batch import payload must be an object with a batches array.');
       }
 
+      const validBatches: unknown[] = [];
+      const validationErrors: Array<{ path: string; message: string }> = [];
+
+      rawParsed.batches.forEach((candidate, index) => {
+        const batchId =
+          candidate && typeof candidate === 'object' && 'batchId' in candidate && typeof candidate.batchId === 'string'
+            ? candidate.batchId
+            : `index-${index}`;
+
+        try {
+          const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+            schemaVersion: 1,
+            beds: [],
+            crops: [],
+            cropPlans: [],
+            batches: [candidate],
+            seedInventoryItems: [],
+            tasks: [],
+          }));
+          validBatches.push(validatedSingleBatch.batches[0]);
+        } catch (validationError) {
+          validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
+        }
+      });
+
+      if (validBatches.length === 0) {
+        setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
+        setImportErrors(validationErrors);
+        return;
+      }
+
       const validatedBatchImportState = parseImportedAppState(JSON.stringify({
         schemaVersion: 1,
         beds: [],
         crops: [],
         cropPlans: [],
-        batches: rawParsed.batches,
+        batches: validBatches,
         seedInventoryItems: [],
         tasks: [],
       }));
@@ -3496,19 +3544,22 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
         : '';
       setImportMessage(
-        `Batch import complete. Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}. `
+        `Batch import complete. Validated before merge: total ${rawParsed.batches.length}, valid ${validBatches.length}, invalid ${validationErrors.length > 0 ? rawParsed.batches.length - validBatches.length : 0}. `
+        + `Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}. `
+        + 'Partial import behavior: invalid batches are rejected and valid batches continue. '
         + 'Merge behavior: stageEvents dedupe key = type + date + location; new events append. '
         + 'Immutable field mismatches (cropId, startedAt, startMethod, startLocation) are rejected. '
         + 'currentStage is recomputed from the latest event.'
         + conflictDetail,
       );
+      setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, mapImportError]);
+  }, [buildBatchValidationMessages, isImporting, mapImportError]);
 
   const handleConfirmReplace = useCallback(async () => {
     if (!pendingImportState || isImporting) {
@@ -3552,6 +3603,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
+      <p>
+        Validation behavior: each batch is schema-validated before merge; invalid batches are reported with <code>batchId</code> + field details and skipped.
+      </p>
       <p>
         Merge behavior: existing batches are matched by <code>batchId</code>; stage events use deterministic dedupe by{' '}
         <code>type + date + location</code>; immutable fields (<code>cropId</code>, <code>startedAt</code>,{' '}

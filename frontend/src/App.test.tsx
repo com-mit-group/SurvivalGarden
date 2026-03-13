@@ -284,17 +284,33 @@ describe('App', () => {
     });
   });
 
-  it('imports batch json in merge mode and shows deterministic merge summary with conflicts', async () => {
-    const importedState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
-    vi.mocked(parseImportedAppState).mockReturnValue(importedState as never);
+  it('imports batch json with partial success and reports validation failures per batch', async () => {
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    const validationError = new SchemaValidationError('batch', [
+      {
+        schemaName: 'batch',
+        keyword: 'required',
+        path: '/batches/0/startedAt',
+        message: "must have required property 'startedAt'",
+      },
+    ]);
+    vi.mocked(parseImportedAppState).mockImplementation((payload: string) => {
+      if (payload.includes('"batch-invalid"')) {
+        throw validationError;
+      }
+      if (payload.includes('"batches":[{"batchId":"batch-1"},{"batchId":"batch-invalid"}]')) {
+        return validOnlyState as never;
+      }
+      return validOnlyState as never;
+    });
     vi.mocked(saveAppStateToIndexedDb).mockResolvedValue({
       beds: { added: 0, updated: 0, unchanged: 0 },
       crops: { added: 0, updated: 0, unchanged: 0 },
       cropPlans: { added: 0, updated: 0, unchanged: 0 },
-      batches: { added: 2, updated: 1, unchanged: 0 },
+      batches: { added: 1, updated: 0, unchanged: 0 },
       tasks: { added: 0, updated: 0, unchanged: 0 },
       seedInventoryItems: { added: 0, updated: 0, unchanged: 0 },
-      conflicts: ['batches:batch-1 immutable field mismatch: cropId'],
+      conflicts: [],
       warnings: [],
     } as never);
 
@@ -305,15 +321,15 @@ describe('App', () => {
     );
 
     const input = screen.getByLabelText('Import Batch JSON');
-    const file = new File(['{"batches":[{"batchId":"batch-1"}]}'], 'batches.json', { type: 'application/json' });
-    vi.spyOn(file, 'text').mockResolvedValue('{"batches":[{"batchId":"batch-1"}]}');
+    const file = new File(['{"batches":[{"batchId":"batch-1"},{"batchId":"batch-invalid"}]}'], 'batches.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"batches":[{"batchId":"batch-1"},{"batchId":"batch-invalid"}]}');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState, { mode: 'merge' });
-      expect(screen.getByText(/Batch import complete\. Created: 2, merged: 1, rejected-conflict: 1, skipped: 0\./)).toBeInTheDocument();
-      expect(screen.getByText(/stageEvents dedupe key = type \+ date \+ location/)).toBeInTheDocument();
-      expect(screen.getByText(/immutable field mismatch: cropId/)).toBeInTheDocument();
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
+      expect(screen.getByText(/Validated before merge: total 2, valid 1, invalid 1\./)).toBeInTheDocument();
+      expect(screen.getByText(/Partial import behavior: invalid batches are rejected and valid batches continue\./)).toBeInTheDocument();
+      expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
   });
 
