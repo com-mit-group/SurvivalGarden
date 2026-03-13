@@ -3377,7 +3377,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [importErrors, setImportErrors] = useState<Array<{ path: string; message: string }>>([]);
   const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
   const [pendingBatchImportState, setPendingBatchImportState] = useState<unknown | null>(null);
-  const [pendingBatchImportSummary, setPendingBatchImportSummary] = useState<string | null>(null);
+  const [pendingBatchImportPreview, setPendingBatchImportPreview] = useState<Array<{ batchLabel: string; seedCount: number; eventCount: number }>>([]);
 
   const buildBatchValidationMessages = useCallback((error: unknown, batchId: string, batchIndex: number): Array<{ path: string; message: string }> => {
     const fallbackPath = `/batches/${batchIndex}`;
@@ -3465,7 +3465,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
     setPendingImportState(null);
     setPendingBatchImportState(null);
-    setPendingBatchImportSummary(null);
+    setPendingBatchImportPreview([]);
 
     try {
       const payload = await file.text();
@@ -3492,6 +3492,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportMessage(null);
     setImportErrors([]);
     setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportPreview([]);
 
     try {
       const payload = await file.text();
@@ -3541,22 +3543,21 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         seedInventoryItems: [],
         tasks: [],
       }));
-      const report = await saveAppStateToIndexedDb(validatedBatchImportState, { mode: 'merge' });
-      const created = report?.batches.added ?? validatedBatchImportState.batches.length;
-      const merged = report?.batches.updated ?? 0;
-      const skipped = report?.batches.unchanged ?? 0;
-      const rejectedConflict = report?.conflicts.length ?? 0;
-      const conflictDetail = rejectedConflict > 0
-        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
-        : '';
+      const previewItems = validatedBatchImportState.batches.map((batch) => ({
+        batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
+        seedCount: batch.seedCountPlanned ?? 0,
+        eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
+      }));
+      const previewSummary = previewItems
+        .slice(0, 3)
+        .map((item) => item.batchLabel)
+        .join(', ');
+      const invalidCount = rawParsed.batches.length - validBatches.length;
+      setPendingBatchImportState(validatedBatchImportState);
+      setPendingBatchImportPreview(previewItems);
       setImportMessage(
-        `Batch import complete. Validated before merge: total ${rawParsed.batches.length}, valid ${validBatches.length}, invalid ${validationErrors.length > 0 ? rawParsed.batches.length - validBatches.length : 0}. `
-        + `Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}. `
-        + 'Partial import behavior: invalid batches are rejected and valid batches continue. '
-        + 'Merge behavior: stageEvents dedupe key = type + date + location; new events append. '
-        + 'Immutable field mismatches (cropId, startedAt, startMethod, startLocation) are rejected. '
-        + 'currentStage is recomputed from the latest event.'
-        + conflictDetail,
+        `Batch import ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es), invalid ${invalidCount}.`
+        + (previewSummary.length > 0 ? ` Preview: ${previewSummary}.` : ''),
       );
       setImportErrors(validationErrors);
     } catch (error) {
@@ -3612,7 +3613,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         + conflictDetail,
       );
       setPendingBatchImportState(null);
-      setPendingBatchImportSummary(null);
+      setPendingBatchImportPreview([]);
     } catch (error) {
       setImportMessage('Import failed while saving.');
       setImportErrors(mapImportError(error));
@@ -3633,7 +3634,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
     setPendingImportState(null);
     setPendingBatchImportState(null);
-    setPendingBatchImportSummary(null);
+    setPendingBatchImportPreview([]);
 
     try {
       const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
@@ -3684,12 +3685,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           seedInventoryItems: [],
           tasks: [],
         }));
-        const previewBatchIds = validBatches
-          .slice(0, 3)
-          .map((batch) => (batch as { batchId?: string }).batchId ?? 'unknown')
-          .join(', ');
+        const previewBatchIds = validatedBatchImportState.batches
+          .map((batch) => ({
+            batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
+            seedCount: batch.seedCountPlanned ?? 0,
+            eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
+          }));
         setPendingBatchImportState(validatedBatchImportState);
-        setPendingBatchImportSummary(previewBatchIds.length > 0 ? previewBatchIds : null);
+        setPendingBatchImportPreview(previewBatchIds);
         setImportMessage(`Deep link ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es). Confirm to import.`);
         setImportErrors(validationErrors);
       }
@@ -3737,9 +3740,33 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       ) : null}
       {pendingBatchImportState ? (
         <>
-          {pendingBatchImportSummary ? <p>Deep-link preview batches: {pendingBatchImportSummary}</p> : null}
+          {pendingBatchImportPreview.length > 0 ? (
+            <section>
+              <h3>Import Preview</h3>
+              <ul>
+                {pendingBatchImportPreview.map((item, index) => (
+                  <li key={`${item.batchLabel}-${index}`}>
+                    <p>Batch: {item.batchLabel}</p>
+                    <p>Seeds: {item.seedCount}</p>
+                    <p>Events: {item.eventCount}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <button type="button" onClick={() => void handleConfirmBatchImport()} disabled={isImporting}>
-            {isImporting ? 'Importing batches…' : 'Confirm batch import'}
+            {isImporting ? 'Importing batches…' : 'Import'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingBatchImportState(null);
+              setPendingBatchImportPreview([]);
+              setImportMessage('Batch import canceled.');
+            }}
+            disabled={isImporting}
+          >
+            Cancel
           </button>
         </>
       ) : null}

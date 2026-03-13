@@ -284,7 +284,7 @@ describe('App', () => {
     });
   });
 
-  it('imports batch json with partial success and reports validation failures per batch', async () => {
+  it('previews batch json with partial success and imports only after confirmation', async () => {
     const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
     const validationError = new SchemaValidationError('batch', [
       {
@@ -326,10 +326,28 @@ describe('App', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
-      expect(screen.getByText(/Validated before merge: total 2, valid 1, invalid 1\./)).toBeInTheDocument();
-      expect(screen.getByText(/Partial import behavior: invalid batches are rejected and valid batches continue\./)).toBeInTheDocument();
+      expect(screen.getByText(/Batch import ready: 1 valid batch\(es\) from 2 payload batch\(es\), invalid 1\./)).toBeInTheDocument();
+      expect(screen.getByText('Import Preview')).toBeInTheDocument();
+      expect(screen.getByText('Batch: Unknown variety (Unknown crop)')).toBeInTheDocument();
+      expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
+      expect(screen.getByText('Events: 0')).toBeInTheDocument();
       expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
+    });
+
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Import Preview')).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('Import Preview')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
     });
   });
 
@@ -382,10 +400,10 @@ describe('App', () => {
       expect(screen.getByText(/Deep link ready: 1 valid batch\(es\) from 1 payload batch\(es\)\./)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Deep-link preview batches: batch-1')).toBeInTheDocument();
+    expect(screen.getByText('Import Preview')).toBeInTheDocument();
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm batch import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
       expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
