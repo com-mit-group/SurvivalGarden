@@ -3457,6 +3457,49 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError]);
 
+  const handleImportBatchJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+
+    try {
+      const payload = await file.text();
+      const rawParsed = JSON.parse(payload) as { batches?: unknown };
+
+      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.batches)) {
+        throw new Error('Batch import payload must be an object with a batches array.');
+      }
+
+      const validatedBatchImportState = parseImportedAppState(JSON.stringify({
+        schemaVersion: 1,
+        beds: [],
+        crops: [],
+        cropPlans: [],
+        batches: rawParsed.batches,
+        seedInventoryItems: [],
+        tasks: [],
+      }));
+      const report = await saveAppStateToIndexedDb(validatedBatchImportState, { mode: 'merge' });
+      const imported = report?.batches.added ?? validatedBatchImportState.batches.length;
+      const merged = report?.batches.updated ?? 0;
+      const skipped = report?.batches.unchanged ?? 0;
+      setImportMessage(`Batch import complete. Imported: ${imported}, merged: ${merged}, skipped: ${skipped}.`);
+    } catch (error) {
+      setImportMessage('Import failed. Fix the errors below and try again.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError]);
+
   const handleConfirmReplace = useCallback(async () => {
     if (!pendingImportState || isImporting) {
       return;
@@ -3489,6 +3532,16 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         Import JSON
         <input type="file" accept="application/json,.json" onChange={(event) => void handleImportJson(event)} disabled={isImporting} />
       </label>
+      <label>
+        Import Batch JSON
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void handleImportBatchJson(event)}
+          disabled={isImporting}
+        />
+      </label>
+      <p>Expected format: {'{ "batches": [ ... ] }'}</p>
       {pendingImportState ? (
         <button type="button" onClick={() => void handleConfirmReplace()} disabled={isImporting}>
           {isImporting ? 'Replacing data…' : 'Replace existing data'}

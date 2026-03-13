@@ -284,6 +284,55 @@ describe('App', () => {
     });
   });
 
+  it('imports batch json in merge mode and shows summary', async () => {
+    const importedState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    vi.mocked(parseImportedAppState).mockReturnValue(importedState as never);
+    vi.mocked(saveAppStateToIndexedDb).mockResolvedValue({
+      beds: { added: 0, updated: 0, unchanged: 0 },
+      crops: { added: 0, updated: 0, unchanged: 0 },
+      cropPlans: { added: 0, updated: 0, unchanged: 0 },
+      batches: { added: 2, updated: 1, unchanged: 0 },
+      tasks: { added: 0, updated: 0, unchanged: 0 },
+      seedInventoryItems: { added: 0, updated: 0, unchanged: 0 },
+      conflicts: [],
+      warnings: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import Batch JSON');
+    const file = new File(['{"batches":[{"batchId":"batch-1"}]}'], 'batches.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"batches":[{"batchId":"batch-1"}]}');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(importedState, { mode: 'merge' });
+      expect(screen.getByText('Batch import complete. Imported: 2, merged: 1, skipped: 0.')).toBeInTheDocument();
+    });
+  });
+
+  it('rejects malformed batch json import', async () => {
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import Batch JSON');
+    const file = new File(['{invalid'], 'bad-batches.json', { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
+    });
+
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+  });
+
   it('renders deterministic nutrition coverage totals and per-day values from non-trivial yields', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
