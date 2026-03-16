@@ -140,6 +140,7 @@ describe('AppState schema', () => {
       cropPlans: [
         {
           planId: 'plan_001',
+          segmentId: 'segment_001',
           cropId: 'crop_tomato',
           bedId: 'bed_001',
           seasonYear: 2026,
@@ -151,6 +152,15 @@ describe('AppState schema', () => {
             amount: 5,
             unit: 'kg',
           },
+          placements: [
+            {
+              type: 'points',
+              points: [
+                { x: 0.1, y: 0.1 },
+                { x: 0.2, y: 0.1 },
+              ],
+            },
+          ],
         },
       ],
       batches: [

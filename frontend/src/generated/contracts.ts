@@ -202,8 +202,9 @@ export interface CropPlanWindowRange {
 
 export interface CropPlan {
   planId: string;
+  segmentId?: string;
   cropId: string;
-  bedId?: string;
+  bedId: string;
   seasonYear: number;
   plannedWindows: {
     sowing: CropPlanWindowRange[];
@@ -215,6 +216,13 @@ export interface CropPlan {
     unit: 'g' | 'kg' | 'pieces';
   };
   notes?: string;
+  placements?: {
+    type: 'points';
+    points: {
+      x: number;
+      y: number;
+    }[];
+  }[];
 }
 
 export interface SeedInventoryItem {

@@ -156,6 +156,7 @@ const validPartialCrop = {
 
 const validCropPlan = {
   planId: 'plan-1',
+  segmentId: 'segment-1',
   cropId: 'crop-1',
   bedId: 'bed-1',
   seasonYear: 2024,
@@ -182,6 +183,33 @@ const validCropPlan = {
     unit: 'kg',
   },
   notes: 'Main spring bed',
+  placements: [
+    {
+      type: 'points',
+      points: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.2, y: 0.1 },
+      ],
+    },
+  ],
+};
+
+const validSegment = {
+  segmentId: 'segment-1',
+  name: 'Segment 1',
+  width: 10,
+  height: 5,
+  originReference: 'nw_corner',
+  beds: [
+    {
+      ...validBed,
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 1,
+    },
+  ],
+  paths: [],
 };
 
 const validBatch = {
@@ -225,6 +253,7 @@ const validSeedInventoryItem = {
 
 const validAppState = {
   schemaVersion: 1,
+  segments: [validSegment],
   beds: [validBed],
   crops: [validCrop],
   cropPlans: [validCropPlan],

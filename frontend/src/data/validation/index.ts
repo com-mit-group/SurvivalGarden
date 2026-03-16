@@ -268,6 +268,125 @@ const collectPathPlacementIssues = (schemaName: SchemaName, payload: unknown): V
   return issues;
 };
 
+const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
+  if (schemaName !== 'appState' || !isObjectRecord(payload)) {
+    return [];
+  }
+
+  const segments = Array.isArray(payload.segments) ? payload.segments : [];
+  const cropPlans = Array.isArray(payload.cropPlans) ? payload.cropPlans : [];
+
+  const bedBySegment = new Map<string, Set<string>>();
+  const bedDimensions = new Map<string, { width: number; height: number }>();
+
+  segments.forEach((segment) => {
+    if (!isObjectRecord(segment) || typeof segment.segmentId !== 'string' || !Array.isArray(segment.beds)) {
+      return;
+    }
+
+    const segmentBeds = new Set<string>();
+    segment.beds.forEach((bed) => {
+      if (!isObjectRecord(bed) || typeof bed.bedId !== 'string') {
+        return;
+      }
+
+      segmentBeds.add(bed.bedId);
+
+      const width = toFiniteNumber(bed.width);
+      const height = toFiniteNumber(bed.height);
+      if (width !== null && height !== null) {
+        bedDimensions.set(`${segment.segmentId}:${bed.bedId}`, { width, height });
+      }
+    });
+
+    bedBySegment.set(segment.segmentId, segmentBeds);
+  });
+
+  const issues: ValidationIssue[] = [];
+
+  cropPlans.forEach((plan, planIndex) => {
+    if (!isObjectRecord(plan)) {
+      return;
+    }
+
+    if (typeof plan.segmentId === 'string' && typeof plan.bedId === 'string') {
+      const bedsInSegment = bedBySegment.get(plan.segmentId);
+      if (!bedsInSegment) {
+        issues.push({
+          schemaName,
+          path: `/cropPlans/${planIndex}/segmentId`,
+          keyword: 'invalidReference',
+          message: `cropPlan references unknown segmentId '${plan.segmentId}'`,
+        });
+      } else if (!bedsInSegment.has(plan.bedId)) {
+        issues.push({
+          schemaName,
+          path: `/cropPlans/${planIndex}/bedId`,
+          keyword: 'invalidReference',
+          message: `cropPlan bedId '${plan.bedId}' does not belong to segmentId '${plan.segmentId}'`,
+        });
+      }
+
+      if (Array.isArray(plan.placements)) {
+        const bedSize = bedDimensions.get(`${plan.segmentId}:${plan.bedId}`);
+
+        plan.placements.forEach((placement, placementIndex) => {
+          if (!isObjectRecord(placement) || !Array.isArray(placement.points)) {
+            return;
+          }
+
+          placement.points.forEach((point, pointIndex) => {
+            if (!isObjectRecord(point)) {
+              return;
+            }
+
+            const x = toFiniteNumber(point.x);
+            const y = toFiniteNumber(point.y);
+
+            if (x !== null && x < -EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/x`,
+                keyword: 'minimum',
+                message: `placement x must be >= 0 meters`,
+              });
+            }
+
+            if (y !== null && y < -EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/y`,
+                keyword: 'minimum',
+                message: `placement y must be >= 0 meters`,
+              });
+            }
+
+            if (bedSize && x !== null && x - bedSize.width > EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/x`,
+                keyword: 'maximum',
+                message: `placement x exceeds bed width ${bedSize.width}m`,
+              });
+            }
+
+            if (bedSize && y !== null && y - bedSize.height > EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/y`,
+                keyword: 'maximum',
+                message: `placement y exceeds bed height ${bedSize.height}m`,
+              });
+            }
+          });
+        });
+      }
+    }
+  });
+
+  return issues;
+};
+
 const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
   appState: ajv.compile<SchemaTypeMap['appState']>(appStateSchema),
   batch: ajv.compile<SchemaTypeMap['batch']>(batchSchema),
@@ -310,16 +429,18 @@ export const validateSchema = <T extends SchemaName>(
   if (validator(payload)) {
     const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
     const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
+    const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
 
-    if (geometryIssues.length === 0 && pathPlacementIssues.length === 0) {
+    if (geometryIssues.length === 0 && pathPlacementIssues.length === 0 && cropPlanReferenceIssues.length === 0) {
       return { ok: true, value: payload };
     }
 
-    return { ok: false, issues: [...geometryIssues, ...pathPlacementIssues] };
+    return { ok: false, issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues] };
   }
 
   const issues = (validator.errors || []).map((error) => normalizeError(schemaName, error));
   const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
   const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
-  return { ok: false, issues: [...issues, ...geometryIssues, ...pathPlacementIssues] };
+  const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
+  return { ok: false, issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues] };
 };

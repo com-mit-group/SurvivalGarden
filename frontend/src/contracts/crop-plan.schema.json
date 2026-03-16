@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "planId",
+    "bedId",
     "cropId",
     "seasonYear",
     "plannedWindows",
@@ -13,6 +14,9 @@
   ],
   "properties": {
     "planId": {
+      "$ref": "#/$defs/id"
+    },
+    "segmentId": {
       "$ref": "#/$defs/id"
     },
     "cropId": {
@@ -82,6 +86,48 @@
     "notes": {
       "type": "string",
       "maxLength": 500
+    },
+    "placements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "points"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "points"
+          },
+          "points": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Meters east from the bed NW corner."
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Meters south from the bed NW corner."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
