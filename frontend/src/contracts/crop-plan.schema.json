@@ -6,13 +6,11 @@
   "additionalProperties": false,
   "required": [
     "planId",
-    "segmentId",
     "bedId",
     "cropId",
     "seasonYear",
     "plannedWindows",
-    "expectedYield",
-    "placements"
+    "expectedYield"
   ],
   "properties": {
     "planId": {

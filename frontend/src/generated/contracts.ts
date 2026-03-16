@@ -202,7 +202,7 @@ export interface CropPlanWindowRange {
 
 export interface CropPlan {
   planId: string;
-  segmentId: string;
+  segmentId?: string;
   cropId: string;
   bedId: string;
   seasonYear: number;
@@ -216,7 +216,7 @@ export interface CropPlan {
     unit: 'g' | 'kg' | 'pieces';
   };
   notes?: string;
-  placements: {
+  placements?: {
     type: 'points';
     points: {
       x: number;
