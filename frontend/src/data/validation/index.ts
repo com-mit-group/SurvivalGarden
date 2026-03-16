@@ -95,6 +95,132 @@ const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
 const toFiniteNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+const MAX_EXPANDED_FORMULA_POINTS = 5000;
+
+type PlacementPoint = { x: number; y: number };
+
+const roundCoordinate = (value: number): number => Number(value.toFixed(9));
+
+const expandPlacementPoints = (placement: Record<string, unknown>): PlacementPoint[] => {
+  if (placement.type === 'points' && Array.isArray(placement.points)) {
+    return placement.points
+      .map((point) => {
+        if (!isObjectRecord(point)) {
+          return null;
+        }
+
+        const x = toFiniteNumber(point.x);
+        const y = toFiniteNumber(point.y);
+
+        if (x === null || y === null) {
+          return null;
+        }
+
+        return { x, y };
+      })
+      .filter((point): point is PlacementPoint => point !== null);
+  }
+
+  if (placement.type !== 'formula' || !isObjectRecord(placement.formula) || typeof placement.formula.kind !== 'string') {
+    return [];
+  }
+
+  const formula = placement.formula;
+  const points: PlacementPoint[] = [];
+  const pushPoint = (x: number, y: number) => {
+    points.push({ x: roundCoordinate(x), y: roundCoordinate(y) });
+  };
+
+  if (formula.kind === 'grid' || formula.kind === 'staggered_grid') {
+    if (!isObjectRecord(formula.origin)) {
+      return [];
+    }
+
+    const originX = toFiniteNumber(formula.origin.x);
+    const originY = toFiniteNumber(formula.origin.y);
+    const dx = toFiniteNumber(formula.dx);
+    const dy = toFiniteNumber(formula.dy);
+    const rows = toFiniteNumber(formula.rows);
+    const cols = toFiniteNumber(formula.cols);
+    const staggerX = formula.kind === 'staggered_grid' ? toFiniteNumber(formula.staggerX) : 0;
+
+    if (originX === null || originY === null || dx === null || dy === null || rows === null || cols === null) {
+      return [];
+    }
+
+    for (let row = 0; row < rows; row += 1) {
+      const rowOffsetX = formula.kind === 'staggered_grid' && staggerX !== null && row % 2 === 1 ? staggerX : 0;
+      for (let col = 0; col < cols; col += 1) {
+        pushPoint(originX + rowOffsetX + col * dx, originY + row * dy);
+      }
+    }
+  }
+
+  if (formula.kind === 'row') {
+    if (!isObjectRecord(formula.origin)) {
+      return [];
+    }
+
+    const originX = toFiniteNumber(formula.origin.x);
+    const originY = toFiniteNumber(formula.origin.y);
+    const dx = toFiniteNumber(formula.dx);
+    const count = toFiniteNumber(formula.count);
+
+    if (originX === null || originY === null || dx === null || count === null) {
+      return [];
+    }
+
+    for (let index = 0; index < count; index += 1) {
+      pushPoint(originX + index * dx, originY);
+    }
+  }
+
+  if (formula.kind === 'line') {
+    if (!isObjectRecord(formula.start) || !isObjectRecord(formula.end)) {
+      return [];
+    }
+
+    const startX = toFiniteNumber(formula.start.x);
+    const startY = toFiniteNumber(formula.start.y);
+    const endX = toFiniteNumber(formula.end.x);
+    const endY = toFiniteNumber(formula.end.y);
+    const count = toFiniteNumber(formula.count);
+
+    if (startX === null || startY === null || endX === null || endY === null || count === null || count < 2) {
+      return [];
+    }
+
+    const stepX = (endX - startX) / (count - 1);
+    const stepY = (endY - startY) / (count - 1);
+
+    for (let index = 0; index < count; index += 1) {
+      pushPoint(startX + index * stepX, startY + index * stepY);
+    }
+  }
+
+  if (formula.kind === 'repeated_offset') {
+    if (!isObjectRecord(formula.origin)) {
+      return [];
+    }
+
+    const originX = toFiniteNumber(formula.origin.x);
+    const originY = toFiniteNumber(formula.origin.y);
+    const dx = toFiniteNumber(formula.dx);
+    const dy = toFiniteNumber(formula.dy);
+    const count = toFiniteNumber(formula.count);
+
+    if (originX === null || originY === null || dx === null || dy === null || count === null) {
+      return [];
+    }
+
+    for (let index = 0; index < count; index += 1) {
+      pushPoint(originX + index * dx, originY + index * dy);
+    }
+  }
+
+  return points;
+};
+
 const collectSegmentGeometryIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
   const segments =
     schemaName === 'segment'
@@ -331,11 +457,23 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
         const bedSize = bedDimensions.get(`${plan.segmentId}:${plan.bedId}`);
 
         plan.placements.forEach((placement, placementIndex) => {
-          if (!isObjectRecord(placement) || !Array.isArray(placement.points)) {
+          if (!isObjectRecord(placement)) {
             return;
           }
 
-          placement.points.forEach((point, pointIndex) => {
+          const expandedPoints = expandPlacementPoints(placement);
+
+          if (placement.type === 'formula' && expandedPoints.length > MAX_EXPANDED_FORMULA_POINTS) {
+            issues.push({
+              schemaName,
+              path: `/cropPlans/${planIndex}/placements/${placementIndex}/formula`,
+              keyword: 'maxItems',
+              message: `placement formula expands to ${expandedPoints.length} points (max ${MAX_EXPANDED_FORMULA_POINTS})`,
+            });
+            return;
+          }
+
+          expandedPoints.forEach((point, pointIndex) => {
             if (!isObjectRecord(point)) {
               return;
             }

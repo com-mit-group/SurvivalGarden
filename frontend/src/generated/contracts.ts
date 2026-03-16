@@ -216,13 +216,55 @@ export interface CropPlan {
     unit: 'g' | 'kg' | 'pieces';
   };
   notes?: string;
-  placements?: {
-    type: 'points';
-    points: {
-      x: number;
-      y: number;
-    }[];
-  }[];
+  placements?: (
+    | {
+        type: 'points';
+        points: {
+          x: number;
+          y: number;
+        }[];
+      }
+    | {
+        type: 'formula';
+        formula:
+          | {
+              kind: 'grid';
+              origin: { x: number; y: number };
+              dx: number;
+              dy: number;
+              rows: number;
+              cols: number;
+            }
+          | {
+              kind: 'row';
+              origin: { x: number; y: number };
+              dx: number;
+              count: number;
+            }
+          | {
+              kind: 'staggered_grid';
+              origin: { x: number; y: number };
+              dx: number;
+              dy: number;
+              rows: number;
+              cols: number;
+              staggerX: number;
+            }
+          | {
+              kind: 'line';
+              start: { x: number; y: number };
+              end: { x: number; y: number };
+              count: number;
+            }
+          | {
+              kind: 'repeated_offset';
+              origin: { x: number; y: number };
+              dx: number;
+              dy: number;
+              count: number;
+            };
+      }
+  )[];
 }
 
 export interface SeedInventoryItem {
