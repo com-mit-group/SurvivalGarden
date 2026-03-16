@@ -408,8 +408,12 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
       if (!bed || typeof bed !== 'object') {
         return bed;
       }
-      const { x: _x, y: _y, width: _w, height: _h, ...rest } = bed as Record<string, unknown>;
-      return rest;
+      const sanitizedBed = { ...(bed as Record<string, unknown>) };
+      delete sanitizedBed.x;
+      delete sanitizedBed.y;
+      delete sanitizedBed.width;
+      delete sanitizedBed.height;
+      return sanitizedBed;
     }),
     segments: [
       {
