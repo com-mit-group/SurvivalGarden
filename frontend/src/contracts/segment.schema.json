@@ -38,38 +38,58 @@
     "beds": {
       "type": "array",
       "items": {
-        "allOf": [
-          {
-            "$ref": "https://survivalgarden/contracts/bed.schema.json"
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bedId",
+          "gardenId",
+          "name",
+          "createdAt",
+          "updatedAt",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "bedId": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
           },
-          {
-            "type": "object",
-            "required": [
-              "x",
-              "y",
-              "width",
-              "height"
-            ],
-            "properties": {
-              "x": {
-                "type": "number",
-                "minimum": 0
-              },
-              "y": {
-                "type": "number",
-                "minimum": 0
-              },
-              "width": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "height": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              }
-            }
+          "gardenId": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "createdAt": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/isoDate"
+          },
+          "updatedAt": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/isoDate"
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0
           }
-        ]
+        }
       }
     },
     "paths": {

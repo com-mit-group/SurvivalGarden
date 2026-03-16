@@ -6,7 +6,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 1",
-      "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -14,7 +14,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 2",
-      "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -22,7 +22,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 3",
-      "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -30,7 +30,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 4",
-      "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -38,7 +38,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 5",
-      "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -46,7 +46,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 6",
-      "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -54,7 +54,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 7",
-      "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -62,7 +62,7 @@
       "createdAt": "2026-01-05T00:00:00Z",
       "gardenId": "garden_trier_001",
       "name": "Bed 8",
-      "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
       "updatedAt": "2026-01-05T00:00:00Z"
     }
   ],
@@ -74,7 +74,7 @@
         "amount": 22,
         "unit": "kg"
       },
-      "notes": "Placeholder estimate: conservative staple-yield assumption (~1.2 kg/m\u00b2) for planning only.",
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~1.2 kg/m²) for planning only.",
       "planId": "plan_001",
       "plannedWindows": {
         "harvest": [
@@ -103,7 +103,7 @@
         "amount": 8,
         "unit": "kg"
       },
-      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.45 kg/m\u00b2 edible beans) for planning only.",
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.45 kg/m² edible beans) for planning only.",
       "planId": "plan_002",
       "plannedWindows": {
         "harvest": [
@@ -132,7 +132,7 @@
         "amount": 6,
         "unit": "kg"
       },
-      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.35 kg/m\u00b2 shelled peas) for planning only.",
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.35 kg/m² shelled peas) for planning only.",
       "planId": "plan_003",
       "plannedWindows": {
         "harvest": [
@@ -161,7 +161,7 @@
         "amount": 12,
         "unit": "kg"
       },
-      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.7 kg/m\u00b2 carrots) for planning only.",
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.7 kg/m² carrots) for planning only.",
       "planId": "plan_004",
       "plannedWindows": {
         "harvest": [
@@ -753,6 +753,114 @@
       "variety": "Bintje"
     }
   ],
+  "segments": [
+    {
+      "beds": [
+        {
+          "bedId": "bed_001",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 1",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_002",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 2",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_003",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 3",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_004",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 4",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_005",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 5",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_006",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 6",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_007",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 7",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_008",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 8",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "height": 100,
+      "name": "Main Segment",
+      "originReference": "nw_corner",
+      "paths": [],
+      "segmentId": "segment_main",
+      "width": 100
+    }
+  ],
   "settings": {
     "createdAt": "2026-01-05T00:00:00Z",
     "locale": "de-DE",
@@ -776,114 +884,6 @@
       "sourceKey": "plan_001:sowing",
       "status": "open",
       "type": "sow"
-    }
-  ],
-  "segments": [
-    {
-      "segmentId": "segment_main",
-      "name": "Main Segment",
-      "width": 100,
-      "height": 100,
-      "originReference": "nw_corner",
-      "beds": [
-        {
-          "bedId": "bed_001",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 1",
-          "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_002",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 2",
-          "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_003",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 3",
-          "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_004",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 4",
-          "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_005",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 5",
-          "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_006",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 6",
-          "notes": "Approx area 18 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_007",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 7",
-          "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        },
-        {
-          "bedId": "bed_008",
-          "createdAt": "2026-01-05T00:00:00Z",
-          "gardenId": "garden_trier_001",
-          "name": "Bed 8",
-          "notes": "Approx area 17 m\u00b2 (documented in notes; no dedicated area field in current schema).",
-          "updatedAt": "2026-01-05T00:00:00Z",
-          "x": 0,
-          "y": 0,
-          "width": 1,
-          "height": 1
-        }
-      ],
-      "paths": []
     }
   ]
 }
