@@ -100,6 +100,7 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
         return {
           ...typedSegment,
           beds: segmentBeds,
+          paths: Array.isArray(typedSegment.paths) ? typedSegment.paths : [],
         };
       })
     : state.segments;
@@ -187,6 +188,16 @@ const canonicalizeForExport = (appState: AppState): AppState => {
     batches: canonicalBatches,
     seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
     tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
+    segments: appState.segments
+      ? sortCollectionByKey(
+          appState.segments.map((segment) => ({
+            ...segment,
+            beds: sortCollectionByKey(segment.beds, ['bedId', 'gardenId', 'name']),
+            paths: sortCollectionByKey(segment.paths, ['pathId', 'name']),
+          })),
+          ['segmentId', 'name'],
+        )
+      : appState.segments,
   };
 };
 

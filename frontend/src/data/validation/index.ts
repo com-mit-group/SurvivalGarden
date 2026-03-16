@@ -182,6 +182,92 @@ const collectSegmentGeometryIssues = (schemaName: SchemaName, payload: unknown):
   return issues;
 };
 
+const collectPathPlacementIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
+  if (schemaName !== 'appState' || !isObjectRecord(payload)) {
+    return [];
+  }
+
+  const segments = Array.isArray(payload.segments) ? payload.segments : [];
+  const pathIds = new Set<string>();
+
+  segments.forEach((segment) => {
+    if (!isObjectRecord(segment) || !Array.isArray(segment.paths)) {
+      return;
+    }
+
+    segment.paths.forEach((path) => {
+      if (isObjectRecord(path) && typeof path.pathId === 'string' && path.pathId.length > 0) {
+        pathIds.add(path.pathId);
+      }
+    });
+  });
+
+  if (pathIds.size === 0) {
+    return [];
+  }
+
+  const issues: ValidationIssue[] = [];
+
+  const addPlacementIssue = (path: string, pathId: string) => {
+    issues.push({
+      schemaName,
+      path,
+      keyword: 'invalidReference',
+      message: `crop placement cannot target path entity '${pathId}'`,
+    });
+  };
+
+  const cropPlans = Array.isArray(payload.cropPlans) ? payload.cropPlans : [];
+  cropPlans.forEach((plan, planIndex) => {
+    if (!isObjectRecord(plan) || typeof plan.bedId !== 'string') {
+      return;
+    }
+
+    if (pathIds.has(plan.bedId)) {
+      addPlacementIssue(`/cropPlans/${planIndex}/bedId`, plan.bedId);
+    }
+  });
+
+  const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+  tasks.forEach((task, taskIndex) => {
+    if (!isObjectRecord(task) || typeof task.bedId !== 'string') {
+      return;
+    }
+
+    if (pathIds.has(task.bedId)) {
+      addPlacementIssue(`/tasks/${taskIndex}/bedId`, task.bedId);
+    }
+  });
+
+  const batches = Array.isArray(payload.batches) ? payload.batches : [];
+  batches.forEach((batch, batchIndex) => {
+    if (!isObjectRecord(batch)) {
+      return;
+    }
+
+    const checkAssignments = (assignmentKey: 'assignments' | 'bedAssignments') => {
+      if (!Array.isArray(batch[assignmentKey])) {
+        return;
+      }
+
+      batch[assignmentKey].forEach((assignment, assignmentIndex) => {
+        if (!isObjectRecord(assignment) || typeof assignment.bedId !== 'string') {
+          return;
+        }
+
+        if (pathIds.has(assignment.bedId)) {
+          addPlacementIssue(`/batches/${batchIndex}/${assignmentKey}/${assignmentIndex}/bedId`, assignment.bedId);
+        }
+      });
+    };
+
+    checkAssignments('assignments');
+    checkAssignments('bedAssignments');
+  });
+
+  return issues;
+};
+
 const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
   appState: ajv.compile<SchemaTypeMap['appState']>(appStateSchema),
   batch: ajv.compile<SchemaTypeMap['batch']>(batchSchema),
@@ -223,14 +309,17 @@ export const validateSchema = <T extends SchemaName>(
 
   if (validator(payload)) {
     const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
-    if (geometryIssues.length === 0) {
+    const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
+
+    if (geometryIssues.length === 0 && pathPlacementIssues.length === 0) {
       return { ok: true, value: payload };
     }
 
-    return { ok: false, issues: geometryIssues };
+    return { ok: false, issues: [...geometryIssues, ...pathPlacementIssues] };
   }
 
   const issues = (validator.errors || []).map((error) => normalizeError(schemaName, error));
   const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
-  return { ok: false, issues: [...issues, ...geometryIssues] };
+  const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
+  return { ok: false, issues: [...issues, ...geometryIssues, ...pathPlacementIssues] };
 };
