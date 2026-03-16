@@ -274,15 +274,7 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
   }
 
   const segments = Array.isArray(payload.segments) ? payload.segments : [];
-  const crops = Array.isArray(payload.crops) ? payload.crops : [];
   const cropPlans = Array.isArray(payload.cropPlans) ? payload.cropPlans : [];
-
-  const cropIds = new Set<string>();
-  crops.forEach((crop) => {
-    if (isObjectRecord(crop) && typeof crop.cropId === 'string' && crop.cropId.length > 0) {
-      cropIds.add(crop.cropId);
-    }
-  });
 
   const bedBySegment = new Map<string, Set<string>>();
   const bedDimensions = new Map<string, { width: number; height: number }>();
@@ -315,15 +307,6 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
   cropPlans.forEach((plan, planIndex) => {
     if (!isObjectRecord(plan)) {
       return;
-    }
-
-    if (typeof plan.cropId === 'string' && plan.cropId.length > 0 && !cropIds.has(plan.cropId)) {
-      issues.push({
-        schemaName,
-        path: `/cropPlans/${planIndex}/cropId`,
-        keyword: 'invalidReference',
-        message: `cropPlan references unknown cropId '${plan.cropId}'`,
-      });
     }
 
     if (typeof plan.segmentId === 'string' && typeof plan.bedId === 'string') {
