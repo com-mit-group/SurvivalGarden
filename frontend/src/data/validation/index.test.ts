@@ -69,6 +69,7 @@ const validBed = {
   bedId: 'bed-1',
   gardenId: 'garden-1',
   name: 'Bed 1',
+  type: 'vegetable_bed',
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
 };
@@ -301,6 +302,7 @@ describe('assertValid', () => {
         bedId: 'bed-1',
         gardenId: 'garden-1',
         name: 'Bed 1',
+        type: 'vegetable_bed',
         createdAt: 'not-a-date',
         updatedAt: '2024-01-01T00:00:00Z',
       }),
@@ -311,6 +313,7 @@ describe('assertValid', () => {
         bedId: 'bed-1',
         gardenId: 'garden-1',
         name: 'Bed 1',
+        type: 'vegetable_bed',
         createdAt: 'not-a-date',
         updatedAt: '2024-01-01T00:00:00Z',
       });

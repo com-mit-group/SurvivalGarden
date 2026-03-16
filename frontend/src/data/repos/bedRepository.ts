@@ -1,7 +1,19 @@
 import type { AppState, Bed } from '../../contracts';
 import { assertValid } from '../validation';
 
-const normalizeBedCandidate = (value: unknown): unknown => value ?? {};
+const LEGACY_BED_TYPE = 'vegetable_bed';
+
+const normalizeBedCandidate = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    ...candidate,
+    type: typeof candidate.type === 'string' ? candidate.type : LEGACY_BED_TYPE,
+  };
+};
 
 const listBedsFromSegments = (state: AppState): Bed[] =>
   (state.segments ?? []).flatMap((segment) =>

@@ -7,7 +7,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 1",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_002",
@@ -15,7 +16,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 2",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_003",
@@ -23,7 +25,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 3",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_004",
@@ -31,7 +34,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 4",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_005",
@@ -39,7 +43,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 5",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_006",
@@ -47,7 +52,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 6",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_007",
@@ -55,7 +61,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 7",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     },
     {
       "bedId": "bed_008",
@@ -63,7 +70,8 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 8",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
-      "updatedAt": "2026-01-05T00:00:00Z"
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "type": "vegetable_bed"
     }
   ],
   "cropPlans": [
@@ -766,7 +774,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_002",
@@ -778,7 +787,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_003",
@@ -790,7 +800,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_004",
@@ -802,7 +813,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_005",
@@ -814,7 +826,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_006",
@@ -826,7 +839,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_007",
@@ -838,7 +852,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         },
         {
           "bedId": "bed_008",
@@ -850,7 +865,8 @@
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
-          "y": 0
+          "y": 0,
+          "type": "vegetable_bed"
         }
       ],
       "height": 100,

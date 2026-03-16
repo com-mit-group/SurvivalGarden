@@ -79,10 +79,13 @@ export interface Batch {
   };
 }
 
+export type BedType = 'ecology_strip' | 'vegetable_bed' | 'perennial_bed';
+
 export interface Bed {
   bedId: string;
   gardenId: string;
   name: string;
+  type: BedType;
   notes?: string;
   createdAt: string;
   updatedAt: string;
