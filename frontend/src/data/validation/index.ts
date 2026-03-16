@@ -556,14 +556,6 @@ const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown
       }
     });
   });
-
-  const batchIds = new Set<string>();
-  batches.forEach((batch) => {
-    if (isObjectRecord(batch) && typeof batch.batchId === 'string' && batch.batchId.length > 0) {
-      batchIds.add(batch.batchId);
-    }
-  });
-
   const issues: ValidationIssue[] = [];
 
   const pushInvalidRef = (path: string, message: string) => {
@@ -632,10 +624,6 @@ const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown
 
     if (typeof task.bedId === 'string' && !bedIds.has(task.bedId)) {
       pushInvalidRef(`/tasks/${taskIndex}/bedId`, `task references unknown bedId '${task.bedId}'`);
-    }
-
-    if (typeof task.batchId === 'string' && !batchIds.has(task.batchId)) {
-      pushInvalidRef(`/tasks/${taskIndex}/batchId`, `task references unknown batchId '${task.batchId}'`);
     }
   });
 
