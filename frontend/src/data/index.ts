@@ -69,6 +69,26 @@ const SCHEMA_VERSION_KEY = 'schemaVersion';
 
 const LEGACY_BED_TYPE = 'vegetable_bed';
 
+type LayoutMigrationWarningCode =
+  | 'legacy_layout_segment_created'
+  | 'legacy_layout_paths_dropped'
+  | 'legacy_layout_crop_plan_segment_missing'
+  | 'legacy_layout_crop_plan_segment_ambiguous'
+  | 'legacy_layout_crop_plan_placement_shifted'
+  | 'legacy_layout_crop_plan_placement_unmigrated';
+
+type LayoutMigrationWarning = {
+  code: LayoutMigrationWarningCode;
+  message: string;
+  entityType?: 'segment' | 'bed' | 'path' | 'cropPlan';
+  entityId?: string;
+};
+
+type LayoutMigrationReport = {
+  migrated: boolean;
+  warnings: LayoutMigrationWarning[];
+};
+
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
   type: typeof bed.type === 'string' ? bed.type : LEGACY_BED_TYPE,
@@ -112,6 +132,309 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
   };
 };
 
+const toFiniteNumber = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report: LayoutMigrationReport } => {
+  const report: LayoutMigrationReport = { migrated: false, warnings: [] };
+
+  if (!payload || typeof payload !== 'object') {
+    return { payload, report };
+  }
+
+  const state = payload as Record<string, unknown>;
+
+  const shiftPlacementsToBedRelative = (
+    placements: unknown[],
+    bed: { x: number; y: number; width: number; height: number },
+  ): { placements: unknown[]; shifted: boolean } => {
+    let shifted = false;
+
+    const shiftPoint = (point: unknown): unknown => {
+      if (!point || typeof point !== 'object') {
+        return point;
+      }
+
+      const typedPoint = point as Record<string, unknown>;
+      const x = toFiniteNumber(typedPoint.x);
+      const y = toFiniteNumber(typedPoint.y);
+
+      if (x === null || y === null) {
+        return point;
+      }
+
+      if (x <= bed.width && y <= bed.height && x >= 0 && y >= 0) {
+        return point;
+      }
+
+      const shiftedX = x - bed.x;
+      const shiftedY = y - bed.y;
+
+      if (shiftedX < 0 || shiftedY < 0 || shiftedX > bed.width || shiftedY > bed.height) {
+        return point;
+      }
+
+      shifted = true;
+      return { ...typedPoint, x: shiftedX, y: shiftedY };
+    };
+
+    const normalized = placements.map((placement) => {
+      if (!placement || typeof placement !== 'object') {
+        return placement;
+      }
+
+      const typedPlacement = placement as Record<string, unknown>;
+
+      if (typedPlacement.type === 'points' && Array.isArray(typedPlacement.points)) {
+        return {
+          ...typedPlacement,
+          points: typedPlacement.points.map((point) => shiftPoint(point)),
+        };
+      }
+
+      if (typedPlacement.type !== 'formula' || !typedPlacement.formula || typeof typedPlacement.formula !== 'object') {
+        return placement;
+      }
+
+      const typedFormula = typedPlacement.formula as Record<string, unknown>;
+
+      if (typedFormula.kind === 'line') {
+        return {
+          ...typedPlacement,
+          formula: {
+            ...typedFormula,
+            start: shiftPoint(typedFormula.start),
+            end: shiftPoint(typedFormula.end),
+          },
+        };
+      }
+
+      return {
+        ...typedPlacement,
+        formula: {
+          ...typedFormula,
+          origin: shiftPoint(typedFormula.origin),
+        },
+      };
+    });
+
+    return { placements: normalized, shifted };
+  };
+
+  const withSegments = (nextState: Record<string, unknown>): Record<string, unknown> => {
+    if (!Array.isArray(nextState.segments)) {
+      return nextState;
+    }
+
+    const bedToSegment = new Map<string, { segmentId: string; bed: { x: number; y: number; width: number; height: number } | null }>();
+
+    nextState.segments.forEach((segment) => {
+      if (!segment || typeof segment !== 'object') {
+        return;
+      }
+
+      const typedSegment = segment as Record<string, unknown>;
+      if (typeof typedSegment.segmentId !== 'string' || !Array.isArray(typedSegment.beds)) {
+        return;
+      }
+
+      typedSegment.beds.forEach((bed) => {
+        if (!bed || typeof bed !== 'object') {
+          return;
+        }
+
+        const typedBed = bed as Record<string, unknown>;
+        if (typeof typedBed.bedId !== 'string') {
+          return;
+        }
+
+        if (bedToSegment.has(typedBed.bedId)) {
+          bedToSegment.set(typedBed.bedId, { segmentId: '__ambiguous__', bed: null });
+          return;
+        }
+
+        const x = toFiniteNumber(typedBed.x);
+        const y = toFiniteNumber(typedBed.y);
+        const width = toFiniteNumber(typedBed.width);
+        const height = toFiniteNumber(typedBed.height);
+
+        bedToSegment.set(typedBed.bedId, {
+          segmentId: typedSegment.segmentId,
+          bed: x !== null && y !== null && width !== null && height !== null ? { x, y, width, height } : null,
+        });
+      });
+    });
+
+    if (!Array.isArray(nextState.cropPlans)) {
+      return nextState;
+    }
+
+    return {
+      ...nextState,
+      cropPlans: nextState.cropPlans.map((plan) => {
+        if (!plan || typeof plan !== 'object') {
+          return plan;
+        }
+
+        const typedPlan = plan as Record<string, unknown>;
+        const bedId = typeof typedPlan.bedId === 'string' ? typedPlan.bedId : null;
+
+        if (!bedId) {
+          return plan;
+        }
+
+        const placementOwner = bedToSegment.get(bedId);
+
+        if (!placementOwner) {
+          report.warnings.push({
+            code: 'legacy_layout_crop_plan_segment_missing',
+            message: `Crop plan bed '${bedId}' does not map to a migrated segment.`,
+            entityType: 'cropPlan',
+            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+          });
+          return plan;
+        }
+
+        if (placementOwner.segmentId === '__ambiguous__') {
+          report.warnings.push({
+            code: 'legacy_layout_crop_plan_segment_ambiguous',
+            message: `Crop plan bed '${bedId}' maps to multiple segments.`,
+            entityType: 'cropPlan',
+            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+          });
+          return plan;
+        }
+
+        let migratedPlan: Record<string, unknown> = typedPlan;
+        if (typeof typedPlan.segmentId !== 'string') {
+          migratedPlan = { ...migratedPlan, segmentId: placementOwner.segmentId };
+          report.migrated = true;
+        }
+
+        if (Array.isArray(typedPlan.placements) && placementOwner.bed) {
+          const shifted = shiftPlacementsToBedRelative(typedPlan.placements, placementOwner.bed);
+          if (shifted.shifted) {
+            migratedPlan = { ...migratedPlan, placements: shifted.placements };
+            report.migrated = true;
+            report.warnings.push({
+              code: 'legacy_layout_crop_plan_placement_shifted',
+              message: `Shifted crop plan placements for bed '${bedId}' to bed-relative coordinates.`,
+              entityType: 'cropPlan',
+              entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+            });
+          }
+        } else if (Array.isArray(typedPlan.placements)) {
+          report.warnings.push({
+            code: 'legacy_layout_crop_plan_placement_unmigrated',
+            message: `Crop plan placements for bed '${bedId}' could not be converted to bed-relative coordinates.`,
+            entityType: 'cropPlan',
+            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+          });
+        }
+
+        return migratedPlan;
+      }),
+    };
+  };
+
+  if (Array.isArray(state.segments) && state.segments.length > 0) {
+    return { payload: withSegments(state), report };
+  }
+
+  if (!Array.isArray(state.beds)) {
+    return { payload, report };
+  }
+
+  const legacyBeds = state.beds.filter((bed): bed is Record<string, unknown> => {
+    if (!bed || typeof bed !== 'object') {
+      return false;
+    }
+
+    const typedBed = bed as Record<string, unknown>;
+    return (
+      toFiniteNumber(typedBed.x) !== null &&
+      toFiniteNumber(typedBed.y) !== null &&
+      toFiniteNumber(typedBed.width) !== null &&
+      toFiniteNumber(typedBed.height) !== null
+    );
+  });
+
+  if (legacyBeds.length === 0) {
+    return { payload, report };
+  }
+
+  const migratedBeds = legacyBeds.map((bed) => {
+    const { x, y, width, height, ...rest } = bed;
+    return {
+      ...rest,
+      x,
+      y,
+      width,
+      height,
+    };
+  });
+
+  const maxX = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.x) ?? 0) + (toFiniteNumber(bed.width) ?? 0)), 0);
+  const maxY = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.y) ?? 0) + (toFiniteNumber(bed.height) ?? 0)), 0);
+
+  const legacyPaths = Array.isArray((state as { paths?: unknown[] }).paths)
+    ? ((state as { paths?: unknown[] }).paths ?? []).filter((path) => {
+        if (!path || typeof path !== 'object') {
+          return false;
+        }
+        const typedPath = path as Record<string, unknown>;
+        return (
+          typeof typedPath.pathId === 'string' &&
+          typeof typedPath.name === 'string' &&
+          toFiniteNumber(typedPath.x) !== null &&
+          toFiniteNumber(typedPath.y) !== null &&
+          toFiniteNumber(typedPath.width) !== null &&
+          toFiniteNumber(typedPath.height) !== null
+        );
+      })
+    : [];
+
+  if (Array.isArray((state as { paths?: unknown[] }).paths) && legacyPaths.length !== (state as { paths?: unknown[] }).paths?.length) {
+    report.warnings.push({
+      code: 'legacy_layout_paths_dropped',
+      message: 'Some legacy paths were dropped because required geometry fields were missing.',
+      entityType: 'segment',
+      entityId: 'segment_migrated_main',
+    });
+  }
+
+  const nextState = {
+    ...state,
+    beds: state.beds.map((bed) => {
+      if (!bed || typeof bed !== 'object') {
+        return bed;
+      }
+      const { x: _x, y: _y, width: _w, height: _h, ...rest } = bed as Record<string, unknown>;
+      return rest;
+    }),
+    segments: [
+      {
+        segmentId: 'segment_migrated_main',
+        name: 'Migrated Segment',
+        width: Math.max(maxX, 1),
+        height: Math.max(maxY, 1),
+        originReference: 'legacy_migration_auto',
+        beds: migratedBeds,
+        paths: legacyPaths,
+      },
+    ],
+  };
+
+  report.migrated = true;
+  report.warnings.push({
+    code: 'legacy_layout_segment_created',
+    message: 'Created a migrated segment from legacy bed coordinates.',
+    entityType: 'segment',
+    entityId: 'segment_migrated_main',
+  });
+
+  return { payload: withSegments(nextState), report };
+};
+
 const GOLDEN_DATASET = assertValid('appState', migrateLegacyBedTypes(goldenDatasetFixture));
 
 export type {
@@ -141,7 +464,13 @@ export {
 
 export const parseImportedAppState = (rawPayload: string): AppState => {
   const parsed: unknown = JSON.parse(rawPayload);
-  return assertValid('appState', migrateLegacyBedTypes(parsed));
+  const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
+
+  if (migrationResult.report.warnings.length > 0) {
+    console.warn('AppState migration warnings', migrationResult.report.warnings);
+  }
+
+  return assertValid('appState', migrationResult.payload);
 };
 
 const compareByString = (left: string, right: string): number => left.localeCompare(right);
