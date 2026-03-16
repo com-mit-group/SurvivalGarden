@@ -88,6 +88,33 @@ export interface Bed {
   updatedAt: string;
 }
 
+export interface Path {
+  pathId: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  surface?: string;
+}
+
+export interface SegmentBed extends Bed {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Segment {
+  segmentId: string;
+  name: string;
+  width: number;
+  height: number;
+  originReference: string;
+  beds: SegmentBed[];
+  paths: Path[];
+}
+
 export interface CropWindowRange {
   startMonth: number;
   startWeek: number;
@@ -231,6 +258,7 @@ export interface Task {
 
 export interface AppState {
   schemaVersion: number;
+  segments?: Segment[];
   beds: Bed[];
   crops: Crop[];
   cropPlans: CropPlan[];

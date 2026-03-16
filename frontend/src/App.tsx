@@ -1428,13 +1428,16 @@ function BatchesPage() {
     void load();
   }, []);
 
-  const filters = {
-    crop: searchParams.get('crop') ?? '',
-    stage: searchParams.get('stage') ?? '',
-    bed: searchParams.get('bed') ?? '',
-    from: searchParams.get('from') ?? '',
-    to: searchParams.get('to') ?? '',
-  };
+  const filters = useMemo(
+    () => ({
+      crop: searchParams.get('crop') ?? '',
+      stage: searchParams.get('stage') ?? '',
+      bed: searchParams.get('bed') ?? '',
+      from: searchParams.get('from') ?? '',
+      to: searchParams.get('to') ?? '',
+    }),
+    [searchParams],
+  );
 
   const cropOptions = useMemo(
     () =>
@@ -1529,7 +1532,7 @@ function BatchesPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const resolveCropIdFromInput = (cropInput: string): string | null => {
+  const resolveCropIdFromInput = useCallback((cropInput: string): string | null => {
     const normalizedInput = normalizeCropSearchValue(cropInput);
     if (!normalizedInput) {
       return null;
@@ -1558,9 +1561,12 @@ function BatchesPage() {
     });
 
     return containsMatch?.cropId ?? null;
-  };
+  }, [cropInputOptions]);
 
-  const selectedCropId = useMemo(() => resolveCropIdFromInput(formValues.cropInput), [cropInputOptions, formValues.cropInput]);
+  const selectedCropId = useMemo(
+    () => resolveCropIdFromInput(formValues.cropInput),
+    [formValues.cropInput, resolveCropIdFromInput],
+  );
   const selectedCropRuleWarning =
     selectedCropId && cropHasTaskRules[selectedCropId] === false
       ? 'Warning: this crop has no task rules. You can still create and edit batches.'

@@ -14,7 +14,9 @@ import batchSchema from './batch.schema.json';
 import bedSchema from './bed.schema.json';
 import cropPlanSchema from './crop-plan.schema.json';
 import cropSchema from './crop.schema.json';
+import pathSchema from './path.schema.json';
 import seedInventoryItemSchema from './seed-inventory-item.schema.json';
+import segmentSchema from './segment.schema.json';
 import settingsSchema from './settings.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
@@ -75,6 +77,8 @@ describe('AppState schema', () => {
     ajv.addSchema(bedSchema);
     ajv.addSchema(cropSchema);
     ajv.addSchema(cropPlanSchema);
+    ajv.addSchema(pathSchema);
+    ajv.addSchema(segmentSchema);
     ajv.addSchema(taskSchema);
     ajv.addSchema(seedInventoryItemSchema);
     ajv.addSchema(settingsSchema);
@@ -85,6 +89,7 @@ describe('AppState schema', () => {
     const validate = buildValidator();
     const payload: AppState = {
       schemaVersion: 1,
+      segments: [],
       beds: [
         {
           bedId: 'bed_001',
@@ -203,6 +208,7 @@ describe('AppState schema', () => {
   it('rejects AppState payload with invalid schemaVersion', () => {
     const validate = buildValidator();
     const payload = {
+      segments: [],
       beds: [],
       crops: [],
       cropPlans: [],

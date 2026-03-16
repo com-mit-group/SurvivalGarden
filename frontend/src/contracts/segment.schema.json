@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/segment.schema.json",
+  "title": "Segment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "segmentId",
+    "name",
+    "width",
+    "height",
+    "originReference",
+    "beds",
+    "paths"
+  ],
+  "properties": {
+    "segmentId": {
+      "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "width": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "height": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "originReference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "beds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bedId",
+          "gardenId",
+          "name",
+          "createdAt",
+          "updatedAt",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "bedId": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+          },
+          "gardenId": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "createdAt": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/isoDate"
+          },
+          "updatedAt": {
+            "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/isoDate"
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      }
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/path.schema.json"
+      }
+    }
+  }
+}
