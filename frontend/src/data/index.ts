@@ -143,6 +143,9 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
 
   const state = payload as Record<string, unknown>;
 
+  const cropPlanWarningMeta = (plan: Record<string, unknown>): { entityType: 'cropPlan'; entityId?: string } =>
+    typeof plan.planId === 'string' ? { entityType: 'cropPlan', entityId: plan.planId } : { entityType: 'cropPlan' };
+
   const shiftPlacementsToBedRelative = (
     placements: unknown[],
     bed: { x: number; y: number; width: number; height: number },
@@ -237,6 +240,8 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
         return;
       }
 
+      const segmentId = typedSegment.segmentId;
+
       typedSegment.beds.forEach((bed) => {
         if (!bed || typeof bed !== 'object') {
           return;
@@ -258,7 +263,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
         const height = toFiniteNumber(typedBed.height);
 
         bedToSegment.set(typedBed.bedId, {
-          segmentId: typedSegment.segmentId,
+          segmentId,
           bed: x !== null && y !== null && width !== null && height !== null ? { x, y, width, height } : null,
         });
       });
@@ -288,8 +293,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
           report.warnings.push({
             code: 'legacy_layout_crop_plan_segment_missing',
             message: `Crop plan bed '${bedId}' does not map to a migrated segment.`,
-            entityType: 'cropPlan',
-            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+            ...cropPlanWarningMeta(typedPlan),
           });
           return plan;
         }
@@ -298,8 +302,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
           report.warnings.push({
             code: 'legacy_layout_crop_plan_segment_ambiguous',
             message: `Crop plan bed '${bedId}' maps to multiple segments.`,
-            entityType: 'cropPlan',
-            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+            ...cropPlanWarningMeta(typedPlan),
           });
           return plan;
         }
@@ -318,16 +321,14 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
             report.warnings.push({
               code: 'legacy_layout_crop_plan_placement_shifted',
               message: `Shifted crop plan placements for bed '${bedId}' to bed-relative coordinates.`,
-              entityType: 'cropPlan',
-              entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+              ...cropPlanWarningMeta(typedPlan),
             });
           }
         } else if (Array.isArray(typedPlan.placements)) {
           report.warnings.push({
             code: 'legacy_layout_crop_plan_placement_unmigrated',
             message: `Crop plan placements for bed '${bedId}' could not be converted to bed-relative coordinates.`,
-            entityType: 'cropPlan',
-            entityId: typeof typedPlan.planId === 'string' ? typedPlan.planId : undefined,
+            ...cropPlanWarningMeta(typedPlan),
           });
         }
 
