@@ -3378,6 +3378,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [pendingImportState, setPendingImportState] = useState<unknown | null>(null);
   const [pendingBatchImportState, setPendingBatchImportState] = useState<unknown | null>(null);
   const [pendingBatchImportPreview, setPendingBatchImportPreview] = useState<Array<{ batchLabel: string; seedCount: number; eventCount: number }>>([]);
+  const [autoRenameOnConflict, setAutoRenameOnConflict] = useState(false);
+  const [batchImportStatusSummary, setBatchImportStatusSummary] = useState<{
+    skipped: number;
+    merged: number;
+    rejected: number;
+    renamed: number;
+  } | null>(null);
 
   const buildBatchValidationMessages = useCallback((error: unknown, batchId: string, batchIndex: number): Array<{ path: string; message: string }> => {
     const fallbackPath = `/batches/${batchIndex}`;
@@ -3466,6 +3473,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingImportState(null);
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
+    setBatchImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3494,6 +3502,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingImportState(null);
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
+    setBatchImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3605,12 +3614,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       const merged = report?.batches.updated ?? 0;
       const skipped = report?.batches.unchanged ?? 0;
       const rejectedConflict = report?.conflicts.length ?? 0;
+      const renamed = 0;
       const conflictDetail = rejectedConflict > 0
         ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
         : '';
+      const renameCapabilityNote = autoRenameOnConflict
+        ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
+        : '';
+      setBatchImportStatusSummary({
+        skipped,
+        merged,
+        rejected: rejectedConflict,
+        renamed,
+      });
       setImportMessage(
-        `Batch import complete. Created: ${created}, merged: ${merged}, rejected-conflict: ${rejectedConflict}, skipped: ${skipped}.`
-        + conflictDetail,
+        `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
+        + conflictDetail
+        + renameCapabilityNote,
       );
       setPendingBatchImportState(null);
       setPendingBatchImportPreview([]);
@@ -3620,7 +3640,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, mapImportError, pendingBatchImportState]);
+  }, [autoRenameOnConflict, isImporting, mapImportError, pendingBatchImportState]);
 
   useEffect(() => {
     const search = new URLSearchParams(location.search);
@@ -3733,6 +3753,20 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         <code>type + date + location</code>; immutable fields (<code>cropId</code>, <code>startedAt</code>,{' '}
         <code>startMethod</code>, <code>startLocation</code>) cannot change; <code>currentStage</code> follows the latest event.
       </p>
+      <label>
+        <input
+          type="checkbox"
+          checked={autoRenameOnConflict}
+          onChange={(event) => {
+            setAutoRenameOnConflict(event.currentTarget.checked);
+          }}
+          disabled={isImporting}
+        />
+        Auto-rename on ID conflict (presentation preview)
+      </label>
+      <p>
+        ID collision statuses: <code>skipped</code> (identical_batch), <code>merged</code> (events added), <code>rejected</code> (batch_identity_conflict), <code>renamed</code> (newId).
+      </p>
       {pendingImportState ? (
         <button type="button" onClick={() => void handleConfirmReplace()} disabled={isImporting}>
           {isImporting ? 'Replacing data…' : 'Replace existing data'}
@@ -3762,6 +3796,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             onClick={() => {
               setPendingBatchImportState(null);
               setPendingBatchImportPreview([]);
+              setBatchImportStatusSummary(null);
               setImportMessage('Batch import canceled.');
             }}
             disabled={isImporting}
@@ -3769,6 +3804,17 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             Cancel
           </button>
         </>
+      ) : null}
+      {batchImportStatusSummary ? (
+        <section>
+          <h3>Collision Status Summary</h3>
+          <ul>
+            <li>skipped (identical_batch): {batchImportStatusSummary.skipped}</li>
+            <li>merged (eventsAdded): {batchImportStatusSummary.merged}</li>
+            <li>rejected (batch_identity_conflict): {batchImportStatusSummary.rejected}</li>
+            <li>renamed (newId): {batchImportStatusSummary.renamed}</li>
+          </ul>
+        </section>
       ) : null}
       {importMessage ? <p>{importMessage}</p> : null}
       {importErrors.length > 0 ? (

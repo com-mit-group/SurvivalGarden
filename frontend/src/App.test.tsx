@@ -331,6 +331,8 @@ describe('App', () => {
       expect(screen.getByText('Batch: Unknown variety (Unknown crop)')).toBeInTheDocument();
       expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
       expect(screen.getByText('Events: 0')).toBeInTheDocument();
+      expect(screen.getByLabelText('Auto-rename on ID conflict (presentation preview)')).toBeInTheDocument();
+      expect(screen.getByText(/ID collision statuses:/)).toBeInTheDocument();
       expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
@@ -348,6 +350,11 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
+      expect(screen.getByText('Collision Status Summary')).toBeInTheDocument();
+      expect(screen.getByText('skipped (identical_batch): 0')).toBeInTheDocument();
+      expect(screen.getByText('merged (eventsAdded): 0')).toBeInTheDocument();
+      expect(screen.getByText('rejected (batch_identity_conflict): 0')).toBeInTheDocument();
+      expect(screen.getByText('renamed (newId): 0')).toBeInTheDocument();
     });
   });
 
@@ -367,6 +374,43 @@ describe('App', () => {
     });
 
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+  });
+
+
+  it('shows auto-rename capability note when toggle is enabled', async () => {
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
+    vi.mocked(parseImportedAppState).mockReturnValue(validOnlyState as never);
+    vi.mocked(saveAppStateToIndexedDb).mockResolvedValue({
+      beds: { added: 0, updated: 0, unchanged: 0 },
+      crops: { added: 0, updated: 0, unchanged: 0 },
+      cropPlans: { added: 0, updated: 0, unchanged: 0 },
+      batches: { added: 1, updated: 0, unchanged: 0 },
+      tasks: { added: 0, updated: 0, unchanged: 0 },
+      seedInventoryItems: { added: 0, updated: 0, unchanged: 0 },
+      conflicts: [],
+      warnings: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import Batch JSON');
+    const file = new File(['{"batches":[{"batchId":"batch-1","startedAt":"2026-01-01"}]}'], 'batches.json', { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Import Preview')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Auto-rename on ID conflict (presentation preview)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Auto-rename requested, but this importer currently reports collisions as deterministic rejects\./)).toBeInTheDocument();
+    });
   });
 
   it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
