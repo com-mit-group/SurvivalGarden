@@ -525,6 +525,122 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
   return issues;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
+  if (schemaName !== 'appState' || !isObjectRecord(payload)) {
+    return [];
+  }
+
+  const crops = Array.isArray(payload.crops) ? payload.crops : [];
+  const batches = Array.isArray(payload.batches) ? payload.batches : [];
+  const cropPlans = Array.isArray(payload.cropPlans) ? payload.cropPlans : [];
+  const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+  const seedInventoryItems = Array.isArray(payload.seedInventoryItems) ? payload.seedInventoryItems : [];
+  const segments = Array.isArray(payload.segments) ? payload.segments : [];
+
+  const cropIds = new Set<string>();
+  crops.forEach((crop) => {
+    if (isObjectRecord(crop) && typeof crop.cropId === 'string' && crop.cropId.length > 0) {
+      cropIds.add(crop.cropId);
+    }
+  });
+
+  const bedIds = new Set<string>();
+  segments.forEach((segment) => {
+    if (!isObjectRecord(segment) || !Array.isArray(segment.beds)) {
+      return;
+    }
+
+    segment.beds.forEach((bed) => {
+      if (isObjectRecord(bed) && typeof bed.bedId === 'string' && bed.bedId.length > 0) {
+        bedIds.add(bed.bedId);
+      }
+    });
+  });
+  const issues: ValidationIssue[] = [];
+
+  const pushInvalidRef = (path: string, message: string) => {
+    issues.push({
+      schemaName,
+      path,
+      keyword: 'invalidReference',
+      message,
+    });
+  };
+
+  cropPlans.forEach((cropPlan, cropPlanIndex) => {
+    if (!isObjectRecord(cropPlan)) {
+      return;
+    }
+
+    if (typeof cropPlan.cropId === 'string' && !cropIds.has(cropPlan.cropId)) {
+      pushInvalidRef(`/cropPlans/${cropPlanIndex}/cropId`, `cropPlan references unknown cropId '${cropPlan.cropId}'`);
+    }
+
+    if (typeof cropPlan.bedId === 'string' && !bedIds.has(cropPlan.bedId)) {
+      pushInvalidRef(`/cropPlans/${cropPlanIndex}/bedId`, `cropPlan references unknown bedId '${cropPlan.bedId}'`);
+    }
+  });
+
+  batches.forEach((batch, batchIndex) => {
+    if (!isObjectRecord(batch)) {
+      return;
+    }
+
+    if (typeof batch.cropId === 'string' && !cropIds.has(batch.cropId)) {
+      pushInvalidRef(`/batches/${batchIndex}/cropId`, `batch references unknown cropId '${batch.cropId}'`);
+    }
+
+    const checkAssignments = (assignmentKey: 'assignments' | 'bedAssignments') => {
+      if (!Array.isArray(batch[assignmentKey])) {
+        return;
+      }
+
+      batch[assignmentKey].forEach((assignment, assignmentIndex) => {
+        if (!isObjectRecord(assignment) || typeof assignment.bedId !== 'string') {
+          return;
+        }
+
+        if (!bedIds.has(assignment.bedId)) {
+          pushInvalidRef(
+            `/batches/${batchIndex}/${assignmentKey}/${assignmentIndex}/bedId`,
+            `batch assignment references unknown bedId '${assignment.bedId}'`,
+          );
+        }
+      });
+    };
+
+    checkAssignments('assignments');
+    checkAssignments('bedAssignments');
+  });
+
+  tasks.forEach((task, taskIndex) => {
+    if (!isObjectRecord(task)) {
+      return;
+    }
+
+    if (typeof task.cropId === 'string' && !cropIds.has(task.cropId)) {
+      pushInvalidRef(`/tasks/${taskIndex}/cropId`, `task references unknown cropId '${task.cropId}'`);
+    }
+
+    if (typeof task.bedId === 'string' && !bedIds.has(task.bedId)) {
+      pushInvalidRef(`/tasks/${taskIndex}/bedId`, `task references unknown bedId '${task.bedId}'`);
+    }
+  });
+
+  seedInventoryItems.forEach((item, itemIndex) => {
+    if (!isObjectRecord(item) || typeof item.cropId !== 'string') {
+      return;
+    }
+
+    if (!cropIds.has(item.cropId)) {
+      pushInvalidRef(`/seedInventoryItems/${itemIndex}/cropId`, `seedInventoryItem references unknown cropId '${item.cropId}'`);
+    }
+  });
+
+  return issues;
+};
+
 const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
   appState: ajv.compile<SchemaTypeMap['appState']>(appStateSchema),
   batch: ajv.compile<SchemaTypeMap['batch']>(batchSchema),
@@ -569,16 +685,26 @@ export const validateSchema = <T extends SchemaName>(
     const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
     const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
 
-    if (geometryIssues.length === 0 && pathPlacementIssues.length === 0 && cropPlanReferenceIssues.length === 0) {
+    if (
+      geometryIssues.length === 0
+      && pathPlacementIssues.length === 0
+      && cropPlanReferenceIssues.length === 0
+    ) {
       return { ok: true, value: payload };
     }
 
-    return { ok: false, issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues] };
+    return {
+      ok: false,
+      issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
+    };
   }
 
   const issues = (validator.errors || []).map((error) => normalizeError(schemaName, error));
   const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
   const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
   const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
-  return { ok: false, issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues] };
+  return {
+    ok: false,
+    issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
+  };
 };
