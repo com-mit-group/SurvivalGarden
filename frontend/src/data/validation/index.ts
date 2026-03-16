@@ -525,6 +525,7 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
   return issues;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
   if (schemaName !== 'appState' || !isObjectRecord(payload)) {
     return [];
