@@ -1199,3 +1199,89 @@ describe('settings repository boundary helpers', () => {
     expect(assertValid('settings', fallbackForInvalid)).toEqual(fallbackForInvalid);
   });
 });
+
+describe('segment-local geometry bounds', () => {
+  it('rejects beds and paths that exceed parent segment bounds with explicit coordinate messages', () => {
+    expect(() =>
+      assertValid('segment', {
+        segmentId: 'segment_main',
+        name: 'Main segment',
+        width: 10,
+        height: 5,
+        originReference: 'NW',
+        beds: [
+          {
+            bedId: 'bed_001',
+            gardenId: 'garden_001',
+            name: 'Bed 1',
+            type: 'vegetable_bed',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            x: 9.5,
+            y: 0,
+            width: 1,
+            height: 1,
+          },
+        ],
+        paths: [
+          {
+            pathId: 'path_001',
+            name: 'Path 1',
+            x: 0,
+            y: 4.8,
+            width: 1,
+            height: 0.5,
+          },
+        ],
+      }),
+    ).toThrowError(SchemaValidationError);
+
+    try {
+      assertValid('segment', {
+        segmentId: 'segment_main',
+        name: 'Main segment',
+        width: 10,
+        height: 5,
+        originReference: 'NW',
+        beds: [
+          {
+            bedId: 'bed_001',
+            gardenId: 'garden_001',
+            name: 'Bed 1',
+            type: 'vegetable_bed',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            x: 9.5,
+            y: 0,
+            width: 1,
+            height: 1,
+          },
+        ],
+        paths: [
+          {
+            pathId: 'path_001',
+            name: 'Path 1',
+            x: 0,
+            y: 4.8,
+            width: 1,
+            height: 0.5,
+          },
+        ],
+      });
+    } catch (error) {
+      const validationError = error as SchemaValidationError;
+      expect(validationError.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: '/beds/0/x',
+            message: expect.stringContaining('bed extends past segment east boundary'),
+          }),
+          expect.objectContaining({
+            path: '/paths/0/y',
+            message: expect.stringContaining('path extends past segment south boundary'),
+          }),
+        ]),
+      );
+    }
+  });
+});
