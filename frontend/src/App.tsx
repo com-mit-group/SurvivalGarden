@@ -3793,15 +3793,26 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         const mergedCrop: Crop = {
           ...currentCrop,
           name: incomingCrop.name,
-          scientificName: incomingCrop.scientificName ?? currentCrop.scientificName,
-          aliases: incomingCrop.aliases ?? currentCrop.aliases,
-          category: incomingCrop.category ?? currentCrop.category,
-          taxonomy: incomingCrop.taxonomy ?? currentCrop.taxonomy,
           rules: incomingCrop.rules,
-          taskRules: incomingCrop.taskRules ?? currentCrop.taskRules,
           nutritionProfile: incomingCrop.nutritionProfile,
           updatedAt: incomingCrop.updatedAt,
         };
+
+        if (incomingCrop.scientificName !== undefined) {
+          mergedCrop.scientificName = incomingCrop.scientificName;
+        }
+        if (incomingCrop.aliases !== undefined) {
+          mergedCrop.aliases = incomingCrop.aliases;
+        }
+        if (incomingCrop.category !== undefined) {
+          mergedCrop.category = incomingCrop.category;
+        }
+        if (incomingCrop.taxonomy !== undefined) {
+          mergedCrop.taxonomy = incomingCrop.taxonomy;
+        }
+        if (incomingCrop.taskRules !== undefined) {
+          mergedCrop.taskRules = incomingCrop.taskRules;
+        }
 
         const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
         cropsById.set(incomingCrop.cropId, mergedCrop);
