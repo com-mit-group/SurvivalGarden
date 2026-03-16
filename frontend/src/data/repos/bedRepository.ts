@@ -5,7 +5,14 @@ const normalizeBedCandidate = (value: unknown): unknown => value ?? {};
 
 const listBedsFromSegments = (state: AppState): Bed[] =>
   (state.segments ?? []).flatMap((segment) =>
-    segment.beds.map(({ x: _x, y: _y, width: _width, height: _height, ...bed }) => bed),
+    segment.beds.map((bed) => {
+      const normalizedBed: Bed & { x?: number; y?: number; width?: number; height?: number } = { ...bed };
+      delete normalizedBed.x;
+      delete normalizedBed.y;
+      delete normalizedBed.width;
+      delete normalizedBed.height;
+      return normalizedBed;
+    }),
   );
 
 export const getBedFromAppState = (appState: unknown, bedId: Bed['bedId']): Bed | null => {
