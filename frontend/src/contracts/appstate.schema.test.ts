@@ -95,6 +95,7 @@ describe('AppState schema', () => {
           bedId: 'bed_001',
           gardenId: 'garden_001',
           name: 'North bed',
+          type: 'vegetable_bed',
           createdAt: '2026-01-05T00:00:00Z',
           updatedAt: '2026-01-05T00:00:00Z',
         },

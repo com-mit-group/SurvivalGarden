@@ -7,6 +7,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 1",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -15,6 +16,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 2",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -23,6 +25,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 3",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -31,6 +34,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 4",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -39,6 +43,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 5",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -47,6 +52,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 6",
       "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -55,6 +61,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 7",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
@@ -63,6 +70,7 @@
       "gardenId": "garden_trier_001",
       "name": "Bed 8",
       "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
       "updatedAt": "2026-01-05T00:00:00Z"
     }
   ],
@@ -763,6 +771,7 @@
           "height": 1,
           "name": "Bed 1",
           "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -775,6 +784,7 @@
           "height": 1,
           "name": "Bed 2",
           "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -787,6 +797,7 @@
           "height": 1,
           "name": "Bed 3",
           "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -799,6 +810,7 @@
           "height": 1,
           "name": "Bed 4",
           "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -811,6 +823,7 @@
           "height": 1,
           "name": "Bed 5",
           "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -823,6 +836,7 @@
           "height": 1,
           "name": "Bed 6",
           "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -835,6 +849,7 @@
           "height": 1,
           "name": "Bed 7",
           "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,
@@ -847,6 +862,7 @@
           "height": 1,
           "name": "Bed 8",
           "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
           "updatedAt": "2026-01-05T00:00:00Z",
           "width": 1,
           "x": 0,

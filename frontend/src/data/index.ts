@@ -67,7 +67,51 @@ const BATCH_INDEX_STORE = 'batchesById';
 const PHOTO_BLOB_STORE = 'photoBlobsById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
 
-const GOLDEN_DATASET = assertValid('appState', goldenDatasetFixture);
+const LEGACY_BED_TYPE = 'vegetable_bed';
+
+const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
+  ...bed,
+  type: typeof bed.type === 'string' ? bed.type : LEGACY_BED_TYPE,
+});
+
+const migrateLegacyBedTypes = (payload: unknown): unknown => {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  const state = payload as Record<string, unknown>;
+  const beds = Array.isArray(state.beds)
+    ? state.beds.map((bed) => (bed && typeof bed === 'object' ? addTypeToLegacyBed(bed as Record<string, unknown>) : bed))
+    : state.beds;
+
+  const segments = Array.isArray(state.segments)
+    ? state.segments.map((segment) => {
+        if (!segment || typeof segment !== 'object') {
+          return segment;
+        }
+
+        const typedSegment = segment as Record<string, unknown>;
+        const segmentBeds = Array.isArray(typedSegment.beds)
+          ? typedSegment.beds.map((bed) =>
+              bed && typeof bed === 'object' ? addTypeToLegacyBed(bed as Record<string, unknown>) : bed,
+            )
+          : typedSegment.beds;
+
+        return {
+          ...typedSegment,
+          beds: segmentBeds,
+        };
+      })
+    : state.segments;
+
+  return {
+    ...state,
+    beds,
+    segments,
+  };
+};
+
+const GOLDEN_DATASET = assertValid('appState', migrateLegacyBedTypes(goldenDatasetFixture));
 
 export type {
   AppStateRepository,
@@ -96,7 +140,7 @@ export {
 
 export const parseImportedAppState = (rawPayload: string): AppState => {
   const parsed: unknown = JSON.parse(rawPayload);
-  return assertValid('appState', parsed);
+  return assertValid('appState', migrateLegacyBedTypes(parsed));
 };
 
 const compareByString = (left: string, right: string): number => left.localeCompare(right);
