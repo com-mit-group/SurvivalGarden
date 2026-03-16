@@ -118,12 +118,12 @@
                 "x": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1
+                  "description": "Meters east from the bed NW corner."
                 },
                 "y": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1
+                  "description": "Meters south from the bed NW corner."
                 }
               }
             }

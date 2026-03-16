@@ -360,43 +360,40 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
             const x = toFiniteNumber(point.x);
             const y = toFiniteNumber(point.y);
 
-            if (x !== null && (x < -EPSILON || x > 1 + EPSILON)) {
+            if (x !== null && x < -EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/x`,
+                keyword: 'minimum',
+                message: `placement x must be >= 0 meters`,
+              });
+            }
+
+            if (y !== null && y < -EPSILON) {
+              issues.push({
+                schemaName,
+                path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/y`,
+                keyword: 'minimum',
+                message: `placement y must be >= 0 meters`,
+              });
+            }
+
+            if (bedSize && x !== null && x - bedSize.width > EPSILON) {
               issues.push({
                 schemaName,
                 path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/x`,
                 keyword: 'maximum',
-                message: `placement x must be within bed-local bounds [0, 1]`,
+                message: `placement x exceeds bed width ${bedSize.width}m`,
               });
             }
 
-            if (y !== null && (y < -EPSILON || y > 1 + EPSILON)) {
+            if (bedSize && y !== null && y - bedSize.height > EPSILON) {
               issues.push({
                 schemaName,
                 path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/y`,
                 keyword: 'maximum',
-                message: `placement y must be within bed-local bounds [0, 1]`,
+                message: `placement y exceeds bed height ${bedSize.height}m`,
               });
-            }
-
-            if (bedSize && x !== null && y !== null) {
-              const absoluteX = x * bedSize.width;
-              const absoluteY = y * bedSize.height;
-              if (absoluteX < -EPSILON || absoluteX - bedSize.width > EPSILON) {
-                issues.push({
-                  schemaName,
-                  path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/x`,
-                  keyword: 'maximum',
-                  message: `placement x resolves outside bed width ${bedSize.width}`,
-                });
-              }
-              if (absoluteY < -EPSILON || absoluteY - bedSize.height > EPSILON) {
-                issues.push({
-                  schemaName,
-                  path: `/cropPlans/${planIndex}/placements/${placementIndex}/points/${pointIndex}/y`,
-                  keyword: 'maximum',
-                  message: `placement y resolves outside bed height ${bedSize.height}`,
-                });
-              }
             }
           });
         });
