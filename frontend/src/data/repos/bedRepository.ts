@@ -3,9 +3,15 @@ import { assertValid } from '../validation';
 
 const normalizeBedCandidate = (value: unknown): unknown => value ?? {};
 
+const listBedsFromSegments = (state: AppState): Bed[] =>
+  (state.segments ?? []).flatMap((segment) =>
+    segment.beds.map(({ x: _x, y: _y, width: _width, height: _height, ...bed }) => bed),
+  );
+
 export const getBedFromAppState = (appState: unknown, bedId: Bed['bedId']): Bed | null => {
   const state = assertValid('appState', appState);
-  const candidate = state.beds.find((bed) => bed.bedId === bedId);
+  const beds = state.segments && state.segments.length > 0 ? listBedsFromSegments(state) : state.beds;
+  const candidate = beds.find((bed) => bed.bedId === bedId);
 
   if (!candidate) {
     return null;
@@ -16,7 +22,8 @@ export const getBedFromAppState = (appState: unknown, bedId: Bed['bedId']): Bed 
 
 export const listBedsFromAppState = (appState: unknown): Bed[] => {
   const state = assertValid('appState', appState);
-  return state.beds.map((bed) => assertValid('bed', normalizeBedCandidate(bed)));
+  const beds = state.segments && state.segments.length > 0 ? listBedsFromSegments(state) : state.beds;
+  return beds.map((bed) => assertValid('bed', normalizeBedCandidate(bed)));
 };
 
 export const upsertBedInAppState = (appState: unknown, bed: unknown): AppState => {

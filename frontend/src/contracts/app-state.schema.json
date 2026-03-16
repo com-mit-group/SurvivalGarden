@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "segments",
     "beds",
     "crops",
     "cropPlans",
@@ -23,6 +24,12 @@
       "type": "array",
       "items": {
         "$ref": "https://survivalgarden/contracts/bed.schema.json"
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/segment.schema.json"
       }
     },
     "crops": {

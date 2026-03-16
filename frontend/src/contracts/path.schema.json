@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/path.schema.json",
+  "title": "Path",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pathId",
+    "name",
+    "x",
+    "y",
+    "width",
+    "height"
+  ],
+  "properties": {
+    "pathId": {
+      "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "x": {
+      "type": "number",
+      "minimum": 0
+    },
+    "y": {
+      "type": "number",
+      "minimum": 0
+    },
+    "width": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "height": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "surface": {
+      "type": "string",
+      "maxLength": 120
+    }
+  }
+}

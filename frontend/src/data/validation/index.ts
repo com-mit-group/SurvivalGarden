@@ -6,7 +6,9 @@ import {
   bedSchema,
   cropPlanSchema,
   cropSchema,
+  pathSchema,
   seedInventoryItemSchema,
+  segmentSchema,
   settingsSchema,
   taskSchema,
 } from '../../contracts';
@@ -16,7 +18,9 @@ import type {
   Bed,
   Crop,
   CropPlan,
+  Path,
   SeedInventoryItem,
+  Segment,
   Settings,
   Task,
 } from '../../contracts';
@@ -27,7 +31,9 @@ export type SchemaName =
   | 'bed'
   | 'crop'
   | 'cropPlan'
+  | 'path'
   | 'seedInventoryItem'
+  | 'segment'
   | 'settings'
   | 'task';
 
@@ -37,7 +43,9 @@ export type SchemaTypeMap = {
   bed: Bed;
   crop: Crop;
   cropPlan: CropPlan;
+  path: Path;
   seedInventoryItem: SeedInventoryItem;
+  segment: Segment;
   settings: Settings;
   task: Task;
 };
@@ -72,8 +80,10 @@ ajv.addSchema(batchSchema);
 ajv.addSchema(bedSchema);
 ajv.addSchema(cropSchema);
 ajv.addSchema(cropPlanSchema);
+ajv.addSchema(pathSchema);
 ajv.addSchema(taskSchema);
 ajv.addSchema(seedInventoryItemSchema);
+ajv.addSchema(segmentSchema);
 ajv.addSchema(settingsSchema);
 
 const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
@@ -82,7 +92,9 @@ const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
   bed: ajv.compile<SchemaTypeMap['bed']>(bedSchema),
   crop: ajv.compile<SchemaTypeMap['crop']>(cropSchema),
   cropPlan: ajv.compile<SchemaTypeMap['cropPlan']>(cropPlanSchema),
+  path: ajv.compile<SchemaTypeMap['path']>(pathSchema),
   seedInventoryItem: ajv.compile<SchemaTypeMap['seedInventoryItem']>(seedInventoryItemSchema),
+  segment: ajv.compile<SchemaTypeMap['segment']>(segmentSchema),
   settings: ajv.compile<SchemaTypeMap['settings']>(settingsSchema),
   task: ajv.compile<SchemaTypeMap['task']>(taskSchema),
 };
