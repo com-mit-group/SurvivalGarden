@@ -683,20 +683,18 @@ export const validateSchema = <T extends SchemaName>(
     const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
     const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
     const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
-    const appStateReferenceIssues = collectAppStateReferenceIssues(schemaName, payload);
 
     if (
       geometryIssues.length === 0
       && pathPlacementIssues.length === 0
       && cropPlanReferenceIssues.length === 0
-      && appStateReferenceIssues.length === 0
     ) {
       return { ok: true, value: payload };
     }
 
     return {
       ok: false,
-      issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues, ...appStateReferenceIssues],
+      issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
     };
   }
 
@@ -704,9 +702,8 @@ export const validateSchema = <T extends SchemaName>(
   const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
   const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
   const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
-  const appStateReferenceIssues = collectAppStateReferenceIssues(schemaName, payload);
   return {
     ok: false,
-    issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues, ...appStateReferenceIssues],
+    issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
   };
 };
