@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Task } from './contracts';
+import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
@@ -82,6 +82,7 @@ function CropIdentityLabel({ cropId, name, scientificName, className }: CropIden
 function BedsPage() {
   const [beds, setBeds] = useState<Bed[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -91,12 +92,14 @@ function BedsPage() {
       if (!appState) {
         setBeds([]);
         setBatches([]);
+        setSegments([]);
         setIsLoading(false);
         return;
       }
 
       setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
       setBatches(listBatchesFromAppState(appState));
+      setSegments(appState.segments ?? []);
       setIsLoading(false);
     };
 
@@ -118,9 +121,19 @@ function BedsPage() {
     return counts;
   }, [batches]);
 
+  const totalPathCount = useMemo(
+    () => segments.reduce((total, segment) => total + segment.paths.length, 0),
+    [segments],
+  );
+
   return (
     <section className="beds-page">
       <h2>Beds</h2>
+      {!isLoading ? (
+        <p className="beds-page-summary">
+          Segments: {segments.length} · Paths: {totalPathCount}
+        </p>
+      ) : null}
       {isLoading ? <p className="beds-empty-state">Loading beds…</p> : null}
       {!isLoading ? (
         <div className="beds-grid">
