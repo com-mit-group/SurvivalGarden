@@ -3649,7 +3649,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             seedInventoryItems: [],
             tasks: [],
           }));
-          validCrops.push(validatedSingleCrop.crops[0]);
+          const validatedCrop = validatedSingleCrop.crops[0];
+          if (validatedCrop) {
+            validCrops.push(validatedCrop);
+          }
         } catch (validationError) {
           if (validationError instanceof SchemaValidationError && validationError.issues.length > 0) {
             validationErrors.push(
@@ -3790,12 +3793,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         const mergedCrop: Crop = {
           ...currentCrop,
           name: incomingCrop.name,
-          scientificName: incomingCrop.scientificName,
-          aliases: incomingCrop.aliases,
-          category: incomingCrop.category,
-          taxonomy: incomingCrop.taxonomy,
+          scientificName: incomingCrop.scientificName ?? currentCrop.scientificName,
+          aliases: incomingCrop.aliases ?? currentCrop.aliases,
+          category: incomingCrop.category ?? currentCrop.category,
+          taxonomy: incomingCrop.taxonomy ?? currentCrop.taxonomy,
           rules: incomingCrop.rules,
-          taskRules: incomingCrop.taskRules,
+          taskRules: incomingCrop.taskRules ?? currentCrop.taskRules,
           nutritionProfile: incomingCrop.nutritionProfile,
           updatedAt: incomingCrop.updatedAt,
         };
