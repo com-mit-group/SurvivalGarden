@@ -223,7 +223,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     return { placements: normalized, shifted };
   };
 
-  const withSegments = (nextState: Record<string, unknown>): Record<string, unknown> => {
+  const withSegments = (nextState: Record<string, unknown>, assignSegmentIdsToPlans: boolean): Record<string, unknown> => {
     if (!Array.isArray(nextState.segments)) {
       return nextState;
     }
@@ -308,7 +308,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
         }
 
         let migratedPlan: Record<string, unknown> = typedPlan;
-        if (typeof typedPlan.segmentId !== 'string') {
+        if (assignSegmentIdsToPlans && typeof typedPlan.segmentId !== 'string') {
           migratedPlan = { ...migratedPlan, segmentId: placementOwner.segmentId };
           report.migrated = true;
         }
@@ -338,7 +338,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   };
 
   if (Array.isArray(state.segments) && state.segments.length > 0) {
-    return { payload: withSegments(state), report };
+    return { payload: withSegments(state, false), report };
   }
 
   if (!Array.isArray(state.beds)) {
@@ -437,7 +437,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     entityId: 'segment_migrated_main',
   });
 
-  return { payload: withSegments(nextState), report };
+  return { payload: withSegments(nextState, true), report };
 };
 
 const GOLDEN_DATASET = assertValid('appState', migrateLegacyBedTypes(goldenDatasetFixture));
