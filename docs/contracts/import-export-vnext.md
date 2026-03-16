@@ -17,6 +17,7 @@ Canonical samples:
 - `docs/contracts/samples/batch.tuber.canonical.json`
 - `docs/contracts/samples/task.canonical.json`
 - `docs/contracts/samples/app-state.canonical.json`
+- `docs/contracts/samples/import-events.request.canonical.json`
 
 ## Canonical vs accepted legacy input
 
@@ -189,6 +190,39 @@ Use `meta.confidence` / `stageEvents[].meta.confidence` when the value quality m
   - Require persisted `StartedAt`, `StageEvents`, and legacy-required `Stage` + `Assignments` until schema requirement changes.
   - Compute/validate `CurrentStage` from latest `StageEvents[*].Stage` when absent.
   - Keep alias parity between `bedAssignments` and `assignments` in write paths until migration-only aliases are formally removed.
+
+## Event import endpoint (incremental updates)
+
+Use this endpoint for small event-based updates without posting full batch payloads.
+
+### Endpoint
+
+- `POST /api/import/events`
+
+### Request payload
+
+```json
+{
+  "events": [
+    {
+      "batchId": "batch-pea-2026-03-06-01",
+      "type": "transplanted",
+      "date": "2026-03-12",
+      "location": "bed_N1"
+    }
+  ]
+}
+```
+
+### Expected behavior
+
+For each event record:
+
+1. Locate the target batch by `batchId`.
+2. Append a canonical `stageEvents[]` entry (`stage = type`, `occurredAt = date`, optional `location`).
+3. Recompute `currentStage` from the newest event.
+
+If any event references a missing batch, reject the request and report the failing event index.
 
 ## Minimal canonical payload set
 
