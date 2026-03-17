@@ -85,6 +85,8 @@ function BedsPage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+
+
   useEffect(() => {
     const load = async () => {
       const appState = await loadAppStateFromIndexedDb();
@@ -3399,6 +3401,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [pendingBatchImportPreview, setPendingBatchImportPreview] = useState<Array<{ batchLabel: string; seedCount: number; eventCount: number }>>([]);
   const [pendingCropImportCrops, setPendingCropImportCrops] = useState<Crop[]>([]);
   const [pendingCropPlanImportPlans, setPendingCropPlanImportPlans] = useState<CropPlan[]>([]);
+  const [pendingSegmentImportSegments, setPendingSegmentImportSegments] = useState<Segment[]>([]);
+  const [pendingSegmentImportPreview, setPendingSegmentImportPreview] = useState<Array<{
+    segmentId: string;
+    name: string;
+    bedCount: number;
+    pathCount: number;
+    status: 'imported' | 'merged' | 'skipped' | 'rejected';
+    reason?: string;
+  }>>([]);
   const [autoRenameOnConflict, setAutoRenameOnConflict] = useState(false);
   const [batchImportStatusSummary, setBatchImportStatusSummary] = useState<{
     skipped: number;
@@ -3413,6 +3424,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     rejected: number;
   } | null>(null);
   const [cropPlanImportStatusSummary, setCropPlanImportStatusSummary] = useState<{
+    imported: number;
+    merged: number;
+    skipped: number;
+    rejected: number;
+  } | null>(null);
+  const [segmentImportStatusSummary, setSegmentImportStatusSummary] = useState<{
     imported: number;
     merged: number;
     skipped: number;
@@ -3508,9 +3525,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
     setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3541,9 +3561,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
     setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3634,9 +3657,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
     setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3716,9 +3742,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
     setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3781,6 +3810,120 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setIsImporting(false);
     }
   }, [isImporting, mapImportError]);
+
+  const handleImportSegmentJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportPreview([]);
+    setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
+    setBatchImportStatusSummary(null);
+    setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
+
+    try {
+      const payload = await file.text();
+      const rawParsed = JSON.parse(payload) as { segments?: unknown[] };
+
+      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.segments)) {
+        throw new Error('Segment import payload must be an object with a segments array.');
+      }
+
+      const validatedSingleSegmentState = parseImportedAppState(JSON.stringify({
+        schemaVersion: 1,
+        segments: rawParsed.segments,
+        beds: [],
+        crops: [],
+        cropPlans: [],
+        batches: [],
+        seedInventoryItems: [],
+        tasks: [],
+      }));
+
+      const validatedSegments = validatedSingleSegmentState.segments ?? [];
+      const existingState = await loadAppStateFromIndexedDb();
+      const existingSegments = existingState?.segments ?? [];
+      const existingById = new Map(existingSegments.map((segment) => [segment.segmentId, segment]));
+
+      const preview = validatedSegments.map((segment) => {
+        const current = existingById.get(segment.segmentId);
+
+        if (!current) {
+          return {
+            segmentId: segment.segmentId,
+            name: segment.name,
+            bedCount: segment.beds.length,
+            pathCount: segment.paths.length,
+            status: 'imported' as const,
+          };
+        }
+
+        if (JSON.stringify(current) === JSON.stringify(segment)) {
+          return {
+            segmentId: segment.segmentId,
+            name: segment.name,
+            bedCount: segment.beds.length,
+            pathCount: segment.paths.length,
+            status: 'skipped' as const,
+            reason: 'identical_segment',
+          };
+        }
+
+        if (current.name !== segment.name || current.originReference !== segment.originReference) {
+          return {
+            segmentId: segment.segmentId,
+            name: segment.name,
+            bedCount: segment.beds.length,
+            pathCount: segment.paths.length,
+            status: 'rejected' as const,
+            reason: 'segment_identity_conflict',
+          };
+        }
+
+        return {
+          segmentId: segment.segmentId,
+          name: segment.name,
+          bedCount: segment.beds.length,
+          pathCount: segment.paths.length,
+          status: 'merged' as const,
+        };
+      });
+
+      const summary = preview.reduce(
+        (acc, entry) => {
+          acc[entry.status] += 1;
+          return acc;
+        },
+        { imported: 0, merged: 0, skipped: 0, rejected: 0 },
+      );
+
+      setPendingSegmentImportSegments(validatedSegments);
+      setPendingSegmentImportPreview(preview);
+      setSegmentImportStatusSummary(summary);
+      setImportMessage(
+        `Segment import ready: ${validatedSegments.length} segment(s). Statuses: imported ${summary.imported}, merged ${summary.merged}, skipped ${summary.skipped}, rejected ${summary.rejected}. Confirm to import.`,
+      );
+    } catch (error) {
+      setImportMessage('Import failed. Fix the errors below and try again.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError]);
+
 
   const handleConfirmReplace = useCallback(async () => {
     if (!pendingImportState || isImporting) {
@@ -3978,6 +4121,68 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError, pendingCropPlanImportPlans]);
 
+
+  const handleConfirmSegmentImport = useCallback(async () => {
+    if (isImporting || pendingSegmentImportSegments.length === 0) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+
+    try {
+      const existingAppState = await loadAppStateFromIndexedDb();
+      if (!existingAppState) {
+        setImportMessage('Segment import failed: local app state is unavailable.');
+        return;
+      }
+
+      const segmentsById = new Map((existingAppState.segments ?? []).map((segment) => [segment.segmentId, segment]));
+      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+      const results: Array<{ path: string; message: string }> = [];
+
+      pendingSegmentImportSegments.forEach((incomingSegment, index) => {
+        const currentSegment = segmentsById.get(incomingSegment.segmentId);
+
+        if (!currentSegment) {
+          segmentsById.set(incomingSegment.segmentId, incomingSegment);
+          summary.imported += 1;
+          return;
+        }
+
+        if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
+          summary.skipped += 1;
+          return;
+        }
+
+        if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
+          summary.rejected += 1;
+          results.push({
+            path: `/segments/${index}`,
+            message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
+          });
+          return;
+        }
+
+        segmentsById.set(incomingSegment.segmentId, incomingSegment);
+        summary.merged += 1;
+      });
+
+      await saveAppStateToIndexedDb({ ...existingAppState, segments: [...segmentsById.values()] }, { mode: 'replace' });
+      setSegmentImportStatusSummary(summary);
+      setImportErrors(results);
+      setImportMessage(`Segment import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      setPendingSegmentImportSegments([]);
+      setPendingSegmentImportPreview([]);
+    } catch (error) {
+      setImportMessage('Import failed while saving.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError, pendingSegmentImportSegments]);
+
   useEffect(() => {
     const search = new URLSearchParams(location.search);
     const importType = search.get('importType');
@@ -3994,8 +4199,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
     setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
     setCropImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
 
     try {
       const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
@@ -4181,9 +4389,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           disabled={isImporting}
         />
       </label>
+      <label>
+        Import Segment JSON
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void handleImportSegmentJson(event)}
+          disabled={isImporting}
+        />
+      </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
       <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ ... ] }'}</code>.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
+      <p>Segment import endpoint contract: <code>POST /api/import/segments</code> with <code>{'{ "segments": [ ... ] }'}</code>.</p>
+      <p>
+        Segment merge statuses: <code>imported</code> (new segment), <code>merged</code> (deterministic child updates), <code>skipped</code>{' '}
+        (identical_segment), <code>rejected</code> (segment_identity_conflict).
+      </p>
       <p>
         Crop plan payload references: <code>segmentId</code>, <code>bedId</code>, <code>cropId</code>, optional <code>batchId</code>, and
         <code>placements</code>.
@@ -4304,6 +4526,43 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           </button>
         </>
       ) : null}
+
+      {pendingSegmentImportSegments.length > 0 ? (
+        <>
+          {pendingSegmentImportPreview.length > 0 ? (
+            <section>
+              <h3>Segment Import Preview</h3>
+              <ul>
+                {pendingSegmentImportPreview.slice(0, 10).map((segment) => (
+                  <li key={segment.segmentId}>
+                    <p>Segment: {segment.name} ({segment.segmentId})</p>
+                    <p>Beds: {segment.bedCount} · Paths: {segment.pathCount}</p>
+                    <p>
+                      Status: {segment.status}
+                      {segment.reason ? ` (${segment.reason})` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          <button type="button" onClick={() => void handleConfirmSegmentImport()} disabled={isImporting}>
+            {isImporting ? 'Importing segments…' : 'Import segments'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingSegmentImportSegments([]);
+              setPendingSegmentImportPreview([]);
+              setSegmentImportStatusSummary(null);
+              setImportMessage('Segment import canceled.');
+            }}
+            disabled={isImporting}
+          >
+            Cancel segment import
+          </button>
+        </>
+      ) : null}
       {batchImportStatusSummary ? (
         <section>
           <h3>Collision Status Summary</h3>
@@ -4334,6 +4593,18 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             <li>merged: {cropPlanImportStatusSummary.merged}</li>
             <li>skipped: {cropPlanImportStatusSummary.skipped}</li>
             <li>rejected: {cropPlanImportStatusSummary.rejected}</li>
+          </ul>
+        </section>
+      ) : null}
+
+      {segmentImportStatusSummary ? (
+        <section>
+          <h3>Segment Import Summary</h3>
+          <ul>
+            <li>imported: {segmentImportStatusSummary.imported}</li>
+            <li>merged: {segmentImportStatusSummary.merged}</li>
+            <li>skipped (identical_segment): {segmentImportStatusSummary.skipped}</li>
+            <li>rejected (segment_identity_conflict): {segmentImportStatusSummary.rejected}</li>
           </ul>
         </section>
       ) : null}
