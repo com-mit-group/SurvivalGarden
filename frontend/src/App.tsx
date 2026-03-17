@@ -2270,7 +2270,7 @@ function BatchesPage() {
               cropInput: formatCropOptionLabel({
                 cropId: existingCrop.cropId,
                 name: speciesCommonName || cultivar,
-                ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
+                scientificName: speciesScientificName || undefined,
               }),
             }
           : current,
