@@ -5303,7 +5303,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         setImportMessage(
           `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
         );
-      } catch (error) {
+      }
+    } catch (error) {
         setImportMessage('Deep-link import failed. Payload was invalid or too large.');
         setImportErrors(mapImportError(error));
       } finally {
