@@ -4220,8 +4220,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
-    try {
-      const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+    void (async () => {
+      try {
+        const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
       const padLength = normalizedPayload.length % 4;
       const paddedPayload = padLength === 0 ? normalizedPayload : `${normalizedPayload}${'='.repeat(4 - padLength)}`;
       const decodedPayload = atob(paddedPayload);
@@ -4449,12 +4450,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
         );
       }
-    } catch (error) {
-      setImportMessage('Deep-link import failed. Payload was invalid or too large.');
-      setImportErrors(mapImportError(error));
-    } finally {
-      navigate('/data', { replace: true });
-    }
+      } catch (error) {
+        setImportMessage('Deep-link import failed. Payload was invalid or too large.');
+        setImportErrors(mapImportError(error));
+      } finally {
+        navigate('/data', { replace: true });
+      }
+    })();
   }, [buildBatchValidationMessages, location.search, mapImportError, navigate]);
 
   return (
