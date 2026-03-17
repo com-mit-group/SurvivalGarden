@@ -3405,8 +3405,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [pendingSegmentImportPreview, setPendingSegmentImportPreview] = useState<Array<{
     segmentId: string;
     name: string;
+    width: number;
+    height: number;
     bedCount: number;
     pathCount: number;
+    bedTypesSummary: string;
     status: 'imported' | 'merged' | 'skipped' | 'rejected';
     reason?: string;
   }>>([]);
@@ -3865,8 +3868,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           return {
             segmentId: segment.segmentId,
             name: segment.name,
+            width: segment.width,
+            height: segment.height,
             bedCount: segment.beds.length,
             pathCount: segment.paths.length,
+            bedTypesSummary: [...new Set(segment.beds.map((bed) => bed.type))].sort().join(', '),
             status: 'imported' as const,
           };
         }
@@ -3875,8 +3881,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           return {
             segmentId: segment.segmentId,
             name: segment.name,
+            width: segment.width,
+            height: segment.height,
             bedCount: segment.beds.length,
             pathCount: segment.paths.length,
+            bedTypesSummary: [...new Set(segment.beds.map((bed) => bed.type))].sort().join(', '),
             status: 'skipped' as const,
             reason: 'identical_segment',
           };
@@ -3886,8 +3895,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           return {
             segmentId: segment.segmentId,
             name: segment.name,
+            width: segment.width,
+            height: segment.height,
             bedCount: segment.beds.length,
             pathCount: segment.paths.length,
+            bedTypesSummary: [...new Set(segment.beds.map((bed) => bed.type))].sort().join(', '),
             status: 'rejected' as const,
             reason: 'segment_identity_conflict',
           };
@@ -3896,8 +3908,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         return {
           segmentId: segment.segmentId,
           name: segment.name,
+          width: segment.width,
+          height: segment.height,
           bedCount: segment.beds.length,
           pathCount: segment.paths.length,
+          bedTypesSummary: [...new Set(segment.beds.map((bed) => bed.type))].sort().join(', '),
           status: 'merged' as const,
         };
       });
@@ -4342,6 +4357,97 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           setImportErrors(validationErrors);
           setImportMessage(`Deep link ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length} payload plan(s). Confirm to import.`);
         }
+      } else if (importType === 'segments') {
+        const rawParsed = JSON.parse(decodedPayload) as { segments?: unknown[] };
+        if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.segments)) {
+          throw new Error('Deep-link payload must decode to an object with a segments array.');
+        }
+
+        const validatedSegmentState = parseImportedAppState(JSON.stringify({
+          schemaVersion: 1,
+          segments: rawParsed.segments,
+          beds: [],
+          crops: [],
+          cropPlans: [],
+          batches: [],
+          seedInventoryItems: [],
+          tasks: [],
+        }));
+        const validatedSegments = validatedSegmentState.segments ?? [];
+        const existingState = await loadAppStateFromIndexedDb();
+        const existingById = new Map((existingState?.segments ?? []).map((segment) => [segment.segmentId, segment]));
+
+        const preview = validatedSegments.map((segment) => {
+          const current = existingById.get(segment.segmentId);
+          const bedTypesSummary = [...new Set(segment.beds.map((bed) => bed.type))].sort().join(', ');
+
+          if (!current) {
+            return {
+              segmentId: segment.segmentId,
+              name: segment.name,
+              width: segment.width,
+              height: segment.height,
+              bedCount: segment.beds.length,
+              pathCount: segment.paths.length,
+              bedTypesSummary,
+              status: 'imported' as const,
+            };
+          }
+
+          if (JSON.stringify(current) === JSON.stringify(segment)) {
+            return {
+              segmentId: segment.segmentId,
+              name: segment.name,
+              width: segment.width,
+              height: segment.height,
+              bedCount: segment.beds.length,
+              pathCount: segment.paths.length,
+              bedTypesSummary,
+              status: 'skipped' as const,
+              reason: 'identical_segment',
+            };
+          }
+
+          if (current.name !== segment.name || current.originReference !== segment.originReference) {
+            return {
+              segmentId: segment.segmentId,
+              name: segment.name,
+              width: segment.width,
+              height: segment.height,
+              bedCount: segment.beds.length,
+              pathCount: segment.paths.length,
+              bedTypesSummary,
+              status: 'rejected' as const,
+              reason: 'segment_identity_conflict',
+            };
+          }
+
+          return {
+            segmentId: segment.segmentId,
+            name: segment.name,
+            width: segment.width,
+            height: segment.height,
+            bedCount: segment.beds.length,
+            pathCount: segment.paths.length,
+            bedTypesSummary,
+            status: 'merged' as const,
+          };
+        });
+
+        const summary = preview.reduce(
+          (acc, entry) => {
+            acc[entry.status] += 1;
+            return acc;
+          },
+          { imported: 0, merged: 0, skipped: 0, rejected: 0 },
+        );
+
+        setPendingSegmentImportSegments(validatedSegments);
+        setPendingSegmentImportPreview(preview);
+        setSegmentImportStatusSummary(summary);
+        setImportMessage(
+          `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
+        );
       }
     } catch (error) {
       setImportMessage('Deep-link import failed. Payload was invalid or too large.');
@@ -4536,7 +4642,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
                 {pendingSegmentImportPreview.slice(0, 10).map((segment) => (
                   <li key={segment.segmentId}>
                     <p>Segment: {segment.name} ({segment.segmentId})</p>
+                    <p>Size: {segment.width} m × {segment.height} m</p>
                     <p>Beds: {segment.bedCount} · Paths: {segment.pathCount}</p>
+                    <p>Types: {segment.bedTypesSummary || 'none'}</p>
                     <p>
                       Status: {segment.status}
                       {segment.reason ? ` (${segment.reason})` : ''}
@@ -4645,6 +4753,13 @@ function ImportCropPlansDeepLinkRoute() {
   const location = useLocation();
   const search = new URLSearchParams(location.search);
   search.set('importType', 'crop-plans');
+  return <Navigate to={`/data?${search.toString()}`} replace />;
+}
+
+function ImportSegmentsDeepLinkRoute() {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search);
+  search.set('importType', 'segments');
   return <Navigate to={`/data?${search.toString()}`} replace />;
 }
 
@@ -4762,6 +4877,7 @@ function App() {
           <Route path="/import-batches" element={<ImportBatchesDeepLinkRoute />} />
           <Route path="/import-crops" element={<ImportCropsDeepLinkRoute />} />
           <Route path="/import-crop-plans" element={<ImportCropPlansDeepLinkRoute />} />
+          <Route path="/import-segments" element={<ImportSegmentsDeepLinkRoute />} />
           <Route path="*" element={<Navigate to="/beds" replace />} />
         </Routes>
       </main>

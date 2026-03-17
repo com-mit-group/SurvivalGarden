@@ -618,6 +618,105 @@ describe('App', () => {
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
   });
 
+  it('accepts deep-link segment import payload and requires confirmation before import', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [],
+    } as never);
+
+    const validSegmentState = {
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [
+        {
+          segmentId: 'segment_north',
+          name: 'North Segment',
+          width: 5.8,
+          height: 4.5,
+          originReference: 'nw_corner',
+          beds: [
+            {
+              bedId: 'bed_n1',
+              gardenId: 'garden_main',
+              name: 'Bed N1',
+              type: 'vegetable_bed',
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z',
+              x: 0.2,
+              y: 0.3,
+              width: 1.2,
+              height: 3.8,
+            },
+          ],
+          paths: [
+            {
+              pathId: 'path_n1_main',
+              name: 'Main Path',
+              x: 1.5,
+              y: 0,
+              width: 0.4,
+              height: 4.5,
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(parseImportedAppState).mockReturnValue(validSegmentState as never);
+
+    const deepLinkPayload = btoa(JSON.stringify({
+      segments: [
+        {
+          segmentId: 'segment_north',
+          name: 'North Segment',
+        },
+      ],
+    }));
+
+    render(
+      <MemoryRouter initialEntries={[`/import-segments?data=${deepLinkPayload}`]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Deep link ready: 1 valid segment\(s\) from 1 payload segment\(s\)\./)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Size: 5.8 m × 4.5 m')).toBeInTheDocument();
+    expect(screen.getByText('Types: vegetable_bed')).toBeInTheDocument();
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.objectContaining({ segments: expect.anything() }), { mode: 'replace' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({ segments: validSegmentState.segments }), { mode: 'replace' });
+    });
+  });
+
+  it('shows deep-link segment import error when payload is malformed', async () => {
+    render(
+      <MemoryRouter initialEntries={['/import-segments?data=%%%']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Deep-link import failed. Payload was invalid or too large.')).toBeInTheDocument();
+    });
+  });
+
   it('renders deterministic nutrition coverage totals and per-day values from non-trivial yields', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
