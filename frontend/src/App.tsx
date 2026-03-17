@@ -1334,6 +1334,16 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
 
 const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
 
+const parseCsvUnique = (value: string): string[] =>
+  Array.from(
+    new Set(
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  );
+
 const normalizeCropIdPart = (value: string): string =>
   value
     .toLowerCase()
@@ -1383,6 +1393,20 @@ function BatchesPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
+  const [editingCropId, setEditingCropId] = useState<string>('');
+  const [cropEditValues, setCropEditValues] = useState({
+    commonName: '',
+    scientificName: '',
+    aliases: '',
+    notes: '',
+    varieties: '',
+    spacing: '',
+    sowingTransplant: '',
+    lifecycle: '',
+    tags: '',
+  });
+  const [cropEditErrors, setCropEditErrors] = useState<Record<string, string>>({});
+  const [cropEditMessage, setCropEditMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -1586,6 +1610,182 @@ function BatchesPage() {
     selectedCropId && cropHasTaskRules[selectedCropId] === false
       ? 'Warning: this crop has no task rules. You can still create and edit batches.'
       : null;
+
+
+  const selectableCrops = useMemo(
+    () =>
+      cropIds
+        .map((cropId) => ({
+          cropId,
+          label: formatCropOptionLabel({
+            cropId,
+            name: cropNames[cropId],
+            scientificName: cropScientificNames[cropId],
+          }),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [cropIds, cropNames, cropScientificNames],
+  );
+
+  useEffect(() => {
+    const firstSelectableCrop = selectableCrops[0];
+    if (!editingCropId && firstSelectableCrop) {
+      setEditingCropId(firstSelectableCrop.cropId);
+    }
+  }, [editingCropId, selectableCrops]);
+
+  useEffect(() => {
+    const loadCropForEdit = async () => {
+      if (!editingCropId) {
+        setCropEditValues({
+          commonName: '',
+          scientificName: '',
+          aliases: '',
+          notes: '',
+          varieties: '',
+          spacing: '',
+          sowingTransplant: '',
+          lifecycle: '',
+          tags: '',
+        });
+        return;
+      }
+
+      const appState = await loadAppStateFromIndexedDb();
+      const crop = appState ? appState.crops.find((entry) => entry.cropId === editingCropId) : null;
+      const cropMeta = ((crop as { meta?: Record<string, unknown> } | null)?.meta ?? {}) as Record<string, unknown>;
+
+      setCropEditValues({
+        commonName: crop?.name ?? '',
+        scientificName: crop?.scientificName ?? (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
+        aliases: (crop?.aliases ?? []).join(', '),
+        notes: typeof cropMeta.notes === 'string' ? cropMeta.notes : '',
+        varieties: Array.isArray(cropMeta.varieties) ? cropMeta.varieties.join(', ') : '',
+        spacing: typeof cropMeta.spacing === 'string' ? cropMeta.spacing : '',
+        sowingTransplant: typeof cropMeta.sowingTransplant === 'string' ? cropMeta.sowingTransplant : '',
+        lifecycle: typeof cropMeta.lifecycle === 'string' ? cropMeta.lifecycle : '',
+        tags: Array.isArray(cropMeta.tags) ? cropMeta.tags.join(', ') : '',
+      });
+      setCropEditErrors({});
+      setCropEditMessage(null);
+    };
+
+    void loadCropForEdit();
+  }, [editingCropId]);
+
+  const handleCropEditSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setCropEditMessage(null);
+    const errors: Record<string, string> = {};
+
+    if (!editingCropId) {
+      errors.cropId = 'Select a crop to edit.';
+    }
+
+    const commonName = cropEditValues.commonName.trim();
+    if (!commonName) {
+      errors.commonName = 'Common name is required.';
+    }
+
+    if (cropEditValues.scientificName.trim().length > 160) {
+      errors.scientificName = 'Scientific name must be 160 characters or fewer.';
+    }
+
+    if (cropEditValues.notes.length > 2000) {
+      errors.notes = 'Notes must be 2000 characters or fewer.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setCropEditErrors(errors);
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setCropEditMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingCrop = appState.crops.find((crop) => crop.cropId === editingCropId);
+      if (!existingCrop) {
+        setCropEditMessage('Crop no longer exists.');
+        return;
+      }
+
+      const existingMeta =
+        (((existingCrop as Crop & { meta?: Record<string, unknown> }).meta ?? {}) as Record<string, unknown>) ?? {};
+      const updatedAt = new Date().toISOString();
+      const aliases = parseCsvUnique(cropEditValues.aliases);
+      const tags = parseCsvUnique(cropEditValues.tags);
+      const varieties = parseCsvUnique(cropEditValues.varieties);
+
+      const nextCrop = {
+        ...existingCrop,
+        cropId: existingCrop.cropId,
+        name: commonName,
+        ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
+        ...(aliases.length > 0 ? { aliases } : {}),
+        meta: {
+          ...existingMeta,
+          ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
+          ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
+          ...(varieties.length > 0 ? { varieties } : {}),
+          ...(cropEditValues.spacing.trim() ? { spacing: cropEditValues.spacing.trim() } : {}),
+          ...(cropEditValues.sowingTransplant.trim() ? { sowingTransplant: cropEditValues.sowingTransplant.trim() } : {}),
+          ...(cropEditValues.lifecycle.trim() ? { lifecycle: cropEditValues.lifecycle.trim() } : {}),
+          ...(tags.length > 0 ? { tags } : {}),
+        },
+        updatedAt,
+      };
+
+      const nextState = upsertCropInAppState(appState, nextCrop);
+      await saveAppStateToIndexedDb(nextState);
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const scientificName = (crop as { scientificName?: string }).scientificName;
+            return [crop.cropId, scientificName ?? ''];
+          }),
+        ),
+      );
+      setCropAliases(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
+              ? (crop as { aliases?: string[] }).aliases ?? []
+              : [];
+            return [crop.cropId, aliasesForCrop];
+          }),
+        ),
+      );
+      setCropEditErrors({});
+      setCropEditMessage('Crop updated.');
+      setFormValues((current) =>
+        selectedCropId === existingCrop.cropId
+          ? {
+              ...current,
+              cropInput: formatCropOptionLabel({
+                cropId: existingCrop.cropId,
+                name: commonName,
+                scientificName: cropEditValues.scientificName.trim() || undefined,
+              }),
+            }
+          : current,
+      );
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        setCropEditMessage('Please fix invalid crop fields before saving.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to save crop.';
+      setCropEditMessage(message);
+    }
+  };
 
   const startEdit = (batch: Batch) => {
     setEditingBatchId(batch.batchId);
@@ -2111,6 +2311,117 @@ function BatchesPage() {
             </button>
           ) : null}
           {saveMessage ? <p className="batch-form-message">{saveMessage}</p> : null}
+        </div>
+      </form>
+
+
+      <form className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
+        <h3>Edit crop metadata</h3>
+        <div className="batch-form-grid">
+          <label>
+            Crop
+            <select value={editingCropId} onChange={(event) => setEditingCropId(event.target.value)}>
+              {selectableCrops.map((crop) => (
+                <option key={crop.cropId} value={crop.cropId}>
+                  {crop.label}
+                </option>
+              ))}
+            </select>
+            {cropEditErrors.cropId ? <span className="form-error">{cropEditErrors.cropId}</span> : null}
+          </label>
+
+          <label>
+            Crop ID (immutable)
+            <input type="text" value={editingCropId} readOnly disabled />
+          </label>
+
+          <label>
+            Common name
+            <input
+              type="text"
+              value={cropEditValues.commonName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, commonName: event.target.value }))}
+            />
+            {cropEditErrors.commonName ? <span className="form-error">{cropEditErrors.commonName}</span> : null}
+          </label>
+
+          <label>
+            Scientific name
+            <input
+              type="text"
+              value={cropEditValues.scientificName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, scientificName: event.target.value }))}
+            />
+            {cropEditErrors.scientificName ? <span className="form-error">{cropEditErrors.scientificName}</span> : null}
+          </label>
+
+          <label>
+            Aliases (comma-separated)
+            <input
+              type="text"
+              value={cropEditValues.aliases}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, aliases: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Varieties (comma-separated)
+            <input
+              type="text"
+              value={cropEditValues.varieties}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, varieties: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Spacing metadata
+            <input
+              type="text"
+              value={cropEditValues.spacing}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, spacing: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Sowing / transplant metadata
+            <input
+              type="text"
+              value={cropEditValues.sowingTransplant}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, sowingTransplant: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Lifecycle metadata
+            <input
+              type="text"
+              value={cropEditValues.lifecycle}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, lifecycle: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Tags (comma-separated)
+            <input
+              type="text"
+              value={cropEditValues.tags}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, tags: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Notes
+            <textarea
+              value={cropEditValues.notes}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+            />
+            {cropEditErrors.notes ? <span className="form-error">{cropEditErrors.notes}</span> : null}
+          </label>
+        </div>
+        <div className="batch-form-actions">
+          <button type="submit">Save crop changes</button>
+          {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
         </div>
       </form>
 
