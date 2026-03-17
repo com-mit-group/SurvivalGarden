@@ -84,6 +84,8 @@ function BedsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingPathKey, setDeletingPathKey] = useState<string | null>(null);
+  const [deletePathMessage, setDeletePathMessage] = useState<string | null>(null);
 
 
 
@@ -128,6 +130,74 @@ function BedsPage() {
     [segments],
   );
 
+  const handleDeletePath = useCallback(async (segmentId: string, pathId: string) => {
+    if (deletingPathKey) {
+      return;
+    }
+
+    setDeletePathMessage(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setDeletePathMessage('Unable to delete path because local app state is unavailable.');
+        return;
+      }
+
+      const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === pathId).length;
+      const relatedTaskCount = appState.tasks.filter((task) => task.bedId === pathId).length;
+      const relatedBatchCount = appState.batches.filter((batch) => {
+        const primaryAssignments = batch.assignments ?? [];
+        const legacyAssignments = batch.bedAssignments ?? [];
+        return [...primaryAssignments, ...legacyAssignments].some((assignment) => assignment.bedId === pathId);
+      }).length;
+
+      if (relatedPlanCount > 0 || relatedTaskCount > 0 || relatedBatchCount > 0) {
+        const blockingReasons: string[] = [];
+        if (relatedPlanCount > 0) {
+          blockingReasons.push(`${relatedPlanCount} crop plan${relatedPlanCount === 1 ? '' : 's'}`);
+        }
+        if (relatedBatchCount > 0) {
+          blockingReasons.push(`${relatedBatchCount} batch assignment${relatedBatchCount === 1 ? '' : 's'}`);
+        }
+        if (relatedTaskCount > 0) {
+          blockingReasons.push(`${relatedTaskCount} task${relatedTaskCount === 1 ? '' : 's'}`);
+        }
+
+        setDeletePathMessage(`Cannot delete path ${pathId} because it is referenced by ${blockingReasons.join(', ')}.`);
+        return;
+      }
+
+      if (!window.confirm(`Delete path ${pathId} from segment ${segmentId}? This action cannot be undone.`)) {
+        return;
+      }
+
+      setDeletingPathKey(`${segmentId}:${pathId}`);
+
+      const nextSegments = (appState.segments ?? []).map((segment) => {
+        if (segment.segmentId !== segmentId) {
+          return segment;
+        }
+
+        const nextPaths = segment.paths.filter((segmentPath) => segmentPath.pathId !== pathId);
+        return nextPaths.length === segment.paths.length ? segment : { ...segment, paths: nextPaths };
+      });
+
+      const nextState = {
+        ...appState,
+        segments: nextSegments,
+      };
+
+      await saveAppStateToIndexedDb(nextState);
+      setSegments(nextSegments);
+      setDeletePathMessage(`Deleted path ${pathId}.`);
+    } catch (error) {
+      setDeletePathMessage(error instanceof Error ? error.message : 'Failed to delete path.');
+    } finally {
+      setDeletingPathKey(null);
+    }
+  }, [deletingPathKey]);
+
   return (
     <section className="beds-page">
       <h2>Beds</h2>
@@ -135,6 +205,34 @@ function BedsPage() {
         <p className="beds-page-summary">
           Segments: {segments.length} · Paths: {totalPathCount}
         </p>
+      ) : null}
+      {!isLoading && deletePathMessage ? <p className="beds-empty-state">{deletePathMessage}</p> : null}
+      {!isLoading && segments.length > 0 ? (
+        <section>
+          <h3>Segment paths</h3>
+          {segments.map((segment) => (
+            <article key={segment.segmentId}>
+              <p>{segment.name} ({segment.segmentId})</p>
+              {segment.paths.length === 0 ? <p>No paths.</p> : (
+                <ul>
+                  {segment.paths.map((path) => {
+                    const deleteKey = `${segment.segmentId}:${path.pathId}`;
+                    const isDeleting = deletingPathKey === deleteKey;
+
+                    return (
+                      <li key={path.pathId}>
+                        <span>{path.name} ({path.pathId})</span>{' '}
+                        <button type="button" onClick={() => void handleDeletePath(segment.segmentId, path.pathId)} disabled={Boolean(deletingPathKey)}>
+                          {isDeleting ? 'Deleting…' : 'Delete path'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </article>
+          ))}
+        </section>
       ) : null}
       {isLoading ? <p className="beds-empty-state">Loading beds…</p> : null}
       {!isLoading ? (
