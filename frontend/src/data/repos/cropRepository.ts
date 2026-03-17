@@ -23,14 +23,51 @@ const asUtcIso = (value: unknown): string | undefined => {
 
 const normalizeCropCandidate = (value: unknown): unknown => {
   const candidate = asRecord(value);
+  const commonName = asString(candidate.name) ?? asString(candidate.commonName);
+  const species = asRecord(candidate.species);
+  const speciesTaxonomy = asRecord(species.taxonomy);
 
-  return {
+  const normalized: Record<string, unknown> = {
     ...candidate,
     cropId: candidate.cropId ?? candidate.id,
-    name: candidate.name ?? candidate.commonName,
+    name: commonName,
     createdAt: asUtcIso(candidate.createdAt),
     updatedAt: asUtcIso(candidate.updatedAt),
   };
+
+  const cultivar = asString(candidate.cultivar);
+  if (cultivar !== undefined) {
+    normalized.cultivar = cultivar;
+  }
+
+  const speciesId = asString(candidate.speciesId);
+  if (speciesId !== undefined) {
+    normalized.speciesId = speciesId;
+  }
+
+  const speciesCommonName = asString(species.commonName);
+  const speciesScientificName = asString(species.scientificName);
+  if (speciesCommonName !== undefined && speciesScientificName !== undefined) {
+    const normalizedSpecies: Record<string, unknown> = {
+      ...(asString(species.id) ? { id: asString(species.id) } : {}),
+      commonName: speciesCommonName,
+      scientificName: speciesScientificName,
+    };
+
+    const normalizedSpeciesTaxonomy = {
+      ...(asString(speciesTaxonomy.family) ? { family: asString(speciesTaxonomy.family) } : {}),
+      ...(asString(speciesTaxonomy.genus) ? { genus: asString(speciesTaxonomy.genus) } : {}),
+      ...(asString(speciesTaxonomy.species) ? { species: asString(speciesTaxonomy.species) } : {}),
+    };
+
+    if (Object.keys(normalizedSpeciesTaxonomy).length > 0) {
+      normalizedSpecies.taxonomy = normalizedSpeciesTaxonomy;
+    }
+
+    normalized.species = normalizedSpecies;
+  }
+
+  return normalized;
 };
 
 export const getCropFromAppState = (appState: unknown, cropId: Crop['cropId']): Crop | null => {

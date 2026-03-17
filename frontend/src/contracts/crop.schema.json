@@ -27,6 +27,11 @@
       "anyOf": [
         {
           "required": [
+            "cultivar"
+          ]
+        },
+        {
+          "required": [
             "name"
           ]
         },
@@ -47,13 +52,68 @@
       "minLength": 1,
       "maxLength": 120
     },
+    "cultivar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Cultivar or variety name for this crop record."
+    },
+    "speciesId": {
+      "$ref": "#/$defs/id"
+    },
+    "species": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commonName",
+        "scientificName"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "commonName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "scientificName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "taxonomy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "family": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "genus": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "species": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        }
+      }
+    },
     "scientificName": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 160
+      "maxLength": 160,
+      "description": "Migration alias for species.scientificName."
     },
     "taxonomy": {
       "type": "object",
+      "description": "Migration alias for species.taxonomy.",
       "additionalProperties": false,
       "properties": {
         "family": {

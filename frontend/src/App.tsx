@@ -617,10 +617,7 @@ function BedDetailPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropHasTaskRules(
@@ -1220,10 +1217,7 @@ function CalendarPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setIsLoading(false);
@@ -1806,6 +1800,11 @@ const fromLocalDateTimeInput = (value: string): string | null => {
   return date.toISOString();
 };
 
+const getCropSpeciesScientificName = (crop: Crop): string => {
+  const speciesScientificName = (crop as Crop & { species?: { scientificName?: string } }).species?.scientificName;
+  return speciesScientificName ?? (crop as { scientificName?: string }).scientificName ?? '';
+};
+
 const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined; scientificName: string | undefined }) => {
   if (crop.name && crop.scientificName) {
     return `${crop.name} (${crop.scientificName})`;
@@ -1877,8 +1876,10 @@ function BatchesPage() {
   const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
   const [editingCropId, setEditingCropId] = useState<string>('');
   const [cropEditValues, setCropEditValues] = useState({
-    commonName: '',
-    scientificName: '',
+    cultivar: '',
+    speciesId: '',
+    speciesCommonName: '',
+    speciesScientificName: '',
     aliases: '',
     notes: '',
     varieties: '',
@@ -1911,10 +1912,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropAliases(
@@ -2120,8 +2118,10 @@ function BatchesPage() {
     const loadCropForEdit = async () => {
       if (!editingCropId) {
         setCropEditValues({
-          commonName: '',
-          scientificName: '',
+          cultivar: '',
+          speciesId: '',
+          speciesCommonName: '',
+          speciesScientificName: '',
           aliases: '',
           notes: '',
           varieties: '',
@@ -2137,9 +2137,17 @@ function BatchesPage() {
       const crop = appState ? appState.crops.find((entry) => entry.cropId === editingCropId) : null;
       const cropMeta = ((crop as { meta?: Record<string, unknown> } | null)?.meta ?? {}) as Record<string, unknown>;
 
+      const cropSpecies = ((crop as { species?: Record<string, unknown> } | null)?.species ?? {}) as Record<string, unknown>;
       setCropEditValues({
-        commonName: crop?.name ?? '',
-        scientificName: crop?.scientificName ?? (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
+        cultivar: (crop as (Crop & { cultivar?: string }) | null)?.cultivar ?? crop?.name ?? '',
+        speciesId: (crop as (Crop & { speciesId?: string }) | null)?.speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : ''),
+        speciesCommonName:
+          (typeof cropSpecies.commonName === 'string' ? cropSpecies.commonName : '')
+          || crop?.name
+          || '',
+        speciesScientificName:
+          (typeof cropSpecies.scientificName === 'string' ? cropSpecies.scientificName : '')
+          || (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
         aliases: (crop?.aliases ?? []).join(', '),
         notes: typeof cropMeta.notes === 'string' ? cropMeta.notes : '',
         varieties: Array.isArray(cropMeta.varieties) ? cropMeta.varieties.join(', ') : '',
@@ -2164,13 +2172,13 @@ function BatchesPage() {
       errors.cropId = 'Select a crop to edit.';
     }
 
-    const commonName = cropEditValues.commonName.trim();
-    if (!commonName) {
-      errors.commonName = 'Common name is required.';
+    const cultivar = cropEditValues.cultivar.trim();
+    if (!cultivar) {
+      errors.cultivar = 'Cultivar is required.';
     }
 
-    if (cropEditValues.scientificName.trim().length > 160) {
-      errors.scientificName = 'Scientific name must be 160 characters or fewer.';
+    if (cropEditValues.speciesScientificName.trim().length > 160) {
+      errors.speciesScientificName = 'Species scientific name must be 160 characters or fewer.';
     }
 
     if (cropEditValues.notes.length > 2000) {
@@ -2203,16 +2211,28 @@ function BatchesPage() {
       const tags = parseCsvUnique(cropEditValues.tags);
       const varieties = parseCsvUnique(cropEditValues.varieties);
 
+      const speciesCommonName = cropEditValues.speciesCommonName.trim();
+      const speciesScientificName = cropEditValues.speciesScientificName.trim();
+      const speciesId = cropEditValues.speciesId.trim();
+
       const nextCrop = {
         ...existingCrop,
         cropId: existingCrop.cropId,
-        name: commonName,
-        ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
+        name: speciesCommonName || cultivar,
+        cultivar,
+        ...(speciesId ? { speciesId } : {}),
         ...(aliases.length > 0 ? { aliases } : {}),
+        species:
+          speciesCommonName && speciesScientificName
+            ? {
+                ...(speciesId ? { id: speciesId } : {}),
+                commonName: speciesCommonName,
+                scientificName: speciesScientificName,
+              }
+            : undefined,
         meta: {
           ...existingMeta,
-          ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
-          ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
+            ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
           ...(varieties.length > 0 ? { varieties } : {}),
           ...(cropEditValues.spacing.trim() ? { spacing: cropEditValues.spacing.trim() } : {}),
           ...(cropEditValues.sowingTransplant.trim() ? { sowingTransplant: cropEditValues.sowingTransplant.trim() } : {}),
@@ -2228,10 +2248,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropAliases(
@@ -2252,8 +2269,8 @@ function BatchesPage() {
               ...current,
               cropInput: formatCropOptionLabel({
                 cropId: existingCrop.cropId,
-                name: commonName,
-                scientificName: cropEditValues.scientificName.trim() || undefined,
+                name: speciesCommonName || cultivar,
+                scientificName: speciesScientificName || undefined,
               }),
             }
           : current,
@@ -2348,10 +2365,16 @@ function BatchesPage() {
         .map((alias) => alias.trim())
         .filter((alias) => alias.length > 0);
 
+      const speciesScientificName = formValues.cropScientificName.trim();
       const nextState = upsertCropInAppState(appState, {
         cropId,
         name: cropName,
-        scientificName: formValues.cropScientificName.trim() || undefined,
+        cultivar: cropName,
+        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
+        species:
+          speciesScientificName.length > 0
+            ? { commonName: cropName, scientificName: speciesScientificName }
+            : undefined,
         category: formValues.cropCategory.trim(),
         aliases: aliases.length > 0 ? aliases : undefined,
         isUserDefined: true,
@@ -2364,10 +2387,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setFormValues((current) => ({
@@ -2523,10 +2543,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setFormErrors({});
@@ -2818,23 +2835,41 @@ function BatchesPage() {
           </label>
 
           <label>
-            Common name
+            Cultivar / variety
             <input
               type="text"
-              value={cropEditValues.commonName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, commonName: event.target.value }))}
+              value={cropEditValues.cultivar}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, cultivar: event.target.value }))}
             />
-            {cropEditErrors.commonName ? <span className="form-error">{cropEditErrors.commonName}</span> : null}
+            {cropEditErrors.cultivar ? <span className="form-error">{cropEditErrors.cultivar}</span> : null}
           </label>
 
           <label>
-            Scientific name
+            Species common name
             <input
               type="text"
-              value={cropEditValues.scientificName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, scientificName: event.target.value }))}
+              value={cropEditValues.speciesCommonName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesCommonName: event.target.value }))}
             />
-            {cropEditErrors.scientificName ? <span className="form-error">{cropEditErrors.scientificName}</span> : null}
+          </label>
+
+          <label>
+            Species scientific name
+            <input
+              type="text"
+              value={cropEditValues.speciesScientificName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesScientificName: event.target.value }))}
+            />
+            {cropEditErrors.speciesScientificName ? <span className="form-error">{cropEditErrors.speciesScientificName}</span> : null}
+          </label>
+
+          <label>
+            Species ID
+            <input
+              type="text"
+              value={cropEditValues.speciesId}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesId: event.target.value }))}
+            />
           </label>
 
           <label>
@@ -3019,7 +3054,7 @@ function BatchDetailPage() {
 
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
-      setCropScientificName((crop as { scientificName?: string } | undefined)?.scientificName ?? null);
+      setCropScientificName(crop ? getCropSpeciesScientificName(crop) || null : null);
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
       setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
       setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
@@ -4844,20 +4879,55 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           updatedAt: incomingCrop.updatedAt,
         };
 
-        if (incomingCrop.scientificName !== undefined) {
-          mergedCrop.scientificName = incomingCrop.scientificName;
-        }
         if (incomingCrop.aliases !== undefined) {
           mergedCrop.aliases = incomingCrop.aliases;
         }
         if (incomingCrop.category !== undefined) {
           mergedCrop.category = incomingCrop.category;
         }
-        if (incomingCrop.taxonomy !== undefined) {
-          mergedCrop.taxonomy = incomingCrop.taxonomy;
-        }
         if (incomingCrop.taskRules !== undefined) {
           mergedCrop.taskRules = incomingCrop.taskRules;
+        }
+        const incomingCultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
+        if (incomingCultivar !== undefined) {
+          (mergedCrop as Crop & { cultivar?: string }).cultivar = incomingCultivar;
+        }
+        const incomingSpeciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
+        if (incomingSpeciesId !== undefined) {
+          (mergedCrop as Crop & { speciesId?: string }).speciesId = incomingSpeciesId;
+        }
+
+        const incomingSpecies = (incomingCrop as Crop & {
+          species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+        }).species;
+        const incomingTaxonomy = incomingCrop.taxonomy;
+
+        if (incomingSpecies !== undefined || incomingTaxonomy !== undefined) {
+          const currentSpecies = (currentCrop as Crop & {
+            species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+          }).species;
+          const commonName = incomingSpecies?.commonName ?? currentSpecies?.commonName;
+          const scientificName = incomingSpecies?.scientificName ?? currentSpecies?.scientificName;
+
+          if (commonName !== undefined && scientificName !== undefined) {
+            (mergedCrop as Crop & {
+              species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+            }).species = {
+              ...(currentSpecies?.id !== undefined ? { id: currentSpecies.id } : {}),
+              ...(incomingSpecies?.id !== undefined ? { id: incomingSpecies.id } : {}),
+              commonName,
+              scientificName,
+              ...((incomingTaxonomy !== undefined || incomingSpecies?.taxonomy !== undefined || currentSpecies?.taxonomy !== undefined)
+                ? {
+                    taxonomy: {
+                      ...(currentSpecies?.taxonomy ?? {}),
+                      ...(incomingTaxonomy ?? {}),
+                      ...(incomingSpecies?.taxonomy ?? {}),
+                    },
+                  }
+                : {}),
+            };
+          }
         }
 
         const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
@@ -5243,7 +5313,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
         );
       }
-      } catch (error) {
+    } catch (error) {
         setImportMessage('Deep-link import failed. Payload was invalid or too large.');
         setImportErrors(mapImportError(error));
       } finally {
@@ -5300,7 +5370,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
-      <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ ... ] }'}</code>.</p>
+      <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
       <p>Segment import endpoint contract: <code>POST /api/import/segments</code> with <code>{'{ "segments": [ ... ] }'}</code>.</p>
       <p>
@@ -5381,7 +5451,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             <h3>Crop Import Preview</h3>
             <ul>
               {pendingCropImportCrops.slice(0, 5).map((crop) => (
-                <li key={crop.cropId}>{crop.name} ({crop.cropId})</li>
+                <li key={crop.cropId}>{(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — {(crop as Crop & { species?: { commonName?: string } }).species?.commonName ?? crop.name} ({crop.cropId})</li>
               ))}
             </ul>
           </section>
