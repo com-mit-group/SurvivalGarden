@@ -176,6 +176,11 @@ export interface Crop {
     id?: string;
     commonName: string;
     scientificName: string;
+    taxonomy?: {
+      family?: string;
+      genus?: string;
+      species?: string;
+    };
   };
   scientificName?: string;
   taxonomy?: {

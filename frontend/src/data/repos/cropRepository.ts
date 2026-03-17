@@ -25,13 +25,27 @@ const normalizeCropCandidate = (value: unknown): unknown => {
   const candidate = asRecord(value);
   const commonName = asString(candidate.name) ?? asString(candidate.commonName);
   const scientificName = asString(candidate.scientificName);
+  const taxonomy = asRecord(candidate.taxonomy);
   const species = asRecord(candidate.species);
+  const speciesTaxonomy = asRecord(species.taxonomy);
+  const normalizedSpeciesTaxonomy = {
+    ...(asString(speciesTaxonomy.family) ?? asString(taxonomy.family)
+      ? { family: asString(speciesTaxonomy.family) ?? asString(taxonomy.family) }
+      : {}),
+    ...(asString(speciesTaxonomy.genus) ?? asString(taxonomy.genus)
+      ? { genus: asString(speciesTaxonomy.genus) ?? asString(taxonomy.genus) }
+      : {}),
+    ...(asString(speciesTaxonomy.species) ?? asString(taxonomy.species)
+      ? { species: asString(speciesTaxonomy.species) ?? asString(taxonomy.species) }
+      : {}),
+  };
   const normalizedSpecies = {
     ...(asString(species.id) ? { id: asString(species.id) } : {}),
     ...(asString(species.commonName) ?? commonName ? { commonName: asString(species.commonName) ?? commonName } : {}),
     ...(asString(species.scientificName) ?? scientificName
       ? { scientificName: asString(species.scientificName) ?? scientificName }
       : {}),
+    ...(Object.keys(normalizedSpeciesTaxonomy).length > 0 ? { taxonomy: normalizedSpeciesTaxonomy } : {}),
   };
 
   return {

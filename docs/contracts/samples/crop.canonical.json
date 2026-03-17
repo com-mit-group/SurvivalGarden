@@ -6,13 +6,12 @@
   "species": {
     "id": "species_tomato",
     "commonName": "Tomato",
-    "scientificName": "Solanum lycopersicum"
-  },
-  "scientificName": "Solanum lycopersicum",
-  "taxonomy": {
-    "family": "Solanaceae",
-    "genus": "Solanum",
-    "species": "lycopersicum"
+    "scientificName": "Solanum lycopersicum",
+    "taxonomy": {
+      "family": "Solanaceae",
+      "genus": "Solanum",
+      "species": "lycopersicum"
+    }
   },
   "aliases": [
     "Garden Tomato"

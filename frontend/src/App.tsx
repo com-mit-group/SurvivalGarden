@@ -617,10 +617,7 @@ function BedDetailPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropHasTaskRules(
@@ -1220,10 +1217,7 @@ function CalendarPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setIsLoading(false);
@@ -1806,6 +1800,11 @@ const fromLocalDateTimeInput = (value: string): string | null => {
   return date.toISOString();
 };
 
+const getCropSpeciesScientificName = (crop: Crop): string => {
+  const speciesScientificName = (crop as Crop & { species?: { scientificName?: string } }).species?.scientificName;
+  return speciesScientificName ?? (crop as { scientificName?: string }).scientificName ?? '';
+};
+
 const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined; scientificName: string | undefined }) => {
   if (crop.name && crop.scientificName) {
     return `${crop.name} (${crop.scientificName})`;
@@ -1913,10 +1912,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropAliases(
@@ -2151,7 +2147,6 @@ function BatchesPage() {
           || '',
         speciesScientificName:
           (typeof cropSpecies.scientificName === 'string' ? cropSpecies.scientificName : '')
-          || crop?.scientificName
           || (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
         aliases: (crop?.aliases ?? []).join(', '),
         notes: typeof cropMeta.notes === 'string' ? cropMeta.notes : '',
@@ -2226,7 +2221,6 @@ function BatchesPage() {
         name: speciesCommonName || cultivar,
         cultivar,
         ...(speciesId ? { speciesId } : {}),
-        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
         ...(aliases.length > 0 ? { aliases } : {}),
         species:
           speciesCommonName && speciesScientificName
@@ -2238,8 +2232,7 @@ function BatchesPage() {
             : undefined,
         meta: {
           ...existingMeta,
-          ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
-          ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
+            ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
           ...(varieties.length > 0 ? { varieties } : {}),
           ...(cropEditValues.spacing.trim() ? { spacing: cropEditValues.spacing.trim() } : {}),
           ...(cropEditValues.sowingTransplant.trim() ? { sowingTransplant: cropEditValues.sowingTransplant.trim() } : {}),
@@ -2255,10 +2248,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setCropAliases(
@@ -2375,10 +2365,15 @@ function BatchesPage() {
         .map((alias) => alias.trim())
         .filter((alias) => alias.length > 0);
 
+      const speciesScientificName = formValues.cropScientificName.trim();
       const nextState = upsertCropInAppState(appState, {
         cropId,
         name: cropName,
-        scientificName: formValues.cropScientificName.trim() || undefined,
+        cultivar: cropName,
+        species:
+          speciesScientificName.length > 0
+            ? { commonName: cropName, scientificName: speciesScientificName }
+            : undefined,
         category: formValues.cropCategory.trim(),
         aliases: aliases.length > 0 ? aliases : undefined,
         isUserDefined: true,
@@ -2391,10 +2386,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setFormValues((current) => ({
@@ -2550,10 +2542,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
-            const scientificName = (crop as { scientificName?: string }).scientificName;
-            return [crop.cropId, scientificName ?? ''];
-          }),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
         ),
       );
       setFormErrors({});
@@ -3064,7 +3053,7 @@ function BatchDetailPage() {
 
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
-      setCropScientificName((crop as { scientificName?: string } | undefined)?.scientificName ?? null);
+      setCropScientificName(crop ? getCropSpeciesScientificName(crop) || null : null);
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
       setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
       setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
@@ -4889,17 +4878,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           updatedAt: incomingCrop.updatedAt,
         };
 
-        if (incomingCrop.scientificName !== undefined) {
-          mergedCrop.scientificName = incomingCrop.scientificName;
-        }
         if (incomingCrop.aliases !== undefined) {
           mergedCrop.aliases = incomingCrop.aliases;
         }
         if (incomingCrop.category !== undefined) {
           mergedCrop.category = incomingCrop.category;
-        }
-        if (incomingCrop.taxonomy !== undefined) {
-          mergedCrop.taxonomy = incomingCrop.taxonomy;
         }
         if (incomingCrop.taskRules !== undefined) {
           mergedCrop.taskRules = incomingCrop.taskRules;
@@ -4910,9 +4893,32 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         if ((incomingCrop as Crop & { speciesId?: string }).speciesId !== undefined) {
           (mergedCrop as Crop & { speciesId?: string }).speciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
         }
-        if ((incomingCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species !== undefined) {
-          (mergedCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species =
-            (incomingCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species;
+
+        const incomingSpecies = (incomingCrop as Crop & {
+          species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+        }).species;
+        const incomingTaxonomy = incomingCrop.taxonomy;
+
+        if (incomingSpecies !== undefined || incomingTaxonomy !== undefined) {
+          const currentSpecies = (currentCrop as Crop & {
+            species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+          }).species;
+
+          (mergedCrop as Crop & {
+            species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+          }).species = {
+            ...(currentSpecies ?? {}),
+            ...(incomingSpecies ?? {}),
+            ...(incomingTaxonomy !== undefined
+              ? {
+                  taxonomy: {
+                    ...(currentSpecies?.taxonomy ?? {}),
+                    ...incomingTaxonomy,
+                    ...(incomingSpecies?.taxonomy ?? {}),
+                  },
+                }
+              : {}),
+          };
         }
 
         const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
