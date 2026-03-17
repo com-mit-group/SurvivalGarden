@@ -3951,6 +3951,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
       <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ ... ] }'}</code>.</p>
+      <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
+      <p>
+        Crop plan payload references: <code>segmentId</code>, <code>bedId</code>, <code>cropId</code>, optional <code>batchId</code>, and
+        <code>placements</code>.
+      </p>
+      <p>
+        Supported placement payloads include <code>{'{ "type": "points", "points": [ ... ] }'}</code> and{' '}
+        <code>{'{ "type": "formula", "formula": { "kind": "grid", ... } }'}</code>.
+      </p>
       <p>
         Validation behavior: each batch is schema-validated before merge; invalid batches are reported with <code>batchId</code> + field details and skipped.
       </p>
