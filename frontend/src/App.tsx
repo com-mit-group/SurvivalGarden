@@ -158,6 +158,7 @@ function BedsPage() {
 
 function BedDetailPage() {
   const { bedId } = useParams();
+  const navigate = useNavigate();
   const [bed, setBed] = useState<Bed | null>(null);
   const [allBeds, setAllBeds] = useState<Bed[]>([]);
   const [notes, setNotes] = useState('');
@@ -182,6 +183,8 @@ function BedDetailPage() {
   const [removeConfirmByBatchId, setRemoveConfirmByBatchId] = useState<Record<string, boolean>>({});
   const [removeMessageByBatchId, setRemoveMessageByBatchId] = useState<Record<string, string>>({});
   const [savingActionBatchId, setSavingActionBatchId] = useState<string | null>(null);
+  const [isDeletingBed, setIsDeletingBed] = useState(false);
+  const [deleteBedMessage, setDeleteBedMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -455,6 +458,75 @@ function BedDetailPage() {
     }
   };
 
+  const handleDeleteBed = async () => {
+    if (!bedId || isDeletingBed) {
+      return;
+    }
+
+    setDeleteBedMessage(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setDeleteBedMessage('Unable to delete because local app state is unavailable.');
+        return;
+      }
+
+      const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
+      const relatedTaskCount = appState.tasks.filter((task) => task.bedId === bedId).length;
+      const relatedBatchCount = appState.batches.filter((batch) => {
+        const primaryAssignments = batch.assignments ?? [];
+        const legacyAssignments = batch.bedAssignments ?? [];
+        return [...primaryAssignments, ...legacyAssignments].some((assignment) => assignment.bedId === bedId);
+      }).length;
+
+      if (relatedPlanCount > 0 || relatedTaskCount > 0 || relatedBatchCount > 0) {
+        const blockingReasons: string[] = [];
+        if (relatedPlanCount > 0) {
+          blockingReasons.push(`${relatedPlanCount} crop plan${relatedPlanCount === 1 ? '' : 's'}`);
+        }
+        if (relatedBatchCount > 0) {
+          blockingReasons.push(`${relatedBatchCount} batch assignment${relatedBatchCount === 1 ? '' : 's'}`);
+        }
+        if (relatedTaskCount > 0) {
+          blockingReasons.push(`${relatedTaskCount} task${relatedTaskCount === 1 ? '' : 's'}`);
+        }
+
+        setDeleteBedMessage(`Cannot delete this bed because it is referenced by ${blockingReasons.join(', ')}.`);
+        return;
+      }
+
+      if (!window.confirm(`Delete bed ${bedId}? This action cannot be undone.`)) {
+        return;
+      }
+
+      setIsDeletingBed(true);
+
+      let wasRemovedFromSegment = false;
+      const nextSegments = (appState.segments ?? []).map((segment) => {
+        const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
+        if (nextBeds.length !== segment.beds.length) {
+          wasRemovedFromSegment = true;
+        }
+
+        return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
+      });
+
+      const nextState = {
+        ...appState,
+        segments: nextSegments,
+        beds: wasRemovedFromSegment ? appState.beds : appState.beds.filter((candidateBed) => candidateBed.bedId !== bedId),
+      };
+
+      await saveAppStateToIndexedDb(nextState);
+      await navigate('/beds');
+    } catch (error) {
+      setDeleteBedMessage(error instanceof Error ? error.message : 'Failed to delete bed.');
+    } finally {
+      setIsDeletingBed(false);
+    }
+  };
+
   useEffect(() => {
     if (!bed || !bedId) {
       return;
@@ -537,6 +609,14 @@ function BedDetailPage() {
       <article className="bed-detail-card">
         <h3>Composition</h3>
         <p className="bed-detail-meta">Companions and succession notes will appear here.</p>
+      </article>
+
+      <article className="bed-detail-card">
+        <h3>Danger zone</h3>
+        <button type="button" onClick={() => void handleDeleteBed()} disabled={isDeletingBed}>
+          {isDeletingBed ? 'Deleting bed…' : 'Delete bed'}
+        </button>
+        {deleteBedMessage ? <p>{deleteBedMessage}</p> : null}
       </article>
 
       <article className="bed-detail-card">
