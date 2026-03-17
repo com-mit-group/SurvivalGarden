@@ -135,6 +135,117 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Beds' })).toBeInTheDocument();
   });
 
+  it('deletes a segment path and persists updated segment state', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      segments: [
+        {
+          segmentId: 'segment-1',
+          name: 'North',
+          width: 4,
+          height: 3,
+          originReference: 'nw_corner',
+          beds: [],
+          paths: [
+            { pathId: 'path-1', name: 'Main', x: 0, y: 0, width: 1, height: 3 },
+          ],
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/beds']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Delete path' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete path' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            segmentId: 'segment-1',
+            paths: [],
+          }),
+        ],
+      }));
+    });
+
+    expect(screen.getByText('Deleted path path-1.')).toBeInTheDocument();
+  });
+
+  it('blocks deleting a segment path when downstream references exist', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [{ planId: 'plan-1', cropId: 'crop-1', bedId: 'path-1', seasonYear: 2026, plannedWindows: { sowing: [], harvest: [] }, expectedYield: { amount: 1, unit: 'kg' } }],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-DE',
+        timezone: 'Europe/Berlin',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      segments: [
+        {
+          segmentId: 'segment-1',
+          name: 'North',
+          width: 4,
+          height: 3,
+          originReference: 'nw_corner',
+          beds: [],
+          paths: [
+            { pathId: 'path-1', name: 'Main', x: 0, y: 0, width: 1, height: 3 },
+          ],
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/beds']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Delete path' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete path' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot delete path path-1 because it is referenced by 1 crop plan.')).toBeInTheDocument();
+    });
+
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
+  });
+
   it('hides dev reset action when flag is disabled', () => {
     render(
       <MemoryRouter initialEntries={['/data']}>
