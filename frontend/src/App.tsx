@@ -1877,8 +1877,10 @@ function BatchesPage() {
   const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
   const [editingCropId, setEditingCropId] = useState<string>('');
   const [cropEditValues, setCropEditValues] = useState({
-    commonName: '',
-    scientificName: '',
+    cultivar: '',
+    speciesId: '',
+    speciesCommonName: '',
+    speciesScientificName: '',
     aliases: '',
     notes: '',
     varieties: '',
@@ -2120,8 +2122,10 @@ function BatchesPage() {
     const loadCropForEdit = async () => {
       if (!editingCropId) {
         setCropEditValues({
-          commonName: '',
-          scientificName: '',
+          cultivar: '',
+          speciesId: '',
+          speciesCommonName: '',
+          speciesScientificName: '',
           aliases: '',
           notes: '',
           varieties: '',
@@ -2137,9 +2141,18 @@ function BatchesPage() {
       const crop = appState ? appState.crops.find((entry) => entry.cropId === editingCropId) : null;
       const cropMeta = ((crop as { meta?: Record<string, unknown> } | null)?.meta ?? {}) as Record<string, unknown>;
 
+      const cropSpecies = ((crop as { species?: Record<string, unknown> } | null)?.species ?? {}) as Record<string, unknown>;
       setCropEditValues({
-        commonName: crop?.name ?? '',
-        scientificName: crop?.scientificName ?? (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
+        cultivar: (crop as Crop & { cultivar?: string }).cultivar ?? crop?.name ?? '',
+        speciesId: (crop as Crop & { speciesId?: string }).speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : ''),
+        speciesCommonName:
+          (typeof cropSpecies.commonName === 'string' ? cropSpecies.commonName : '')
+          || crop?.name
+          || '',
+        speciesScientificName:
+          (typeof cropSpecies.scientificName === 'string' ? cropSpecies.scientificName : '')
+          || crop?.scientificName
+          || (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
         aliases: (crop?.aliases ?? []).join(', '),
         notes: typeof cropMeta.notes === 'string' ? cropMeta.notes : '',
         varieties: Array.isArray(cropMeta.varieties) ? cropMeta.varieties.join(', ') : '',
@@ -2164,13 +2177,13 @@ function BatchesPage() {
       errors.cropId = 'Select a crop to edit.';
     }
 
-    const commonName = cropEditValues.commonName.trim();
-    if (!commonName) {
-      errors.commonName = 'Common name is required.';
+    const cultivar = cropEditValues.cultivar.trim();
+    if (!cultivar) {
+      errors.cultivar = 'Cultivar is required.';
     }
 
-    if (cropEditValues.scientificName.trim().length > 160) {
-      errors.scientificName = 'Scientific name must be 160 characters or fewer.';
+    if (cropEditValues.speciesScientificName.trim().length > 160) {
+      errors.speciesScientificName = 'Species scientific name must be 160 characters or fewer.';
     }
 
     if (cropEditValues.notes.length > 2000) {
@@ -2203,15 +2216,29 @@ function BatchesPage() {
       const tags = parseCsvUnique(cropEditValues.tags);
       const varieties = parseCsvUnique(cropEditValues.varieties);
 
+      const speciesCommonName = cropEditValues.speciesCommonName.trim();
+      const speciesScientificName = cropEditValues.speciesScientificName.trim();
+      const speciesId = cropEditValues.speciesId.trim();
+
       const nextCrop = {
         ...existingCrop,
         cropId: existingCrop.cropId,
-        name: commonName,
-        ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
+        name: speciesCommonName || cultivar,
+        cultivar,
+        ...(speciesId ? { speciesId } : {}),
+        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
         ...(aliases.length > 0 ? { aliases } : {}),
+        species:
+          speciesCommonName && speciesScientificName
+            ? {
+                ...(speciesId ? { id: speciesId } : {}),
+                commonName: speciesCommonName,
+                scientificName: speciesScientificName,
+              }
+            : undefined,
         meta: {
           ...existingMeta,
-          ...(cropEditValues.scientificName.trim() ? { scientificName: cropEditValues.scientificName.trim() } : {}),
+          ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
           ...(cropEditValues.notes.trim() ? { notes: cropEditValues.notes.trim() } : {}),
           ...(varieties.length > 0 ? { varieties } : {}),
           ...(cropEditValues.spacing.trim() ? { spacing: cropEditValues.spacing.trim() } : {}),
@@ -2252,8 +2279,8 @@ function BatchesPage() {
               ...current,
               cropInput: formatCropOptionLabel({
                 cropId: existingCrop.cropId,
-                name: commonName,
-                scientificName: cropEditValues.scientificName.trim() || undefined,
+                name: speciesCommonName || cultivar,
+                scientificName: speciesScientificName || undefined,
               }),
             }
           : current,
@@ -2818,23 +2845,41 @@ function BatchesPage() {
           </label>
 
           <label>
-            Common name
+            Cultivar / variety
             <input
               type="text"
-              value={cropEditValues.commonName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, commonName: event.target.value }))}
+              value={cropEditValues.cultivar}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, cultivar: event.target.value }))}
             />
-            {cropEditErrors.commonName ? <span className="form-error">{cropEditErrors.commonName}</span> : null}
+            {cropEditErrors.cultivar ? <span className="form-error">{cropEditErrors.cultivar}</span> : null}
           </label>
 
           <label>
-            Scientific name
+            Species common name
             <input
               type="text"
-              value={cropEditValues.scientificName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, scientificName: event.target.value }))}
+              value={cropEditValues.speciesCommonName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesCommonName: event.target.value }))}
             />
-            {cropEditErrors.scientificName ? <span className="form-error">{cropEditErrors.scientificName}</span> : null}
+          </label>
+
+          <label>
+            Species scientific name
+            <input
+              type="text"
+              value={cropEditValues.speciesScientificName}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesScientificName: event.target.value }))}
+            />
+            {cropEditErrors.speciesScientificName ? <span className="form-error">{cropEditErrors.speciesScientificName}</span> : null}
+          </label>
+
+          <label>
+            Species ID
+            <input
+              type="text"
+              value={cropEditValues.speciesId}
+              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesId: event.target.value }))}
+            />
           </label>
 
           <label>
@@ -4859,6 +4904,16 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         if (incomingCrop.taskRules !== undefined) {
           mergedCrop.taskRules = incomingCrop.taskRules;
         }
+        if ((incomingCrop as Crop & { cultivar?: string }).cultivar !== undefined) {
+          (mergedCrop as Crop & { cultivar?: string }).cultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
+        }
+        if ((incomingCrop as Crop & { speciesId?: string }).speciesId !== undefined) {
+          (mergedCrop as Crop & { speciesId?: string }).speciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
+        }
+        if ((incomingCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species !== undefined) {
+          (mergedCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species =
+            (incomingCrop as Crop & { species?: { id?: string; commonName: string; scientificName: string } }).species;
+        }
 
         const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
         cropsById.set(incomingCrop.cropId, mergedCrop);
@@ -5242,7 +5297,6 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         setImportMessage(
           `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
         );
-      }
       } catch (error) {
         setImportMessage('Deep-link import failed. Payload was invalid or too large.');
         setImportErrors(mapImportError(error));
@@ -5300,7 +5354,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
-      <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ ... ] }'}</code>.</p>
+      <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
       <p>Segment import endpoint contract: <code>POST /api/import/segments</code> with <code>{'{ "segments": [ ... ] }'}</code>.</p>
       <p>
@@ -5381,7 +5435,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             <h3>Crop Import Preview</h3>
             <ul>
               {pendingCropImportCrops.slice(0, 5).map((crop) => (
-                <li key={crop.cropId}>{crop.name} ({crop.cropId})</li>
+                <li key={crop.cropId}>{(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — {(crop as Crop & { species?: { commonName?: string } }).species?.commonName ?? crop.name} ({crop.cropId})</li>
               ))}
             </ul>
           </section>

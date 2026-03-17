@@ -21,8 +21,10 @@ describe('crop.schema.json', () => {
   const validate = ajv.compile(cropSchema);
 
   const validPayload = {
-    cropId: 'crop_tomato',
+    cropId: 'crop_tomato_san_marzano',
     name: 'Tomato',
+    speciesId: 'species_tomato',
+    cultivar: 'San Marzano',
     category: 'fruiting',
     rules: {
       sowing: {
@@ -107,6 +109,24 @@ describe('crop.schema.json', () => {
       },
       defaults: { spacingCm: 15 },
       meta: { family: 'Amaryllidaceae' },
+    };
+
+    expect(validate(payload)).toBe(true);
+  });
+
+
+  it('accepts cultivar-first payloads with explicit species metadata', () => {
+    const payload = {
+      cropId: 'crop_potato_laura',
+      cultivar: 'Laura',
+      speciesId: 'species_potato',
+      species: {
+        id: 'species_potato',
+        commonName: 'Potato',
+        scientificName: 'Solanum tuberosum',
+      },
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
     };
 
     expect(validate(payload)).toBe(true);

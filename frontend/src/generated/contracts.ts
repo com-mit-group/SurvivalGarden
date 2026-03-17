@@ -170,6 +170,13 @@ export interface CropNutritionItem {
 export interface Crop {
   cropId: string;
   name: string;
+  cultivar?: string;
+  speciesId?: string;
+  species?: {
+    id?: string;
+    commonName: string;
+    scientificName: string;
+  };
   scientificName?: string;
   taxonomy?: {
     family?: string;

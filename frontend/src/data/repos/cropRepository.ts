@@ -23,11 +23,24 @@ const asUtcIso = (value: unknown): string | undefined => {
 
 const normalizeCropCandidate = (value: unknown): unknown => {
   const candidate = asRecord(value);
+  const commonName = asString(candidate.name) ?? asString(candidate.commonName);
+  const scientificName = asString(candidate.scientificName);
+  const species = asRecord(candidate.species);
+  const normalizedSpecies = {
+    ...(asString(species.id) ? { id: asString(species.id) } : {}),
+    ...(asString(species.commonName) ?? commonName ? { commonName: asString(species.commonName) ?? commonName } : {}),
+    ...(asString(species.scientificName) ?? scientificName
+      ? { scientificName: asString(species.scientificName) ?? scientificName }
+      : {}),
+  };
 
   return {
     ...candidate,
     cropId: candidate.cropId ?? candidate.id,
-    name: candidate.name ?? candidate.commonName,
+    name: commonName,
+    cultivar: asString(candidate.cultivar) ?? commonName ?? 'unknown variety',
+    speciesId: asString(candidate.speciesId) ?? asString(species.id),
+    ...(Object.keys(normalizedSpecies).length >= 2 ? { species: normalizedSpecies } : {}),
     createdAt: asUtcIso(candidate.createdAt),
     updatedAt: asUtcIso(candidate.updatedAt),
   };

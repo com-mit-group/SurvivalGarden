@@ -27,6 +27,11 @@
       "anyOf": [
         {
           "required": [
+            "cultivar"
+          ]
+        },
+        {
+          "required": [
             "name"
           ]
         },
@@ -46,6 +51,38 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 120
+    },
+    "cultivar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Cultivar or variety name for this crop record."
+    },
+    "speciesId": {
+      "$ref": "#/$defs/id"
+    },
+    "species": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commonName",
+        "scientificName"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "commonName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "scientificName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
     },
     "scientificName": {
       "type": "string",

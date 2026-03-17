@@ -1,6 +1,13 @@
 {
-  "cropId": "crop_tomato",
+  "cropId": "crop_tomato_san_marzano",
   "name": "Tomato",
+  "cultivar": "San Marzano",
+  "speciesId": "species_tomato",
+  "species": {
+    "id": "species_tomato",
+    "commonName": "Tomato",
+    "scientificName": "Solanum lycopersicum"
+  },
   "scientificName": "Solanum lycopersicum",
   "taxonomy": {
     "family": "Solanaceae",
