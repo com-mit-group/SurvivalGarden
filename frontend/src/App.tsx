@@ -1628,8 +1628,9 @@ function BatchesPage() {
   );
 
   useEffect(() => {
-    if (!editingCropId && selectableCrops.length > 0) {
-      setEditingCropId(selectableCrops[0].cropId);
+    const firstSelectableCrop = selectableCrops[0];
+    if (!editingCropId && firstSelectableCrop) {
+      setEditingCropId(firstSelectableCrop.cropId);
     }
   }, [editingCropId, selectableCrops]);
 
@@ -1713,7 +1714,8 @@ function BatchesPage() {
         return;
       }
 
-      const existingMeta = ((existingCrop.meta ?? {}) as Record<string, unknown>) ?? {};
+      const existingMeta =
+        (((existingCrop as Crop & { meta?: Record<string, unknown> }).meta ?? {}) as Record<string, unknown>) ?? {};
       const updatedAt = new Date().toISOString();
       const aliases = parseCsvUnique(cropEditValues.aliases);
       const tags = parseCsvUnique(cropEditValues.tags);
