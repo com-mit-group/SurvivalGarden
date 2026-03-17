@@ -358,6 +358,155 @@ describe('App', () => {
     });
   });
 
+
+  it('previews segment json import with per-segment counts and statuses before confirmation', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [
+        {
+          segmentId: 'segment_existing',
+          name: 'Existing Segment',
+          width: 5,
+          height: 5,
+          originReference: 'nw_corner',
+          beds: [],
+          paths: [],
+        },
+      ],
+    } as never);
+
+    vi.mocked(parseImportedAppState).mockReturnValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [
+        {
+          segmentId: 'segment_new',
+          name: 'North Segment',
+          width: 5.8,
+          height: 4.5,
+          originReference: 'nw_corner',
+          beds: [{ bedId: 'bed_n1' }],
+          paths: [{ pathId: 'path_north_1' }],
+        },
+        {
+          segmentId: 'segment_existing',
+          name: 'Existing Segment',
+          width: 5,
+          height: 5,
+          originReference: 'nw_corner',
+          beds: [],
+          paths: [],
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import Segment JSON');
+    const file = new File(['{"segments":[]}'], 'segments.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"segments":[]}');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Segment Import Preview')).toBeInTheDocument();
+      expect(screen.getByText('Segment: North Segment (segment_new)')).toBeInTheDocument();
+      expect(screen.getByText('Beds: 1 · Paths: 1')).toBeInTheDocument();
+      expect(screen.getByText('Status: imported')).toBeInTheDocument();
+      expect(screen.getByText('Status: skipped (identical_segment)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Segment Import Summary')).toBeInTheDocument();
+      expect(screen.getByText('imported: 1')).toBeInTheDocument();
+      expect(screen.getByText('merged: 0')).toBeInTheDocument();
+      expect(screen.getByText('skipped (identical_segment): 1')).toBeInTheDocument();
+      expect(screen.getByText('rejected (segment_identity_conflict): 0')).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces segment identity conflicts as rejected without silent overwrite', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [
+        {
+          segmentId: 'segment_north',
+          name: 'North Segment',
+          width: 5.8,
+          height: 4.5,
+          originReference: 'nw_corner',
+          beds: [],
+          paths: [],
+        },
+      ],
+    } as never);
+
+    vi.mocked(parseImportedAppState).mockReturnValue({
+      schemaVersion: 1,
+      beds: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      seedInventoryItems: [],
+      tasks: [],
+      segments: [
+        {
+          segmentId: 'segment_north',
+          name: 'Conflicting Name',
+          width: 5.8,
+          height: 4.5,
+          originReference: 'se_corner',
+          beds: [],
+          paths: [],
+        },
+      ],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/data']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText('Import Segment JSON');
+    const file = new File(['{"segments":[]}'], 'segments-conflict.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockResolvedValue('{"segments":[]}');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Status: rejected (segment_identity_conflict)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('rejected (segment_identity_conflict): 1')).toBeInTheDocument();
+      expect(screen.getByText(/rejected \(segment_identity_conflict\): identity mismatch for segmentId segment_north/)).toBeInTheDocument();
+    });
+  });
+
   it('rejects malformed batch json import', async () => {
     render(
       <MemoryRouter initialEntries={['/data']}>
