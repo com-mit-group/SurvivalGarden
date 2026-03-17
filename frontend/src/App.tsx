@@ -4887,11 +4887,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         if (incomingCrop.taskRules !== undefined) {
           mergedCrop.taskRules = incomingCrop.taskRules;
         }
-        if ((incomingCrop as Crop & { cultivar?: string }).cultivar !== undefined) {
-          (mergedCrop as Crop & { cultivar?: string }).cultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
+        const incomingCultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
+        if (incomingCultivar !== undefined) {
+          (mergedCrop as Crop & { cultivar?: string }).cultivar = incomingCultivar;
         }
-        if ((incomingCrop as Crop & { speciesId?: string }).speciesId !== undefined) {
-          (mergedCrop as Crop & { speciesId?: string }).speciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
+        const incomingSpeciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
+        if (incomingSpeciesId !== undefined) {
+          (mergedCrop as Crop & { speciesId?: string }).speciesId = incomingSpeciesId;
         }
 
         const incomingSpecies = (incomingCrop as Crop & {
@@ -4903,22 +4905,28 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           const currentSpecies = (currentCrop as Crop & {
             species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
           }).species;
+          const commonName = incomingSpecies?.commonName ?? currentSpecies?.commonName;
+          const scientificName = incomingSpecies?.scientificName ?? currentSpecies?.scientificName;
 
-          (mergedCrop as Crop & {
-            species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-          }).species = {
-            ...(currentSpecies ?? {}),
-            ...(incomingSpecies ?? {}),
-            ...(incomingTaxonomy !== undefined
-              ? {
-                  taxonomy: {
-                    ...(currentSpecies?.taxonomy ?? {}),
-                    ...incomingTaxonomy,
-                    ...(incomingSpecies?.taxonomy ?? {}),
-                  },
-                }
-              : {}),
-          };
+          if (commonName !== undefined && scientificName !== undefined) {
+            (mergedCrop as Crop & {
+              species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+            }).species = {
+              ...(currentSpecies?.id !== undefined ? { id: currentSpecies.id } : {}),
+              ...(incomingSpecies?.id !== undefined ? { id: incomingSpecies.id } : {}),
+              commonName,
+              scientificName,
+              ...((incomingTaxonomy !== undefined || incomingSpecies?.taxonomy !== undefined || currentSpecies?.taxonomy !== undefined)
+                ? {
+                    taxonomy: {
+                      ...(currentSpecies?.taxonomy ?? {}),
+                      ...(incomingTaxonomy ?? {}),
+                      ...(incomingSpecies?.taxonomy ?? {}),
+                    },
+                  }
+                : {}),
+            };
+          }
         }
 
         const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
