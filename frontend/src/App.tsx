@@ -2139,8 +2139,8 @@ function BatchesPage() {
 
       const cropSpecies = ((crop as { species?: Record<string, unknown> } | null)?.species ?? {}) as Record<string, unknown>;
       setCropEditValues({
-        cultivar: (crop as Crop & { cultivar?: string }).cultivar ?? crop?.name ?? '',
-        speciesId: (crop as Crop & { speciesId?: string }).speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : ''),
+        cultivar: (crop as (Crop & { cultivar?: string }) | null)?.cultivar ?? crop?.name ?? '',
+        speciesId: (crop as (Crop & { speciesId?: string }) | null)?.speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : ''),
         speciesCommonName:
           (typeof cropSpecies.commonName === 'string' ? cropSpecies.commonName : '')
           || crop?.name
@@ -2270,7 +2270,7 @@ function BatchesPage() {
               cropInput: formatCropOptionLabel({
                 cropId: existingCrop.cropId,
                 name: speciesCommonName || cultivar,
-                scientificName: speciesScientificName || undefined,
+                ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
               }),
             }
           : current,
@@ -2370,6 +2370,7 @@ function BatchesPage() {
         cropId,
         name: cropName,
         cultivar: cropName,
+        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
         species:
           speciesScientificName.length > 0
             ? { commonName: cropName, scientificName: speciesScientificName }
