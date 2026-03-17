@@ -119,6 +119,8 @@ describe('crop.schema.json', () => {
     const payload = {
       cropId: 'crop_potato_laura',
       cultivar: 'Laura',
+      name: 'Potato',
+      scientificName: 'Solanum tuberosum',
       speciesId: 'species_potato',
       species: {
         id: 'species_potato',
