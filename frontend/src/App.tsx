@@ -3398,6 +3398,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [pendingBatchImportState, setPendingBatchImportState] = useState<unknown | null>(null);
   const [pendingBatchImportPreview, setPendingBatchImportPreview] = useState<Array<{ batchLabel: string; seedCount: number; eventCount: number }>>([]);
   const [pendingCropImportCrops, setPendingCropImportCrops] = useState<Crop[]>([]);
+  const [pendingCropPlanImportPlans, setPendingCropPlanImportPlans] = useState<CropPlan[]>([]);
   const [autoRenameOnConflict, setAutoRenameOnConflict] = useState(false);
   const [batchImportStatusSummary, setBatchImportStatusSummary] = useState<{
     skipped: number;
@@ -3406,6 +3407,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     renamed: number;
   } | null>(null);
   const [cropImportStatusSummary, setCropImportStatusSummary] = useState<{
+    imported: number;
+    merged: number;
+    skipped: number;
+    rejected: number;
+  } | null>(null);
+  const [cropPlanImportStatusSummary, setCropPlanImportStatusSummary] = useState<{
     imported: number;
     merged: number;
     skipped: number;
@@ -3500,8 +3507,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3531,8 +3540,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3622,8 +3633,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
 
     try {
       const payload = await file.text();
@@ -3679,6 +3692,88 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setPendingCropImportCrops(validCrops);
       setImportMessage(`Crop import ready: ${validCrops.length} valid crop(s) from ${rawParsed.crops.length}. Confirm to import.`);
       setImportErrors(validationErrors);
+    } catch (error) {
+      setImportMessage('Import failed. Fix the errors below and try again.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError]);
+
+  const handleImportCropPlanJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportPreview([]);
+    setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
+    setBatchImportStatusSummary(null);
+    setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
+
+    try {
+      const payload = await file.text();
+      const rawParsed = JSON.parse(payload) as { cropPlans?: unknown[] };
+
+      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.cropPlans)) {
+        throw new Error('Crop plan import payload must be an object with a cropPlans array.');
+      }
+
+      const validCropPlans: CropPlan[] = [];
+      const validationErrors: Array<{ path: string; message: string }> = [];
+
+      rawParsed.cropPlans.forEach((candidate, index) => {
+        const fallbackPath = `/cropPlans/${index}`;
+
+        try {
+          const validatedSinglePlan = parseImportedAppState(JSON.stringify({
+            schemaVersion: 1,
+            beds: [],
+            crops: [],
+            cropPlans: [candidate],
+            batches: [],
+            seedInventoryItems: [],
+            tasks: [],
+          }));
+          const validatedPlan = validatedSinglePlan.cropPlans[0];
+          if (validatedPlan) {
+            validCropPlans.push(validatedPlan);
+          }
+        } catch (validationError) {
+          if (validationError instanceof SchemaValidationError && validationError.issues.length > 0) {
+            validationErrors.push(
+              ...validationError.issues.map((issue) => ({
+                path: fallbackPath,
+                message: `schema_validation_failed - ${issue.message}`,
+              })),
+            );
+          } else {
+            validationErrors.push({
+              path: fallbackPath,
+              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+            });
+          }
+        }
+      });
+
+      if (validCropPlans.length === 0) {
+        setImportMessage('Crop plan import failed. No valid crop plans passed validation.');
+        setImportErrors(validationErrors);
+        return;
+      }
+
+      setPendingCropPlanImportPlans(validCropPlans);
+      setImportErrors(validationErrors);
+      setImportMessage(`Crop plan import ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length}. Confirm to import.`);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
@@ -3836,11 +3931,59 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError, pendingCropImportCrops]);
 
+  const handleConfirmCropPlanImport = useCallback(async () => {
+    if (isImporting || pendingCropPlanImportPlans.length === 0) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+
+    try {
+      const existingAppState = await loadAppStateFromIndexedDb();
+      if (!existingAppState) {
+        setImportMessage('Crop plan import failed: local app state is unavailable.');
+        return;
+      }
+
+      const plansById = new Map(existingAppState.cropPlans.map((plan) => [plan.planId, plan]));
+      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+
+      pendingCropPlanImportPlans.forEach((incomingPlan) => {
+        const currentPlan = plansById.get(incomingPlan.planId);
+        if (!currentPlan) {
+          plansById.set(incomingPlan.planId, incomingPlan);
+          summary.imported += 1;
+          return;
+        }
+
+        const unchanged = JSON.stringify(currentPlan) === JSON.stringify(incomingPlan);
+        plansById.set(incomingPlan.planId, incomingPlan);
+        if (unchanged) {
+          summary.skipped += 1;
+        } else {
+          summary.merged += 1;
+        }
+      });
+
+      await saveAppStateToIndexedDb({ ...existingAppState, cropPlans: [...plansById.values()] }, { mode: 'replace' });
+      setCropPlanImportStatusSummary(summary);
+      setImportMessage(`Crop plan import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      setPendingCropPlanImportPlans([]);
+    } catch (error) {
+      setImportMessage('Import failed while saving.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError, pendingCropPlanImportPlans]);
+
   useEffect(() => {
     const search = new URLSearchParams(location.search);
+    const importType = search.get('importType');
     const encodedPayload = search.get('data');
 
-    if (!encodedPayload) {
+    if (!encodedPayload || !importType) {
       return;
     }
 
@@ -3850,67 +3993,147 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingCropPlanImportPlans([]);
     setCropImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
 
     try {
       const normalizedPayload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
       const padLength = normalizedPayload.length % 4;
       const paddedPayload = padLength === 0 ? normalizedPayload : `${normalizedPayload}${'='.repeat(4 - padLength)}`;
       const decodedPayload = atob(paddedPayload);
-      const rawParsed = JSON.parse(decodedPayload) as { batches?: unknown[] };
+      if (importType === 'batches') {
+        const rawParsed = JSON.parse(decodedPayload) as { batches?: unknown[] };
 
-      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.batches)) {
-        throw new Error('Deep-link payload must decode to an object with a batches array.');
-      }
+        if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.batches)) {
+          throw new Error('Deep-link payload must decode to an object with a batches array.');
+        }
 
-      const validBatches: unknown[] = [];
-      const validationErrors: Array<{ path: string; message: string }> = [];
+        const validBatches: unknown[] = [];
+        const validationErrors: Array<{ path: string; message: string }> = [];
 
-      rawParsed.batches.forEach((candidate, index) => {
-        const batchId =
-          candidate && typeof candidate === 'object' && 'batchId' in candidate && typeof candidate.batchId === 'string'
-            ? candidate.batchId
-            : `index-${index}`;
+        rawParsed.batches.forEach((candidate, index) => {
+          const batchId =
+            candidate && typeof candidate === 'object' && 'batchId' in candidate && typeof candidate.batchId === 'string'
+              ? candidate.batchId
+              : `index-${index}`;
 
-        try {
-          const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+          try {
+            const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+              schemaVersion: 1,
+              beds: [],
+              crops: [],
+              cropPlans: [],
+              batches: [candidate],
+              seedInventoryItems: [],
+              tasks: [],
+            }));
+            validBatches.push(validatedSingleBatch.batches[0]);
+          } catch (validationError) {
+            validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
+          }
+        });
+
+        if (validBatches.length === 0) {
+          setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
+          setImportErrors(validationErrors);
+        } else {
+          const validatedBatchImportState = parseImportedAppState(JSON.stringify({
             schemaVersion: 1,
             beds: [],
             crops: [],
             cropPlans: [],
-            batches: [candidate],
+            batches: validBatches,
             seedInventoryItems: [],
             tasks: [],
           }));
-          validBatches.push(validatedSingleBatch.batches[0]);
-        } catch (validationError) {
-          validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
+          const previewBatchIds = validatedBatchImportState.batches
+            .map((batch) => ({
+              batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
+              seedCount: batch.seedCountPlanned ?? 0,
+              eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
+            }));
+          setPendingBatchImportState(validatedBatchImportState);
+          setPendingBatchImportPreview(previewBatchIds);
+          setImportMessage(`Deep link ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es). Confirm to import.`);
+          setImportErrors(validationErrors);
         }
-      });
-
-      if (validBatches.length === 0) {
-        setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
-        setImportErrors(validationErrors);
-      } else {
-        const validatedBatchImportState = parseImportedAppState(JSON.stringify({
-          schemaVersion: 1,
-          beds: [],
-          crops: [],
-          cropPlans: [],
-          batches: validBatches,
-          seedInventoryItems: [],
-          tasks: [],
-        }));
-        const previewBatchIds = validatedBatchImportState.batches
-          .map((batch) => ({
-            batchLabel: `${batch.variety ?? 'Unknown variety'} (${batch.cropId ?? 'Unknown crop'})`,
-            seedCount: batch.seedCountPlanned ?? 0,
-            eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
-          }));
-        setPendingBatchImportState(validatedBatchImportState);
-        setPendingBatchImportPreview(previewBatchIds);
-        setImportMessage(`Deep link ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es). Confirm to import.`);
-        setImportErrors(validationErrors);
+      } else if (importType === 'crops') {
+        const rawParsed = JSON.parse(decodedPayload) as { crops?: unknown[] };
+        if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.crops)) {
+          throw new Error('Deep-link payload must decode to an object with a crops array.');
+        }
+        const validCrops: Crop[] = [];
+        const validationErrors: Array<{ path: string; message: string }> = [];
+        rawParsed.crops.forEach((candidate, index) => {
+          const fallbackPath = `/crops/${index}`;
+          try {
+            const validatedSingleCrop = parseImportedAppState(JSON.stringify({
+              schemaVersion: 1,
+              beds: [],
+              crops: [candidate],
+              cropPlans: [],
+              batches: [],
+              seedInventoryItems: [],
+              tasks: [],
+            }));
+            const validatedCrop = validatedSingleCrop.crops[0];
+            if (validatedCrop) {
+              validCrops.push(validatedCrop);
+            }
+          } catch (validationError) {
+            validationErrors.push({
+              path: fallbackPath,
+              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+            });
+          }
+        });
+        if (validCrops.length === 0) {
+          setImportMessage('Crop import failed. No valid crops passed validation.');
+          setImportErrors(validationErrors);
+        } else {
+          setPendingCropImportCrops(validCrops);
+          setImportErrors(validationErrors);
+          setImportMessage(`Deep link ready: ${validCrops.length} valid crop(s) from ${rawParsed.crops.length} payload crop(s). Confirm to import.`);
+        }
+      } else if (importType === 'crop-plans') {
+        const rawParsed = JSON.parse(decodedPayload) as { cropPlans?: unknown[] };
+        if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.cropPlans)) {
+          throw new Error('Deep-link payload must decode to an object with a cropPlans array.');
+        }
+        const validCropPlans: CropPlan[] = [];
+        const validationErrors: Array<{ path: string; message: string }> = [];
+        rawParsed.cropPlans.forEach((candidate, index) => {
+          const fallbackPath = `/cropPlans/${index}`;
+          try {
+            const validatedSinglePlan = parseImportedAppState(JSON.stringify({
+              schemaVersion: 1,
+              beds: [],
+              crops: [],
+              cropPlans: [candidate],
+              batches: [],
+              seedInventoryItems: [],
+              tasks: [],
+            }));
+            const validatedPlan = validatedSinglePlan.cropPlans[0];
+            if (validatedPlan) {
+              validCropPlans.push(validatedPlan);
+            }
+          } catch (validationError) {
+            validationErrors.push({
+              path: fallbackPath,
+              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+            });
+          }
+        });
+        if (validCropPlans.length === 0) {
+          setImportMessage('Crop plan import failed. No valid crop plans passed validation.');
+          setImportErrors(validationErrors);
+        } else {
+          setPendingCropPlanImportPlans(validCropPlans);
+          setImportErrors(validationErrors);
+          setImportMessage(`Deep link ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length} payload plan(s). Confirm to import.`);
+        }
       }
     } catch (error) {
       setImportMessage('Deep-link import failed. Payload was invalid or too large.');
@@ -3946,6 +4169,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           type="file"
           accept="application/json,.json"
           onChange={(event) => void handleImportCropJson(event)}
+          disabled={isImporting}
+        />
+      </label>
+      <label>
+        Import Crop Plan JSON
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void handleImportCropPlanJson(event)}
           disabled={isImporting}
         />
       </label>
@@ -4022,6 +4254,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       ) : null}
       {pendingCropImportCrops.length > 0 ? (
         <>
+          <section>
+            <h3>Crop Import Preview</h3>
+            <ul>
+              {pendingCropImportCrops.slice(0, 5).map((crop) => (
+                <li key={crop.cropId}>{crop.name} ({crop.cropId})</li>
+              ))}
+            </ul>
+          </section>
           <button type="button" onClick={() => void handleConfirmCropImport()} disabled={isImporting}>
             {isImporting ? 'Importing crops…' : 'Import crops'}
           </button>
@@ -4035,6 +4275,32 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             disabled={isImporting}
           >
             Cancel crop import
+          </button>
+        </>
+      ) : null}
+      {pendingCropPlanImportPlans.length > 0 ? (
+        <>
+          <section>
+            <h3>Crop Plan Import Preview</h3>
+            <ul>
+              {pendingCropPlanImportPlans.slice(0, 5).map((plan) => (
+                <li key={plan.planId}>{plan.planId} — bed {plan.bedId}, crop {plan.cropId}</li>
+              ))}
+            </ul>
+          </section>
+          <button type="button" onClick={() => void handleConfirmCropPlanImport()} disabled={isImporting}>
+            {isImporting ? 'Importing crop plans…' : 'Import crop plans'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingCropPlanImportPlans([]);
+              setCropPlanImportStatusSummary(null);
+              setImportMessage('Crop plan import canceled.');
+            }}
+            disabled={isImporting}
+          >
+            Cancel crop plan import
           </button>
         </>
       ) : null}
@@ -4060,6 +4326,17 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           </ul>
         </section>
       ) : null}
+      {cropPlanImportStatusSummary ? (
+        <section>
+          <h3>Crop Plan Import Summary</h3>
+          <ul>
+            <li>imported: {cropPlanImportStatusSummary.imported}</li>
+            <li>merged: {cropPlanImportStatusSummary.merged}</li>
+            <li>skipped: {cropPlanImportStatusSummary.skipped}</li>
+            <li>rejected: {cropPlanImportStatusSummary.rejected}</li>
+          </ul>
+        </section>
+      ) : null}
       {importMessage ? <p>{importMessage}</p> : null}
       {importErrors.length > 0 ? (
         <ul>
@@ -4081,7 +4358,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
 function ImportBatchesDeepLinkRoute() {
   const location = useLocation();
-  return <Navigate to={`/data${location.search}`} replace />;
+  const search = new URLSearchParams(location.search);
+  search.set('importType', 'batches');
+  return <Navigate to={`/data?${search.toString()}`} replace />;
+}
+
+function ImportCropsDeepLinkRoute() {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search);
+  search.set('importType', 'crops');
+  return <Navigate to={`/data?${search.toString()}`} replace />;
+}
+
+function ImportCropPlansDeepLinkRoute() {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search);
+  search.set('importType', 'crop-plans');
+  return <Navigate to={`/data?${search.toString()}`} replace />;
 }
 
 function App() {
@@ -4196,6 +4489,8 @@ function App() {
             }
           />
           <Route path="/import-batches" element={<ImportBatchesDeepLinkRoute />} />
+          <Route path="/import-crops" element={<ImportCropsDeepLinkRoute />} />
+          <Route path="/import-crop-plans" element={<ImportCropPlansDeepLinkRoute />} />
           <Route path="*" element={<Navigate to="/beds" replace />} />
         </Routes>
       </main>
