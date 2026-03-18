@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
+import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
+  createEmptyAppState,
   initializeAppStateStorage,
   listBedsFromAppState,
   listBatchesFromAppState,
@@ -16,7 +17,6 @@ import {
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
-  getSettingsOrDefault,
   removeSeedInventoryItemFromAppState,
   upsertSeedInventoryItemInAppState,
   upsertGeneratedTasksInAppState,
@@ -4616,7 +4616,7 @@ export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
 
     try {
       await resetToGoldenDataset();
-      setResetMessage('Reset complete. You can retry loading the app now.');
+      setResetMessage('Golden dataset restored. You can retry loading the app now.');
       setConfirmReset(false);
     } catch (resetError) {
       setResetMessage(`Reset failed: ${resetError instanceof Error ? resetError.message : 'Unknown error.'}`);
@@ -4648,12 +4648,13 @@ export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
         </button>
       ) : null}
       {importMessage ? <p>{importMessage}</p> : null}
+      <p>Restore golden dataset is separate from “Empty all data” and repopulates local storage with the bundled starter records.</p>
       <label>
         <input type="checkbox" checked={confirmReset} onChange={(event) => setConfirmReset(event.currentTarget.checked)} disabled={isResetting} />
-        I understand reset will replace local data with the golden dataset.
+        I understand this will replace local data with the golden dataset.
       </label>
       <button type="button" onClick={() => void handleReset()} disabled={!confirmReset || isResetting}>
-        {isResetting ? 'Resetting…' : 'Reset local database'}
+        {isResetting ? 'Restoring golden dataset…' : 'Restore golden dataset'}
       </button>
       {resetMessage ? <p>{resetMessage}</p> : null}
     </div>
@@ -5733,20 +5734,25 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
     try {
       const currentState = await loadAppStateFromIndexedDb();
-      const emptyState: AppState = {
-        schemaVersion: currentState?.schemaVersion ?? 1,
-        segments: [],
-        beds: [],
-        species: [],
-        crops: [],
-        cropPlans: [],
-        batches: [],
-        tasks: [],
-        seedInventoryItems: [],
-        settings: currentState?.settings ?? getSettingsOrDefault(undefined),
-      };
+      const emptyState = createEmptyAppState(currentState);
 
       await saveAppStateToIndexedDb(emptyState, { mode: 'replace' });
+      const validatedEmptyState = await loadAppStateFromIndexedDb();
+
+      if (
+        !validatedEmptyState
+        || validatedEmptyState.species.length > 0
+        || validatedEmptyState.crops.length > 0
+        || validatedEmptyState.segments.length > 0
+        || validatedEmptyState.beds.length > 0
+        || validatedEmptyState.cropPlans.length > 0
+        || validatedEmptyState.batches.length > 0
+        || validatedEmptyState.tasks.length > 0
+        || validatedEmptyState.seedInventoryItems.length > 0
+      ) {
+        throw new Error('Empty-state validation failed. Local data was not fully cleared.');
+      }
+
       setPendingImportState(null);
       setPendingBatchImportState(null);
       setPendingBatchImportPreview([]);
@@ -6460,7 +6466,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           </button>
           {emptyAllDataMessage ? <p>{emptyAllDataMessage}</p> : null}
           <button type="button" onClick={onResetToGoldenDataset} disabled={isEmptyingAllData}>
-            Reset to golden dataset
+            Restore golden dataset
           </button>
         </section>
       ) : null}
@@ -6574,13 +6580,13 @@ function App() {
       <div className="storage-error-screen" role="alert">
         <h1>Local storage unavailable</h1>
         <p>{storageError}</p>
-        <p>Try again, or reset local data if migration is blocked or corrupted.</p>
+        <p>Try again, or restore the golden dataset if migration is blocked or corrupted.</p>
         <div className="storage-error-actions">
           <button type="button" onClick={() => void initializeStorage()}>
             Retry
           </button>
           <button type="button" onClick={() => void handleReset()}>
-            Reset to golden dataset
+            Restore golden dataset
           </button>
         </div>
       </div>

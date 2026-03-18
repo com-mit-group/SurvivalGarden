@@ -856,18 +856,28 @@ export const initializeAppStateStorage = async (): Promise<void> => {
   await seedAppStateIfEmpty();
 };
 
-const isEmptyAppState = (appState: AppState | null): boolean =>
-  !appState || (appState.beds.length === 0 && appState.crops.length === 0 && appState.cropPlans.length === 0);
-
 const seedAppStateIfEmpty = async (): Promise<void> => {
   const currentState = await loadAppStateFromIndexedDb();
 
-  if (!isEmptyAppState(currentState)) {
+  if (currentState) {
     return;
   }
 
   await saveAppStateToIndexedDb(GOLDEN_DATASET);
 };
+
+export const createEmptyAppState = (currentState: AppState | null): AppState => ({
+  schemaVersion: currentState?.schemaVersion ?? 1,
+  segments: [],
+  beds: [],
+  species: [],
+  crops: [],
+  cropPlans: [],
+  batches: [],
+  tasks: [],
+  seedInventoryItems: [],
+  settings: currentState?.settings ?? getSettingsOrDefault(undefined),
+});
 
 export const resetToGoldenDataset = async (): Promise<void> => {
   if (typeof indexedDB === 'undefined') {

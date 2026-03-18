@@ -87,14 +87,14 @@ describe('App', () => {
     render(<RecoveryScreen error={new Error('corrupt state')} onRetry={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Recovery mode' })).toBeInTheDocument();
-    const resetButton = screen.getByRole('button', { name: 'Reset local database' });
+    const resetButton = screen.getByRole('button', { name: 'Restore golden dataset' });
     expect(resetButton).toBeDisabled();
 
     fireEvent.click(resetButton);
     expect(resetToGoldenDataset).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('checkbox', { name: /I understand reset will replace local data/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset local database' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore golden dataset' }));
 
     await waitFor(() => {
       expect(resetToGoldenDataset).toHaveBeenCalledTimes(1);
@@ -253,7 +253,7 @@ describe('App', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByRole('button', { name: 'Reset to golden dataset' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore golden dataset' })).not.toBeInTheDocument();
   });
 
   it('shows dev reset action when flag is enabled and resets to golden dataset', () => {
@@ -265,7 +265,7 @@ describe('App', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset to golden dataset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore golden dataset' }));
 
     expect(resetToGoldenDataset).toHaveBeenCalledTimes(1);
     expect(initializeAppStateStorage).toHaveBeenCalled();
