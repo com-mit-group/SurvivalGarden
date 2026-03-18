@@ -275,7 +275,7 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
 
   const cropsById = new Map(cropCandidates.map((candidate) => [candidate.cropId, candidate]));
 
-  const remapCollection = <T extends Record<string, unknown>>(items: unknown, options?: { stripTaxonomy?: boolean }): unknown =>
+  const remapCollection = (items: unknown, options?: { stripTaxonomy?: boolean }): unknown =>
     Array.isArray(items)
       ? items.map((item) => {
           if (!isObjectRecord(item)) {
