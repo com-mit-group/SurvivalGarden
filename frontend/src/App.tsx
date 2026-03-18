@@ -1897,6 +1897,9 @@ function BatchesPage() {
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cropInput: '',
+    cropCategory: '',
+    cropScientificName: '',
+    cropAliases: '',
     variety: '',
     startedAt: getLocalDateTimeDefault(),
     seedCountPlanned: '',
@@ -1908,6 +1911,7 @@ function BatchesPage() {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
   const [cropCreateValues, setCropCreateValues] = useState({
     speciesId: '',
     cultivar: '',
@@ -2722,6 +2726,9 @@ function BatchesPage() {
         name: cropNames[batch.cropId],
         scientificName: cropScientificNames[batch.cropId],
       }),
+      cropCategory: '',
+      cropScientificName: '',
+      cropAliases: '',
       variety: batch.variety ?? '',
       startedAt,
       seedCountPlanned: batch.seedCountPlanned?.toString() ?? '',
@@ -2738,8 +2745,12 @@ function BatchesPage() {
 
   const resetForm = () => {
     setEditingBatchId(null);
+    setIsAddingNewCrop(false);
     setFormValues({
       cropInput: '',
+      cropCategory: '',
+      cropScientificName: '',
+      cropAliases: '',
       variety: '',
       startedAt: getLocalDateTimeDefault(),
       seedCountPlanned: '',
@@ -2750,6 +2761,82 @@ function BatchesPage() {
       initialMethod: 'sowing',
     });
     setFormErrors({});
+  };
+
+  const handleCreateCropInline = async () => {
+    const errors: Record<string, string> = {};
+    const cropName = formValues.cropInput.trim();
+
+    if (!cropName) {
+      errors.cropInput = 'Enter a crop name.';
+    }
+
+    if (!formValues.cropCategory.trim()) {
+      errors.cropCategory = 'Category is required for new crops.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors((current) => ({ ...current, ...errors }));
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setSaveMessage('Unable to create crop because local app state is unavailable.');
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const cropId = createUniqueUserCropId(cropName, appState.crops.map((crop) => crop.cropId));
+      const aliases = formValues.cropAliases
+        .split(',')
+        .map((alias) => alias.trim())
+        .filter((alias) => alias.length > 0);
+
+      const speciesScientificName = formValues.cropScientificName.trim();
+      const nextState = upsertCropInAppState(appState, {
+        cropId,
+        name: cropName,
+        cultivar: cropName,
+        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
+        species:
+          speciesScientificName.length > 0
+            ? { commonName: cropName, scientificName: speciesScientificName }
+            : undefined,
+        category: formValues.cropCategory.trim(),
+        aliases: aliases.length > 0 ? aliases : undefined,
+        isUserDefined: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      await saveAppStateToIndexedDb(nextState);
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+        ),
+      );
+      setFormValues((current) => ({
+        ...current,
+        cropInput: formatCropOptionLabel({ cropId, name: cropName, scientificName: formValues.cropScientificName.trim() || undefined }),
+        cropCategory: '',
+        cropScientificName: '',
+        cropAliases: '',
+      }));
+      setFormErrors((current) => ({
+        ...current,
+        cropInput: '',
+        cropCategory: '',
+      }));
+      setIsAddingNewCrop(false);
+      setSaveMessage('Crop created and selected. Warning: task rules are missing for this crop, but batch operations are still allowed.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create crop.';
+      setSaveMessage(message);
+    }
   };
 
   const handleCreateCropSubmit = async (event: FormEvent) => {
@@ -3073,15 +3160,9 @@ function BatchesPage() {
       </div>
 
       <nav className="batch-form-actions" aria-label="Creation flows">
-        <button type="button" onClick={() => document.getElementById('create-batch')?.scrollIntoView()}>
-          Create batch
-        </button>
-        <button type="button" onClick={() => document.getElementById('create-crop')?.scrollIntoView()}>
-          Create crop
-        </button>
-        <button type="button" onClick={() => document.getElementById('create-species')?.scrollIntoView()}>
-          Create species
-        </button>
+        <button type="button">Create batch</button>
+        <button type="button">Create crop</button>
+        <button type="button">Create species</button>
       </nav>
 
       <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
@@ -3105,6 +3186,41 @@ function BatchesPage() {
             </datalist>
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
           </label>
+
+          {isAddingNewCrop ? (
+            <>
+              <label>
+                New crop category
+                <input
+                  type="text"
+                  value={formValues.cropCategory}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropCategory: event.target.value }))}
+                  placeholder="Required"
+                />
+                {formErrors.cropCategory ? <span className="form-error">{formErrors.cropCategory}</span> : null}
+              </label>
+
+              <label>
+                New crop scientific name
+                <input
+                  type="text"
+                  value={formValues.cropScientificName}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropScientificName: event.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label>
+                New crop aliases
+                <input
+                  type="text"
+                  value={formValues.cropAliases}
+                  onChange={(event) => setFormValues((current) => ({ ...current, cropAliases: event.target.value }))}
+                  placeholder="Optional, comma-separated"
+                />
+              </label>
+            </>
+          ) : null}
 
           <label>
             Variety
@@ -3212,9 +3328,20 @@ function BatchesPage() {
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <button type="button" onClick={() => document.getElementById('create-crop')?.scrollIntoView()}>
-            Add new crop
-          </button>
+          {isAddingNewCrop ? (
+            <>
+              <button type="button" onClick={() => setIsAddingNewCrop(false)}>
+                Cancel new crop
+              </button>
+              <button type="button" onClick={() => void handleCreateCropInline()}>
+                Create crop
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setIsAddingNewCrop(true)}>
+              Add new crop
+            </button>
+          )}
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
