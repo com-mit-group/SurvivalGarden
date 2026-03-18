@@ -1844,6 +1844,15 @@ const normalizeCropIdPart = (value: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
 
+const normalizeSpeciesIdInput = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .slice(0, 120);
+
 const createUniqueUserCropId = (name: string, existingCropIds: string[]): string => {
   const base = normalizeCropIdPart(name) || `crop-${Date.now()}`;
   const existing = new Set(existingCropIds);
@@ -1852,6 +1861,20 @@ const createUniqueUserCropId = (name: string, existingCropIds: string[]): string
 
   while (existing.has(candidate)) {
     candidate = `crop_user_${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+};
+
+const createUniqueSpeciesId = (name: string, existingSpeciesIds: string[]): string => {
+  const base = normalizeCropIdPart(name) || `species-${Date.now()}`;
+  const existing = new Set(existingSpeciesIds);
+  let candidate = `species_${base}`;
+  let suffix = 2;
+
+  while (existing.has(candidate)) {
+    candidate = `species_${base}-${suffix}`;
     suffix += 1;
   }
 
@@ -1910,6 +1933,15 @@ function BatchesPage() {
     aliases: '',
     notes: '',
   });
+  const [speciesCreateValues, setSpeciesCreateValues] = useState({
+    id: '',
+    commonName: '',
+    scientificName: '',
+    aliases: '',
+    notes: '',
+  });
+  const [speciesCreateErrors, setSpeciesCreateErrors] = useState<Record<string, string>>({});
+  const [speciesCreateMessage, setSpeciesCreateMessage] = useState<string | null>(null);
   const [speciesEditErrors, setSpeciesEditErrors] = useState<Record<string, string>>({});
   const [speciesEditMessage, setSpeciesEditMessage] = useState<string | null>(null);
 
@@ -2244,6 +2276,19 @@ function BatchesPage() {
     void loadSpeciesForEdit();
   }, [editingSpeciesId]);
 
+  useEffect(() => {
+    setSpeciesCreateValues((current) => {
+      if (current.id.trim()) {
+        return current;
+      }
+
+      return {
+        ...current,
+        id: createUniqueSpeciesId(current.commonName, Object.keys(speciesById)),
+      };
+    });
+  }, [speciesById]);
+
   const handleCropEditSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setCropEditMessage(null);
@@ -2389,9 +2434,7 @@ function BatchesPage() {
       errors.commonName = 'Common name is required.';
     }
 
-    if (!scientificName) {
-      errors.scientificName = 'Scientific name is required.';
-    } else if (scientificName.length > 160) {
+    if (scientificName.length > 160) {
       errors.scientificName = 'Scientific name must be 160 characters or fewer.';
     }
 
@@ -2471,6 +2514,97 @@ function BatchesPage() {
 
       const message = error instanceof Error ? error.message : 'Failed to save species.';
       setSpeciesEditMessage(message);
+    }
+  };
+
+  const handleSpeciesCreateSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSpeciesCreateMessage(null);
+
+    const errors: Record<string, string> = {};
+    const commonName = speciesCreateValues.commonName.trim();
+    const scientificName = speciesCreateValues.scientificName.trim();
+    const aliases = parseCsvUnique(speciesCreateValues.aliases);
+    const notes = speciesCreateValues.notes.trim();
+    const normalizedId = normalizeSpeciesIdInput(speciesCreateValues.id) || createUniqueSpeciesId(commonName, Object.keys(speciesById));
+    const speciesId = normalizedId.startsWith('species_') ? normalizedId : `species_${normalizedId}`;
+
+    if (!commonName) {
+      errors.commonName = 'Common name is required.';
+    }
+
+    if (!speciesId) {
+      errors.id = 'Species ID is required.';
+    } else if (speciesId.length > 120) {
+      errors.id = 'Species ID must be 120 characters or fewer.';
+    } else if (speciesById[speciesId]) {
+      errors.id = 'Species ID already exists.';
+    }
+
+    if (scientificName.length > 160) {
+      errors.scientificName = 'Scientific name must be 160 characters or fewer.';
+    }
+
+    if (notes.length > 2000) {
+      errors.notes = 'Notes must be 2000 characters or fewer.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setSpeciesCreateErrors(errors);
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setSpeciesCreateMessage('Unable to create species because local app state is unavailable.');
+        return;
+      }
+
+      if ((appState.species ?? []).some((entry) => entry.id === speciesId)) {
+        setSpeciesCreateErrors({ id: 'Species ID already exists.' });
+        return;
+      }
+
+      const nextSpecies: Species = {
+        id: speciesId,
+        commonName,
+        ...(scientificName ? { scientificName } : {}),
+        ...(aliases.length > 0 ? { aliases } : {}),
+        ...(notes ? { notes } : {}),
+      };
+      const nextState = assertValid('appState', {
+        ...appState,
+        species: [...(appState.species ?? []), nextSpecies],
+      });
+      const nextSpeciesById = buildSpeciesLookup(nextState.species);
+
+      await saveAppStateToIndexedDb(nextState);
+      setSpeciesById(nextSpeciesById);
+      setEditingSpeciesId(speciesId);
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+        ),
+      );
+      setSpeciesCreateValues({
+        id: '',
+        commonName: '',
+        scientificName: '',
+        aliases: '',
+        notes: '',
+      });
+      setSpeciesCreateErrors({});
+      setSpeciesCreateMessage('Species created.');
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        setSpeciesCreateMessage('Please fix invalid species fields before saving.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to create species.';
+      setSpeciesCreateMessage(message);
     }
   };
 
@@ -3117,6 +3251,70 @@ function BatchesPage() {
         <div className="batch-form-actions">
           <button type="submit">Save crop changes</button>
           {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
+        </div>
+      </form>
+
+      <form className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
+        <h3>Create species</h3>
+        <div className="batch-form-grid">
+          <label>
+            Species ID
+            <input
+              type="text"
+              value={speciesCreateValues.id}
+              onChange={(event) => setSpeciesCreateValues((current) => ({ ...current, id: event.target.value }))}
+              placeholder="species_pea"
+            />
+            {speciesCreateErrors.id ? <span className="form-error">{speciesCreateErrors.id}</span> : null}
+          </label>
+
+          <label>
+            Common name
+            <input
+              type="text"
+              value={speciesCreateValues.commonName}
+              onChange={(event) =>
+                setSpeciesCreateValues((current) => ({
+                  ...current,
+                  commonName: event.target.value,
+                  id: current.id.trim() ? current.id : createUniqueSpeciesId(event.target.value, Object.keys(speciesById)),
+                }))}
+            />
+            {speciesCreateErrors.commonName ? <span className="form-error">{speciesCreateErrors.commonName}</span> : null}
+          </label>
+
+          <label>
+            Scientific name
+            <input
+              type="text"
+              value={speciesCreateValues.scientificName}
+              onChange={(event) => setSpeciesCreateValues((current) => ({ ...current, scientificName: event.target.value }))}
+            />
+            {speciesCreateErrors.scientificName ? <span className="form-error">{speciesCreateErrors.scientificName}</span> : null}
+          </label>
+
+          <label>
+            Aliases (comma-separated)
+            <input
+              type="text"
+              value={speciesCreateValues.aliases}
+              onChange={(event) => setSpeciesCreateValues((current) => ({ ...current, aliases: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Notes
+            <textarea
+              value={speciesCreateValues.notes}
+              onChange={(event) => setSpeciesCreateValues((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+            />
+            {speciesCreateErrors.notes ? <span className="form-error">{speciesCreateErrors.notes}</span> : null}
+          </label>
+        </div>
+        <div className="batch-form-actions">
+          <button type="submit">Create species</button>
+          {speciesCreateMessage ? <p className="batch-form-message">{speciesCreateMessage}</p> : null}
         </div>
       </form>
 

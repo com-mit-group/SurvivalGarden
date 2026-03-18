@@ -6,8 +6,7 @@
   "additionalProperties": false,
   "required": [
     "id",
-    "commonName",
-    "scientificName"
+    "commonName"
   ],
   "properties": {
     "id": {
@@ -23,7 +22,6 @@
     },
     "scientificName": {
       "type": "string",
-      "minLength": 1,
       "maxLength": 160
     },
     "aliases": {
