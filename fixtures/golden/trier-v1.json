@@ -77,7 +77,7 @@
   "cropPlans": [
     {
       "bedId": "bed_001",
-      "cropId": "crop_potato_unknown_variety",
+      "cropId": "crop_potato_bintje",
       "expectedYield": {
         "amount": 22,
         "unit": "kg"
@@ -106,7 +106,7 @@
     },
     {
       "bedId": "bed_002",
-      "cropId": "crop_beans_unknown_variety",
+      "cropId": "crop_beans_blue_lake",
       "expectedYield": {
         "amount": 8,
         "unit": "kg"
@@ -135,7 +135,7 @@
     },
     {
       "bedId": "bed_003",
-      "cropId": "crop_peas_unknown_variety",
+      "cropId": "crop_pea_kelvedon_wonder",
       "expectedYield": {
         "amount": 6,
         "unit": "kg"
@@ -164,7 +164,7 @@
     },
     {
       "bedId": "bed_004",
-      "cropId": "crop_carrot_unknown_variety",
+      "cropId": "crop_carrot_nantes",
       "expectedYield": {
         "amount": 12,
         "unit": "kg"
@@ -196,15 +196,15 @@
     {
       "category": "root",
       "companionsAvoid": [
-        "crop_tomato_unknown_variety"
+        "crop_tomato_san_marzano"
       ],
       "companionsGood": [
-        "crop_beans_unknown_variety",
-        "crop_peas_unknown_variety"
+        "crop_beans_blue_lake",
+        "crop_pea_kelvedon_wonder"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_potato_unknown_variety",
-      "cultivar": "Unknown variety",
+      "cropId": "crop_potato_bintje",
+      "cultivar": "Bintje",
       "name": "Potato",
       "nutritionProfile": [
         {
@@ -262,26 +262,21 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Potato",
-        "id": "species_potato",
-        "scientificName": "Solanum tuberosum"
-      },
       "speciesId": "species_potato",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "legume",
       "companionsAvoid": [
-        "crop_onion_leek_unknown_variety"
+        "crop_leek_blue_de_solaise"
       ],
       "companionsGood": [
-        "crop_carrot_unknown_variety",
-        "crop_cabbage_unknown_variety"
+        "crop_carrot_nantes",
+        "crop_cabbage_golden_acre"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_beans_unknown_variety",
-      "cultivar": "Unknown variety",
+      "cropId": "crop_beans_blue_lake",
+      "cultivar": "Blue Lake",
       "name": "Beans",
       "nutritionProfile": [
         {
@@ -338,26 +333,21 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Beans",
-        "id": "species_beans",
-        "scientificName": "Phaseolus vulgaris"
-      },
       "speciesId": "species_beans",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "legume",
       "companionsAvoid": [
-        "crop_onion_leek_unknown_variety"
+        "crop_leek_blue_de_solaise"
       ],
       "companionsGood": [
-        "crop_carrot_unknown_variety"
+        "crop_carrot_nantes"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_peas_unknown_variety",
-      "cultivar": "Unknown variety",
-      "name": "Peas",
+      "cropId": "crop_pea_kelvedon_wonder",
+      "cultivar": "Kelvedon Wonder",
+      "name": "Pea",
       "nutritionProfile": [
         {
           "assumptions": "Per 100g cooked.",
@@ -413,26 +403,21 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Peas",
-        "id": "species_peas",
-        "scientificName": "Pisum sativum"
-      },
       "speciesId": "species_peas",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "root",
       "companionsAvoid": [
-        "crop_tomato_unknown_variety"
+        "crop_tomato_san_marzano"
       ],
       "companionsGood": [
-        "crop_onion_leek_unknown_variety",
-        "crop_peas_unknown_variety"
+        "crop_leek_blue_de_solaise",
+        "crop_pea_kelvedon_wonder"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_carrot_unknown_variety",
-      "cultivar": "Unknown variety",
+      "cropId": "crop_carrot_nantes",
+      "cultivar": "Nantes",
       "name": "Carrot",
       "nutritionProfile": [
         {
@@ -490,28 +475,23 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Carrot",
-        "id": "species_carrot",
-        "scientificName": "Daucus carota"
-      },
       "speciesId": "species_carrot",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "allium",
       "companionsAvoid": [
-        "crop_beans_unknown_variety",
-        "crop_peas_unknown_variety"
+        "crop_beans_blue_lake",
+        "crop_pea_kelvedon_wonder"
       ],
       "companionsGood": [
-        "crop_carrot_unknown_variety",
-        "crop_cabbage_unknown_variety"
+        "crop_carrot_nantes",
+        "crop_cabbage_golden_acre"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_onion_leek_unknown_variety",
-      "cultivar": "Unknown variety",
-      "name": "Onion/Leek",
+      "cropId": "crop_leek_blue_de_solaise",
+      "cultivar": "Blue de Solaise",
+      "name": "Leek",
       "nutritionProfile": [
         {
           "assumptions": "Per 100g raw onion.",
@@ -567,27 +547,22 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Onion & Leek",
-        "id": "species_onion_leek",
-        "scientificName": "Allium ampeloprasum"
-      },
       "speciesId": "species_onion_leek",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "brassica",
       "companionsAvoid": [
-        "crop_tomato_unknown_variety"
+        "crop_tomato_san_marzano"
       ],
       "companionsGood": [
-        "crop_onion_leek_unknown_variety",
-        "crop_beans_unknown_variety"
+        "crop_leek_blue_de_solaise",
+        "crop_beans_blue_lake"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_cabbage_unknown_variety",
-      "cultivar": "Unknown variety",
-      "name": "Cabbage Family",
+      "cropId": "crop_cabbage_golden_acre",
+      "cultivar": "Golden Acre",
+      "name": "Cabbage",
       "nutritionProfile": [
         {
           "assumptions": "Per 100g raw green cabbage.",
@@ -643,26 +618,21 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Cabbage",
-        "id": "species_cabbage",
-        "scientificName": "Brassica oleracea"
-      },
       "speciesId": "species_cabbage",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "fruit",
       "companionsAvoid": [
-        "crop_potato_unknown_variety",
-        "crop_cabbage_unknown_variety"
+        "crop_potato_bintje",
+        "crop_cabbage_golden_acre"
       ],
       "companionsGood": [
-        "crop_onion_leek_unknown_variety"
+        "crop_leek_blue_de_solaise"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_tomato_unknown_variety",
-      "cultivar": "Unknown variety",
+      "cropId": "crop_tomato_san_marzano",
+      "cultivar": "San Marzano",
       "name": "Tomato",
       "nutritionProfile": [
         {
@@ -719,25 +689,20 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Tomato",
-        "id": "species_tomato",
-        "scientificName": "Solanum lycopersicum"
-      },
       "speciesId": "species_tomato",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
     {
       "category": "fruit",
       "companionsAvoid": [
-        "crop_potato_unknown_variety"
+        "crop_potato_bintje"
       ],
       "companionsGood": [
-        "crop_beans_unknown_variety"
+        "crop_beans_blue_lake"
       ],
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_squash_unknown_variety",
-      "cultivar": "Unknown variety",
+      "cropId": "crop_squash_black_beauty",
+      "cultivar": "Black Beauty",
       "name": "Squash",
       "nutritionProfile": [
         {
@@ -794,11 +759,6 @@
           ]
         }
       },
-      "species": {
-        "commonName": "Squash",
-        "id": "species_squash",
-        "scientificName": "Cucurbita pepo"
-      },
       "speciesId": "species_squash",
       "updatedAt": "2026-01-05T00:00:00Z"
     }
@@ -807,7 +767,7 @@
   "seedInventoryItems": [
     {
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_potato_unknown_variety",
+      "cropId": "crop_potato_bintje",
       "notes": "Seed tubers represented as grams for MVP fixture simplicity.",
       "quantity": 2000,
       "seedInventoryItemId": "seed_001",
@@ -992,7 +952,7 @@
       "batchId": "batch_001",
       "bedId": "bed_001",
       "checklist": [],
-      "cropId": "crop_potato_unknown_variety",
+      "cropId": "crop_potato_bintje",
       "date": "2026-03-15",
       "id": "task_001",
       "sourceKey": "plan_001:sowing",

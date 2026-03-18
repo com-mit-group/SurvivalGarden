@@ -120,12 +120,12 @@ Example `PUT /api/beds/bed_001` payload:
 - `PUT /api/crop-plans/{planId}` body `CropPlan` -> `CropPlan`
 - `DELETE /api/crop-plans/{planId}` -> `204 No Content`
 
-Example `GET /api/crop-plans?cropId=crop_potato_unknown_variety&seasonYear=2026` response item:
+Example `GET /api/crop-plans?cropId=crop_potato_bintje&seasonYear=2026` response item:
 
 ```json
 {
   "planId": "plan_001",
-  "cropId": "crop_potato_unknown_variety",
+  "cropId": "crop_potato_bintje",
   "bedId": "bed_001",
   "seasonYear": 2026,
   "plannedWindows": {
