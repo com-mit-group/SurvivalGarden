@@ -3121,7 +3121,7 @@ function BatchesPage() {
           )}
         </div>
         <p className="batch-form-note">
-          Create new crops inline, then save the batch. Non-sowing start transitions are still planning-only.
+          Create new cultivar records inline, then save the batch. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
@@ -3140,7 +3140,7 @@ function BatchesPage() {
         <h3>Edit crop cultivar metadata</h3>
         <div className="batch-form-grid">
           <label>
-            Crop
+            Cultivar record
             <select value={editingCropId} onChange={(event) => setEditingCropId(event.target.value)}>
               {selectableCrops.map((crop) => (
                 <option key={crop.cropId} value={crop.cropId}>
@@ -3152,7 +3152,7 @@ function BatchesPage() {
           </label>
 
           <label>
-            Crop ID (immutable)
+            Cultivar ID (immutable)
             <input type="text" value={editingCropId} readOnly disabled />
           </label>
 
@@ -5811,8 +5811,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
-      <p>Crop import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "id": "...", "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
-      <p>Legacy species-level crop imports are auto-migrated into cultivar records using the deterministic placeholder <code>Unknown variety</code> when no cultivar is provided.</p>
+      <p>Cultivar import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "id": "...", "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
+      <p>Legacy species-level crop imports are auto-migrated into cultivar records linked to species metadata, using the deterministic placeholder <code>Unknown variety</code> when no cultivar is provided.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
       <p>Segment import endpoint contract: <code>POST /api/import/segments</code> with <code>{'{ "segments": [ ... ] }'}</code>.</p>
       <p>
@@ -5890,10 +5890,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       {pendingCropImportCrops.length > 0 ? (
         <>
           <section>
-            <h3>Crop Import Preview</h3>
+            <h3>Cultivar Import Preview</h3>
             <ul>
               {pendingCropImportCrops.slice(0, 5).map((crop) => (
-                <li key={crop.cropId}>{(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — {getCropSpeciesCommonName(crop) || crop.cropId} ({crop.cropId})</li>
+                <li key={crop.cropId}>Cultivar {(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — species {getCropSpeciesCommonName(crop) || crop.cropId} ({crop.cropId})</li>
               ))}
             </ul>
           </section>
