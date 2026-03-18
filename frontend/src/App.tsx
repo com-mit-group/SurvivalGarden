@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Task } from './contracts';
+import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
@@ -617,7 +617,7 @@ function BedDetailPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(appState.species))]),
         ),
       );
       setCropHasTaskRules(
@@ -1217,7 +1217,7 @@ function CalendarPage() {
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(appState.species))]),
         ),
       );
       setIsLoading(false);
@@ -1800,14 +1800,21 @@ const fromLocalDateTimeInput = (value: string): string | null => {
   return date.toISOString();
 };
 
-const getCropSpeciesScientificName = (crop: Crop): string => {
-  const speciesScientificName = (crop as Crop & { species?: { scientificName?: string } }).species?.scientificName;
-  return speciesScientificName ?? (crop as { scientificName?: string }).scientificName ?? '';
+const buildSpeciesLookup = (species: Species[] | undefined): Record<string, Species> =>
+  Object.fromEntries((species ?? []).map((entry) => [entry.id, entry]));
+
+const getCropSpeciesScientificName = (crop: Crop, speciesById: Record<string, Species> = {}): string => {
+  const speciesId = (crop as Crop & { speciesId?: string }).speciesId;
+  const speciesScientificName = speciesId ? speciesById[speciesId]?.scientificName : undefined;
+  const embeddedSpeciesScientificName = (crop as Crop & { species?: { scientificName?: string } }).species?.scientificName;
+  return speciesScientificName ?? embeddedSpeciesScientificName ?? (crop as { scientificName?: string }).scientificName ?? '';
 };
 
-const getCropSpeciesCommonName = (crop: Crop): string => {
-  const speciesCommonName = (crop as Crop & { species?: { commonName?: string } }).species?.commonName;
-  return speciesCommonName ?? '';
+const getCropSpeciesCommonName = (crop: Crop, speciesById: Record<string, Species> = {}): string => {
+  const speciesId = (crop as Crop & { speciesId?: string }).speciesId;
+  const speciesCommonName = speciesId ? speciesById[speciesId]?.commonName : undefined;
+  const embeddedSpeciesCommonName = (crop as Crop & { species?: { commonName?: string } }).species?.commonName;
+  return speciesCommonName ?? embeddedSpeciesCommonName ?? '';
 };
 
 const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined; scientificName: string | undefined }) => {
@@ -1860,6 +1867,8 @@ function BatchesPage() {
   const [cropAliases, setCropAliases] = useState<Record<string, string[]>>({});
   const [cropHasTaskRules, setCropHasTaskRules] = useState<Record<string, boolean>>({});
   const [userDefinedCropIds, setUserDefinedCropIds] = useState<Record<string, boolean>>({});
+  const [speciesById, setSpeciesById] = useState<Record<string, Species>>({});
+  const [editingSpeciesId, setEditingSpeciesId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
@@ -1895,6 +1904,14 @@ function BatchesPage() {
   });
   const [cropEditErrors, setCropEditErrors] = useState<Record<string, string>>({});
   const [cropEditMessage, setCropEditMessage] = useState<string | null>(null);
+  const [speciesEditValues, setSpeciesEditValues] = useState({
+    commonName: '',
+    scientificName: '',
+    aliases: '',
+    notes: '',
+  });
+  const [speciesEditErrors, setSpeciesEditErrors] = useState<Record<string, string>>({});
+  const [speciesEditMessage, setSpeciesEditMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -1908,18 +1925,22 @@ function BatchesPage() {
         setCropAliases({});
         setCropHasTaskRules({});
         setUserDefinedCropIds({});
+        setSpeciesById({});
         setIsLoading(false);
         return;
       }
+
+      const nextSpeciesById = buildSpeciesLookup(appState.species);
 
       setBatches(listBatchesFromAppState(appState));
       setCropIds(appState.crops.map((crop) => crop.cropId));
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          appState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
+      setSpeciesById(nextSpeciesById);
       setCropAliases(
         Object.fromEntries(
           appState.crops.map((crop) => {
@@ -2112,12 +2133,34 @@ function BatchesPage() {
     [cropIds, cropNames, cropScientificNames],
   );
 
+  const selectableSpecies = useMemo(
+    () =>
+      Object.values(speciesById)
+        .map((species) => ({
+          speciesId: species.id,
+          label: formatCropOptionLabel({
+            cropId: species.id,
+            name: species.commonName,
+            scientificName: species.scientificName,
+          }),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [speciesById],
+  );
+
   useEffect(() => {
     const firstSelectableCrop = selectableCrops[0];
     if (!editingCropId && firstSelectableCrop) {
       setEditingCropId(firstSelectableCrop.cropId);
     }
   }, [editingCropId, selectableCrops]);
+
+  useEffect(() => {
+    const firstSelectableSpecies = selectableSpecies[0];
+    if (!editingSpeciesId && firstSelectableSpecies) {
+      setEditingSpeciesId(firstSelectableSpecies.speciesId);
+    }
+  }, [editingSpeciesId, selectableSpecies]);
 
   useEffect(() => {
     const loadCropForEdit = async () => {
@@ -2141,17 +2184,22 @@ function BatchesPage() {
       const appState = await loadAppStateFromIndexedDb();
       const crop = appState ? appState.crops.find((entry) => entry.cropId === editingCropId) : null;
       const cropMeta = ((crop as { meta?: Record<string, unknown> } | null)?.meta ?? {}) as Record<string, unknown>;
+      const nextSpeciesById = buildSpeciesLookup(appState?.species);
 
       const cropSpecies = ((crop as { species?: Record<string, unknown> } | null)?.species ?? {}) as Record<string, unknown>;
+      const speciesId = (crop as (Crop & { speciesId?: string }) | null)?.speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : '');
+      const speciesRecord = speciesId ? nextSpeciesById[speciesId] : undefined;
       setCropEditValues({
         cultivar: (crop as (Crop & { cultivar?: string }) | null)?.cultivar ?? crop?.name ?? '',
-        speciesId: (crop as (Crop & { speciesId?: string }) | null)?.speciesId ?? (typeof cropSpecies.id === 'string' ? cropSpecies.id : ''),
+        speciesId,
         speciesCommonName:
-          (typeof cropSpecies.commonName === 'string' ? cropSpecies.commonName : '')
+          speciesRecord?.commonName
+          || (typeof cropSpecies.commonName === 'string' ? cropSpecies.commonName : '')
           || crop?.name
           || '',
         speciesScientificName:
-          (typeof cropSpecies.scientificName === 'string' ? cropSpecies.scientificName : '')
+          speciesRecord?.scientificName
+          || (typeof cropSpecies.scientificName === 'string' ? cropSpecies.scientificName : '')
           || (typeof cropMeta.scientificName === 'string' ? cropMeta.scientificName : ''),
         aliases: (crop?.aliases ?? []).join(', '),
         notes: typeof cropMeta.notes === 'string' ? cropMeta.notes : '',
@@ -2167,6 +2215,34 @@ function BatchesPage() {
 
     void loadCropForEdit();
   }, [editingCropId]);
+
+
+  useEffect(() => {
+    const loadSpeciesForEdit = async () => {
+      if (!editingSpeciesId) {
+        setSpeciesEditValues({
+          commonName: '',
+          scientificName: '',
+          aliases: '',
+          notes: '',
+        });
+        return;
+      }
+
+      const appState = await loadAppStateFromIndexedDb();
+      const species = appState?.species?.find((entry) => entry.id === editingSpeciesId) ?? null;
+      setSpeciesEditValues({
+        commonName: species?.commonName ?? '',
+        scientificName: species?.scientificName ?? '',
+        aliases: (species?.aliases ?? []).join(', '),
+        notes: species?.notes ?? '',
+      });
+      setSpeciesEditErrors({});
+      setSpeciesEditMessage(null);
+    };
+
+    void loadSpeciesForEdit();
+  }, [editingSpeciesId]);
 
   const handleCropEditSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -2257,7 +2333,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
         ),
       );
       setCropAliases(
@@ -2292,6 +2368,109 @@ function BatchesPage() {
 
       const message = error instanceof Error ? error.message : 'Failed to save crop.';
       setCropEditMessage(message);
+    }
+  };
+
+  const handleSpeciesEditSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSpeciesEditMessage(null);
+    const errors: Record<string, string> = {};
+
+    if (!editingSpeciesId) {
+      errors.id = 'Select a species to edit.';
+    }
+
+    const commonName = speciesEditValues.commonName.trim();
+    const scientificName = speciesEditValues.scientificName.trim();
+    const aliases = parseCsvUnique(speciesEditValues.aliases);
+    const notes = speciesEditValues.notes.trim();
+
+    if (!commonName) {
+      errors.commonName = 'Common name is required.';
+    }
+
+    if (!scientificName) {
+      errors.scientificName = 'Scientific name is required.';
+    } else if (scientificName.length > 160) {
+      errors.scientificName = 'Scientific name must be 160 characters or fewer.';
+    }
+
+    if (notes.length > 2000) {
+      errors.notes = 'Notes must be 2000 characters or fewer.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setSpeciesEditErrors(errors);
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+
+      if (!appState) {
+        setSpeciesEditMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingSpecies = appState.species?.find((entry) => entry.id === editingSpeciesId) ?? null;
+      if (!existingSpecies) {
+        setSpeciesEditMessage('Species no longer exists.');
+        return;
+      }
+
+      const nextSpecies: Species = {
+        ...existingSpecies,
+        id: existingSpecies.id,
+        commonName,
+        scientificName,
+        ...(aliases.length > 0 ? { aliases } : {}),
+        ...(notes ? { notes } : {}),
+      };
+      const nextSpeciesCollection = (appState.species ?? []).map((entry) => (entry.id === existingSpecies.id ? nextSpecies : entry));
+      const nextState = assertValid('appState', {
+        ...appState,
+        species: nextSpeciesCollection,
+      });
+      const nextSpeciesById = buildSpeciesLookup(nextState.species);
+
+      await saveAppStateToIndexedDb(nextState);
+      setSpeciesById(nextSpeciesById);
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+        ),
+      );
+      setSpeciesEditErrors({});
+      setSpeciesEditMessage('Species updated.');
+      setCropEditValues((current) =>
+        current.speciesId === existingSpecies.id
+          ? {
+              ...current,
+              speciesCommonName: commonName,
+              speciesScientificName: scientificName,
+            }
+          : current,
+      );
+      setFormValues((current) =>
+        selectedCropId && nextState.crops.some((crop) => crop.cropId === selectedCropId && (crop as Crop & { speciesId?: string }).speciesId === existingSpecies.id)
+          ? {
+              ...current,
+              cropInput: formatCropOptionLabel({
+                cropId: selectedCropId,
+                name: cropNames[selectedCropId],
+                scientificName,
+              }),
+            }
+          : current,
+      );
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        setSpeciesEditMessage('Please fix invalid species fields before saving.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to save species.';
+      setSpeciesEditMessage(message);
     }
   };
 
@@ -2396,7 +2575,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
         ),
       );
       setFormValues((current) => ({
@@ -2552,7 +2731,7 @@ function BatchesPage() {
       setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop)]),
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
         ),
       );
       setFormErrors({});
@@ -2855,30 +3034,18 @@ function BatchesPage() {
 
           <label>
             Species common name
-            <input
-              type="text"
-              value={cropEditValues.speciesCommonName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesCommonName: event.target.value }))}
-            />
+            <input type="text" value={cropEditValues.speciesCommonName} readOnly disabled />
           </label>
 
           <label>
             Species scientific name
-            <input
-              type="text"
-              value={cropEditValues.speciesScientificName}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesScientificName: event.target.value }))}
-            />
+            <input type="text" value={cropEditValues.speciesScientificName} readOnly disabled />
             {cropEditErrors.speciesScientificName ? <span className="form-error">{cropEditErrors.speciesScientificName}</span> : null}
           </label>
 
           <label>
-            Species ID
-            <input
-              type="text"
-              value={cropEditValues.speciesId}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, speciesId: event.target.value }))}
-            />
+            Species ID (immutable)
+            <input type="text" value={cropEditValues.speciesId} readOnly disabled />
             {cropEditErrors.speciesId ? <span className="form-error">{cropEditErrors.speciesId}</span> : null}
           </label>
 
@@ -2946,9 +3113,75 @@ function BatchesPage() {
             {cropEditErrors.notes ? <span className="form-error">{cropEditErrors.notes}</span> : null}
           </label>
         </div>
+        <p className="batch-form-note">Species identity is locked here. Use the species editor below to update shared species metadata safely.</p>
         <div className="batch-form-actions">
           <button type="submit">Save crop changes</button>
           {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
+        </div>
+      </form>
+
+      <form className="batch-form" onSubmit={(event) => void handleSpeciesEditSubmit(event)}>
+        <h3>Edit species metadata</h3>
+        <div className="batch-form-grid">
+          <label>
+            Species
+            <select value={editingSpeciesId} onChange={(event) => setEditingSpeciesId(event.target.value)}>
+              {selectableSpecies.map((species) => (
+                <option key={species.speciesId} value={species.speciesId}>
+                  {species.label}
+                </option>
+              ))}
+            </select>
+            {speciesEditErrors.id ? <span className="form-error">{speciesEditErrors.id}</span> : null}
+          </label>
+
+          <label>
+            Species ID (immutable)
+            <input type="text" value={editingSpeciesId} readOnly disabled />
+          </label>
+
+          <label>
+            Common name
+            <input
+              type="text"
+              value={speciesEditValues.commonName}
+              onChange={(event) => setSpeciesEditValues((current) => ({ ...current, commonName: event.target.value }))}
+            />
+            {speciesEditErrors.commonName ? <span className="form-error">{speciesEditErrors.commonName}</span> : null}
+          </label>
+
+          <label>
+            Scientific name
+            <input
+              type="text"
+              value={speciesEditValues.scientificName}
+              onChange={(event) => setSpeciesEditValues((current) => ({ ...current, scientificName: event.target.value }))}
+            />
+            {speciesEditErrors.scientificName ? <span className="form-error">{speciesEditErrors.scientificName}</span> : null}
+          </label>
+
+          <label>
+            Aliases (comma-separated)
+            <input
+              type="text"
+              value={speciesEditValues.aliases}
+              onChange={(event) => setSpeciesEditValues((current) => ({ ...current, aliases: event.target.value }))}
+            />
+          </label>
+
+          <label>
+            Notes
+            <textarea
+              value={speciesEditValues.notes}
+              onChange={(event) => setSpeciesEditValues((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+            />
+            {speciesEditErrors.notes ? <span className="form-error">{speciesEditErrors.notes}</span> : null}
+          </label>
+        </div>
+        <div className="batch-form-actions">
+          <button type="submit">Save species changes</button>
+          {speciesEditMessage ? <p className="batch-form-message">{speciesEditMessage}</p> : null}
         </div>
       </form>
 
@@ -3064,7 +3297,7 @@ function BatchDetailPage() {
 
       const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
       setCropName(crop?.name ?? null);
-      setCropScientificName(crop ? getCropSpeciesScientificName(crop) || null : null);
+      setCropScientificName(crop ? getCropSpeciesScientificName(crop, buildSpeciesLookup(appState.species)) || null : null);
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
       setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
       setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
