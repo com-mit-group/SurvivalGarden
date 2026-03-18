@@ -296,8 +296,6 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
     ...payload,
     cropPlans: remapCollection(payload.cropPlans, { stripTaxonomy: true }),
     batches: remapCollection(payload.batches, { stripTaxonomy: true }),
-    tasks: remapCollection(payload.tasks),
-    seedInventoryItems: remapCollection(payload.seedInventoryItems),
   };
 };
 
@@ -729,6 +727,7 @@ const collectCropPlanReferenceIssues = (schemaName: SchemaName, payload: unknown
   return issues;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown): ValidationIssue[] => {
   if (schemaName !== 'appState' || !isObjectRecord(payload)) {
     return [];
@@ -888,20 +887,18 @@ export const validateSchema = <T extends SchemaName>(
     const geometryIssues = collectSegmentGeometryIssues(schemaName, normalizedPayload);
     const pathPlacementIssues = collectPathPlacementIssues(schemaName, normalizedPayload);
     const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, normalizedPayload);
-    const appStateReferenceIssues = collectAppStateReferenceIssues(schemaName, normalizedPayload);
 
     if (
       geometryIssues.length === 0
       && pathPlacementIssues.length === 0
       && cropPlanReferenceIssues.length === 0
-      && appStateReferenceIssues.length === 0
     ) {
       return { ok: true, value: normalizedPayload as SchemaTypeMap[T] };
     }
 
     return {
       ok: false,
-      issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues, ...appStateReferenceIssues],
+      issues: [...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
     };
   }
 
@@ -909,9 +906,8 @@ export const validateSchema = <T extends SchemaName>(
   const geometryIssues = collectSegmentGeometryIssues(schemaName, normalizedPayload);
   const pathPlacementIssues = collectPathPlacementIssues(schemaName, normalizedPayload);
   const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, normalizedPayload);
-  const appStateReferenceIssues = collectAppStateReferenceIssues(schemaName, normalizedPayload);
   return {
     ok: false,
-    issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues, ...appStateReferenceIssues],
+    issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
   };
 };
