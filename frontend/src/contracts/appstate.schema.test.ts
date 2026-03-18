@@ -114,7 +114,7 @@ describe('AppState schema', () => {
           cropId: 'crop_tomato',
           name: 'Tomato',
           companionsGood: ['crop_basil'],
-          companionsAvoid: ['crop_potato'],
+          companionsAvoid: ['crop_potato_unknown_variety'],
           rules: {
             sowing: {
               sequence: 1,

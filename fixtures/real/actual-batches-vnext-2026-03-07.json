@@ -90,7 +90,7 @@
     },
     {
       "batchId": "potato-cutting-2026-02-18-01",
-      "cropId": "crop_potato",
+      "cropId": "crop_potato_unknown_variety",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-18T12:00:00+01:00",
       "startMethod": "regrow_water",
