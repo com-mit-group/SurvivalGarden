@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
+import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
@@ -16,6 +16,7 @@ import {
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
+  getSettingsOrDefault,
   removeSeedInventoryItemFromAppState,
   upsertSeedInventoryItemInAppState,
   upsertGeneratedTasksInAppState,
@@ -4517,6 +4518,8 @@ type RecoveryScreenProps = {
   onRetry: () => void;
 };
 
+const EMPTY_ALL_DATA_CONFIRMATION = 'DELETE ALL DATA';
+
 export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -4714,6 +4717,42 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     skipped: number;
     rejected: number;
   } | null>(null);
+  const [emptyAllDataMessage, setEmptyAllDataMessage] = useState<string | null>(null);
+  const [isEmptyingAllData, setIsEmptyingAllData] = useState(false);
+  const [emptyAllDataConfirmationText, setEmptyAllDataConfirmationText] = useState('');
+  const [emptyAllDataConfirmed, setEmptyAllDataConfirmed] = useState(false);
+  const [emptyAllDataRecordCounts, setEmptyAllDataRecordCounts] = useState<{
+    species: number;
+    crops: number;
+    segments: number;
+    beds: number;
+    paths: number;
+    cropPlans: number;
+    batches: number;
+    tasks: number;
+    seedInventoryItems: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!showDevResetButton) {
+      return;
+    }
+
+    void (async () => {
+      const appState = await loadAppStateFromIndexedDb();
+      setEmptyAllDataRecordCounts({
+        species: appState?.species?.length ?? 0,
+        crops: appState?.crops.length ?? 0,
+        segments: appState?.segments?.length ?? 0,
+        beds: appState?.beds.length ?? 0,
+        paths: (appState?.segments ?? []).reduce((total, segment) => total + segment.paths.length, 0),
+        cropPlans: appState?.cropPlans.length ?? 0,
+        batches: appState?.batches.length ?? 0,
+        tasks: appState?.tasks.length ?? 0,
+        seedInventoryItems: appState?.seedInventoryItems.length ?? 0,
+      });
+    })();
+  }, [showDevResetButton]);
 
   const buildBatchValidationMessages = useCallback((error: unknown, batchId: string, batchIndex: number): Array<{ path: string; message: string }> => {
     const fallbackPath = `/batches/${batchIndex}`;
@@ -5679,6 +5718,77 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError, pendingSegmentImportSegments]);
 
+  const handleEmptyAllData = useCallback(async () => {
+    if (isEmptyingAllData) {
+      return;
+    }
+
+    if (!emptyAllDataConfirmed || emptyAllDataConfirmationText.trim() !== EMPTY_ALL_DATA_CONFIRMATION) {
+      setEmptyAllDataMessage(`Type ${EMPTY_ALL_DATA_CONFIRMATION} and confirm the irreversible wipe before continuing.`);
+      return;
+    }
+
+    setIsEmptyingAllData(true);
+    setEmptyAllDataMessage(null);
+
+    try {
+      const currentState = await loadAppStateFromIndexedDb();
+      const emptyState: AppState = {
+        schemaVersion: currentState?.schemaVersion ?? 1,
+        segments: [],
+        beds: [],
+        species: [],
+        crops: [],
+        cropPlans: [],
+        batches: [],
+        tasks: [],
+        seedInventoryItems: [],
+        settings: currentState?.settings ?? getSettingsOrDefault(undefined),
+      };
+
+      await saveAppStateToIndexedDb(emptyState, { mode: 'replace' });
+      setPendingImportState(null);
+      setPendingBatchImportState(null);
+      setPendingBatchImportPreview([]);
+      setPendingCropImportCrops([]);
+      setPendingSpeciesImportSpecies([]);
+      setPendingCropPlanImportPlans([]);
+      setPendingSegmentImportSegments([]);
+      setPendingSegmentImportPreview([]);
+      setBatchImportStatusSummary(null);
+      setCropImportStatusSummary(null);
+      setSpeciesImportStatusSummary(null);
+      setCropPlanImportStatusSummary(null);
+      setSegmentImportStatusSummary(null);
+      setImportErrors([]);
+      setImportMessage(null);
+      setEmptyAllDataRecordCounts({
+        species: 0,
+        crops: 0,
+        segments: 0,
+        beds: 0,
+        paths: 0,
+        cropPlans: 0,
+        batches: 0,
+        tasks: 0,
+        seedInventoryItems: 0,
+      });
+      setEmptyAllDataConfirmed(false);
+      setEmptyAllDataConfirmationText('');
+      setEmptyAllDataMessage('All local garden data was deleted. The dataset is now empty and ready to rebuild from scratch.');
+      navigate('/beds', { replace: true });
+    } catch (error) {
+      setEmptyAllDataMessage(error instanceof Error ? error.message : 'Failed to empty local garden data.');
+    } finally {
+      setIsEmptyingAllData(false);
+    }
+  }, [
+    emptyAllDataConfirmationText,
+    emptyAllDataConfirmed,
+    isEmptyingAllData,
+    navigate,
+  ]);
+
   useEffect(() => {
     const search = new URLSearchParams(location.search);
     const importType = search.get('importType');
@@ -6302,9 +6412,57 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         </ul>
       ) : null}
       {showDevResetButton ? (
-        <button type="button" onClick={onResetToGoldenDataset}>
-          Reset to golden dataset
-        </button>
+        <section aria-label="Danger zone">
+          <h3>Danger zone</h3>
+          <p>Admin-only destructive actions for repairing corrupted local state.</p>
+          {emptyAllDataRecordCounts ? (
+            <ul>
+              <li>Species: {emptyAllDataRecordCounts.species}</li>
+              <li>Crops: {emptyAllDataRecordCounts.crops}</li>
+              <li>Segments: {emptyAllDataRecordCounts.segments}</li>
+              <li>Beds: {emptyAllDataRecordCounts.beds}</li>
+              <li>Paths: {emptyAllDataRecordCounts.paths}</li>
+              <li>Crop plans: {emptyAllDataRecordCounts.cropPlans}</li>
+              <li>Batches: {emptyAllDataRecordCounts.batches}</li>
+              <li>Tasks: {emptyAllDataRecordCounts.tasks}</li>
+              <li>Seed inventory items: {emptyAllDataRecordCounts.seedInventoryItems}</li>
+            </ul>
+          ) : null}
+          <p>Empty all data permanently removes user-managed entities and rebuilds a valid empty baseline shell. This cannot be undone here.</p>
+          <label>
+            Type <code>{EMPTY_ALL_DATA_CONFIRMATION}</code> to unlock the wipe
+            <input
+              type="text"
+              value={emptyAllDataConfirmationText}
+              onChange={(event) => setEmptyAllDataConfirmationText(event.currentTarget.value)}
+              disabled={isEmptyingAllData}
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={emptyAllDataConfirmed}
+              onChange={(event) => setEmptyAllDataConfirmed(event.currentTarget.checked)}
+              disabled={isEmptyingAllData}
+            />
+            I understand this will irreversibly delete all local species, crops, segments, beds, paths, crop plans, batches, tasks, seed inventory, and related metadata.
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleEmptyAllData()}
+            disabled={
+              isEmptyingAllData
+              || !emptyAllDataConfirmed
+              || emptyAllDataConfirmationText.trim() !== EMPTY_ALL_DATA_CONFIRMATION
+            }
+          >
+            {isEmptyingAllData ? 'Emptying all data…' : 'Empty all data'}
+          </button>
+          {emptyAllDataMessage ? <p>{emptyAllDataMessage}</p> : null}
+          <button type="button" onClick={onResetToGoldenDataset} disabled={isEmptyingAllData}>
+            Reset to golden dataset
+          </button>
+        </section>
       ) : null}
     </>
   );
