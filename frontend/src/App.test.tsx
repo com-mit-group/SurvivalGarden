@@ -1077,7 +1077,9 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Pea (Pisum sativum)')).toBeInTheDocument();
+      const editSpeciesForm = screen.getByRole('heading', { name: 'Edit species metadata' }).closest('form');
+      expect(editSpeciesForm).not.toBeNull();
+      expect(within(editSpeciesForm as HTMLFormElement).getByDisplayValue('Pea (Pisum sativum)')).toBeInTheDocument();
     });
   });
 
