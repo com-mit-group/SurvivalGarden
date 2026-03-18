@@ -111,8 +111,10 @@ describe('AppState schema', () => {
       ],
       crops: [
         {
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           name: 'Tomato',
+          cultivar: 'San Marzano',
+          speciesId: 'species_tomato',
           companionsGood: ['crop_basil'],
           companionsAvoid: ['crop_potato_unknown_variety'],
           rules: {
@@ -150,7 +152,7 @@ describe('AppState schema', () => {
         {
           planId: 'plan_001',
           segmentId: 'segment_001',
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           bedId: 'bed_001',
           seasonYear: 2026,
           plannedWindows: {
@@ -175,7 +177,7 @@ describe('AppState schema', () => {
       batches: [
         {
           batchId: 'batch_001',
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           startedAt: '2026-03-01T00:00:00Z',
           stage: 'sowing',
           currentStage: 'sowing',
@@ -187,10 +189,10 @@ describe('AppState schema', () => {
       tasks: [
         {
           id: 'task_001',
-          sourceKey: 'crop_tomato:bed_001',
+          sourceKey: 'crop_tomato_san_marzano:bed_001',
           date: '2026-03-12',
           type: 'sow',
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           bedId: 'bed_001',
           batchId: 'batch_001',
           checklist: [],
@@ -200,8 +202,8 @@ describe('AppState schema', () => {
       seedInventoryItems: [
         {
           seedInventoryItemId: 'seed_item_001',
-          cropId: 'crop_tomato',
-          variety: 'Roma',
+          cropId: 'crop_tomato_san_marzano',
+          variety: 'San Marzano',
           quantity: 120,
           unit: 'seeds',
           status: 'available',

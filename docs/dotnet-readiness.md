@@ -172,7 +172,7 @@ Minimal migration example (legacy start-only history -> valid timeline):
 ```json
 {
   "batchId": "batch_001",
-  "cropId": "crop_tomato",
+  "cropId": "crop_tomato_san_marzano",
   "startedAt": "2026-03-01T00:00:00Z",
   "currentStage": "sowing",
   "stage": "sowing",

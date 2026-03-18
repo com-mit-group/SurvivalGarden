@@ -27,7 +27,7 @@
   ],
   "crops": [
     {
-      "cropId": "crop_tomato",
+      "cropId": "crop_tomato_san_marzano",
       "name": "Tomato",
       "cultivar": "San Marzano",
       "speciesId": "species_tomato",
@@ -38,7 +38,7 @@
   "cropPlans": [
     {
       "planId": "plan_tomato_2026",
-      "cropId": "crop_tomato",
+      "cropId": "crop_tomato_san_marzano",
       "bedId": "bed_001",
       "seasonYear": 2026,
       "plannedWindows": {
@@ -68,7 +68,7 @@
   "batches": [
     {
       "batchId": "batch_tomato_seed_2026",
-      "cropId": "crop_tomato",
+      "cropId": "crop_tomato_san_marzano",
       "startedAt": "2026-03-01T08:00:00Z",
       "propagationType": "seed",
       "startQuantity": {
@@ -107,10 +107,10 @@
   "tasks": [
     {
       "id": "task_plant_tomato_2026_05_01",
-      "sourceKey": "batch_tomato_seed_2026|2026-05-01|crop_tomato|bed_001|transplant",
+      "sourceKey": "batch_tomato_seed_2026|2026-05-01|crop_tomato_san_marzano|bed_001|transplant",
       "date": "2026-05-01",
       "type": "transplant",
-      "cropId": "crop_tomato",
+      "cropId": "crop_tomato_san_marzano",
       "bedId": "bed_001",
       "batchId": "batch_tomato_seed_2026",
       "checklist": [
@@ -123,9 +123,9 @@
   ],
   "seedInventoryItems": [
     {
-      "seedInventoryItemId": "seed_tomato_roma_001",
-      "cropId": "crop_tomato",
-      "variety": "Roma",
+      "seedInventoryItemId": "seed_tomato_san_marzano_001",
+      "cropId": "crop_tomato_san_marzano",
+      "variety": "San Marzano",
       "quantity": 120,
       "unit": "seeds",
       "status": "available",
