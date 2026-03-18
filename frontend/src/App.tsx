@@ -1945,6 +1945,15 @@ function BatchesPage() {
   const [speciesCreateMessage, setSpeciesCreateMessage] = useState<string | null>(null);
   const [speciesEditErrors, setSpeciesEditErrors] = useState<Record<string, string>>({});
   const [speciesEditMessage, setSpeciesEditMessage] = useState<string | null>(null);
+  const [repairSpeciesId, setRepairSpeciesId] = useState<string>('');
+  const [cropRepairPreview, setCropRepairPreview] = useState<{
+    currentSpeciesLabel: string;
+    replacementSpeciesLabel: string;
+    cropPlanCount: number;
+    batchCount: number;
+    auditNote: string;
+    importPayload: string;
+  } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -2196,6 +2205,21 @@ function BatchesPage() {
   }, [editingSpeciesId, selectableSpecies]);
 
   useEffect(() => {
+    if (!selectableSpecies.length) {
+      setRepairSpeciesId('');
+      return;
+    }
+
+    const currentSpeciesId = cropEditValues.speciesId.trim();
+    const firstReplacementSpecies =
+      selectableSpecies.find((species) => species.speciesId !== currentSpeciesId) ?? selectableSpecies[0];
+
+    if (!repairSpeciesId || !selectableSpecies.some((species) => species.speciesId === repairSpeciesId)) {
+      setRepairSpeciesId(firstReplacementSpecies?.speciesId ?? '');
+    }
+  }, [cropEditValues.speciesId, repairSpeciesId, selectableSpecies]);
+
+  useEffect(() => {
     const loadCropForEdit = async () => {
       if (!editingCropId) {
         setCropEditValues({
@@ -2289,6 +2313,73 @@ function BatchesPage() {
       };
     });
   }, [speciesById]);
+
+  useEffect(() => {
+    const loadCropRepairPreview = async () => {
+      if (!editingCropId || !repairSpeciesId) {
+        setCropRepairPreview(null);
+        return;
+      }
+
+      const appState = await loadAppStateFromIndexedDb();
+      const crop = appState?.crops.find((entry) => entry.cropId === editingCropId) ?? null;
+      const replacementSpecies = appState?.species?.find((entry) => entry.id === repairSpeciesId) ?? null;
+
+      if (!appState || !crop || !replacementSpecies) {
+        setCropRepairPreview(null);
+        return;
+      }
+
+      const nextSpeciesById = buildSpeciesLookup(appState.species);
+      const currentSpeciesLabel = formatCropOptionLabel({
+        cropId: cropEditValues.speciesId || crop.cropId,
+        name: getCropSpeciesCommonName(crop, nextSpeciesById) || cropEditValues.speciesCommonName || crop.name,
+        scientificName: getCropSpeciesScientificName(crop, nextSpeciesById) || cropEditValues.speciesScientificName,
+      });
+      const replacementSpeciesLabel = formatCropOptionLabel({
+        cropId: replacementSpecies.id,
+        name: replacementSpecies.commonName,
+        scientificName: replacementSpecies.scientificName,
+      });
+      const cropPlanCount = appState.cropPlans.filter((plan) => plan.cropId === crop.cropId).length;
+      const batchCount = appState.batches.filter((batch) => batch.cropId === crop.cropId).length;
+      const importPayload = JSON.stringify(
+        {
+          crops: [
+            {
+              ...crop,
+              speciesId: replacementSpecies.id,
+              species: {
+                id: replacementSpecies.id,
+                commonName: replacementSpecies.commonName,
+                scientificName: replacementSpecies.scientificName,
+              },
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        null,
+        2,
+      );
+
+      setCropRepairPreview({
+        currentSpeciesLabel,
+        replacementSpeciesLabel,
+        cropPlanCount,
+        batchCount,
+        auditNote: `crop=${crop.cropId}; oldSpeciesId=${cropEditValues.speciesId || '(unset)'}; newSpeciesId=${replacementSpecies.id}`,
+        importPayload,
+      });
+    };
+
+    void loadCropRepairPreview();
+  }, [
+    cropEditValues.speciesCommonName,
+    cropEditValues.speciesId,
+    cropEditValues.speciesScientificName,
+    editingCropId,
+    repairSpeciesId,
+  ]);
 
   const handleCropEditSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -3254,6 +3345,56 @@ function BatchesPage() {
           {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
         </div>
       </form>
+
+      <section className="batch-form">
+        <h3>Repair crop taxonomy</h3>
+        <div className="batch-form-grid">
+          <label>
+            Crop to repair
+            <input type="text" value={editingCropId} readOnly disabled />
+          </label>
+
+          <label>
+            Current species
+            <input type="text" value={cropRepairPreview?.currentSpeciesLabel ?? cropEditValues.speciesId} readOnly disabled />
+          </label>
+
+          <label>
+            Replacement species
+            <select value={repairSpeciesId} onChange={(event) => setRepairSpeciesId(event.target.value)}>
+              {selectableSpecies.map((species) => (
+                <option key={species.speciesId} value={species.speciesId}>
+                  {species.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="crop-repair-preview">
+          <p className="batch-form-note">
+            Admin repair flow preview only. Normal crop edits still keep <code>speciesId</code> locked.
+          </p>
+          {cropRepairPreview ? (
+            <>
+              <ul className="crop-repair-impact-list">
+                <li>Replacement species: {cropRepairPreview.replacementSpeciesLabel}</li>
+                <li>Affected crop plans: {cropRepairPreview.cropPlanCount}</li>
+                <li>Affected batches: {cropRepairPreview.batchCount}</li>
+                <li>Audit metadata: <code>{cropRepairPreview.auditNote}</code></li>
+              </ul>
+              <label>
+                Import payload for explicit repair
+                <textarea value={cropRepairPreview.importPayload} readOnly rows={12} />
+              </label>
+            </>
+          ) : (
+            <p className="batch-form-note">Select a replacement species to preview the repair payload and impact summary.</p>
+          )}
+        </div>
+        <p className="batch-form-note">
+          Use the generated payload with <strong>Import Crop JSON</strong> below to run a controlled reassignment while preserving the existing crop identity.
+        </p>
+      </section>
 
       <form className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
         <h3>Create species</h3>
