@@ -4,7 +4,7 @@
   "batches": [
     {
       "batchId": "batch-basil-genoveser-2026-01",
-      "cropId": "crop_basil",
+      "cropId": "crop_basil_genoveser",
       "variety": "Genoveser",
       "startedAt": "2026-03-05T12:00:00+01:00",
       "startMethod": "pre_sow_indoor",
@@ -31,7 +31,7 @@
     },
     {
       "batchId": "batch-garlic-2026-03-06-01",
-      "cropId": "crop_garlic",
+      "cropId": "crop_garlic_unknown_variety",
       "variety": "Unknown",
       "startedAt": "2026-03-06T18:10:00+01:00",
       "startMethod": "pre_sow",
@@ -57,7 +57,7 @@
     },
     {
       "batchId": "celery-regrow-2026-02-20-01",
-      "cropId": "crop_celery",
+      "cropId": "crop_celery_unknown_variety",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-20T12:00:00+01:00",
       "startMethod": "regrow_water",
@@ -114,7 +114,7 @@
     },
     {
       "batchId": "onion-regrow-2026-02-18-01",
-      "cropId": "crop_onion",
+      "cropId": "crop_onion_unknown_variety",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-18T12:00:00+01:00",
       "startMethod": "regrow_water",
@@ -138,7 +138,7 @@
     },
     {
       "batchId": "batch-pea-2026-03-06-01",
-      "cropId": "crop_pea",
+      "cropId": "crop_pea_unknown_variety",
       "variety": "Unknown",
       "startedAt": "2026-03-06T18:05:00+01:00",
       "startMethod": "pre_sow",
@@ -180,7 +180,7 @@
     },
     {
       "batchId": "pakchoi-regrow-2026-02-16-01",
-      "cropId": "crop_pak_choi",
+      "cropId": "crop_pak_choi_unknown_variety",
       "variety": "Unknown (Supermarket)",
       "startedAt": "2026-02-16T12:00:00+01:00",
       "startMethod": "regrow_water",
@@ -200,7 +200,7 @@
     },
     {
       "batchId": "batch-lettuce-2026-03-06-01",
-      "cropId": "crop_lettuce",
+      "cropId": "crop_lettuce_romaine",
       "variety": "Romaine",
       "startedAt": "2026-03-06T18:30:00+01:00",
       "startMethod": "pre_sow",
