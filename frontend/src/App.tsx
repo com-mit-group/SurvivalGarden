@@ -5741,14 +5741,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
       if (
         !validatedEmptyState
-        || validatedEmptyState.species.length > 0
-        || validatedEmptyState.crops.length > 0
-        || validatedEmptyState.segments.length > 0
-        || validatedEmptyState.beds.length > 0
-        || validatedEmptyState.cropPlans.length > 0
-        || validatedEmptyState.batches.length > 0
-        || validatedEmptyState.tasks.length > 0
-        || validatedEmptyState.seedInventoryItems.length > 0
+        || (validatedEmptyState.species ?? []).length > 0
+        || (validatedEmptyState.crops ?? []).length > 0
+        || (validatedEmptyState.segments ?? []).length > 0
+        || (validatedEmptyState.beds ?? []).length > 0
+        || (validatedEmptyState.cropPlans ?? []).length > 0
+        || (validatedEmptyState.batches ?? []).length > 0
+        || (validatedEmptyState.tasks ?? []).length > 0
+        || (validatedEmptyState.seedInventoryItems ?? []).length > 0
       ) {
         throw new Error('Empty-state validation failed. Local data was not fully cleared.');
       }
