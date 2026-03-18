@@ -2952,9 +2952,9 @@ function BatchesPage() {
     const resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
 
     if (!formValues.cropInput.trim()) {
-      errors.cropInput = 'Select an existing crop.';
+      errors.cropInput = 'Select an existing crop record.';
     } else if (!resolvedCropId) {
-      errors.cropInput = 'Select an existing crop before creating a batch.';
+      errors.cropInput = 'Select an existing crop record before creating a batch.';
     }
 
     if (!formValues.startedAt) {
@@ -2963,7 +2963,7 @@ function BatchesPage() {
 
     const trimmedVariety = formValues.variety.trim();
     if (trimmedVariety.length > 120) {
-      errors.variety = 'Variety must be 120 characters or fewer.';
+      errors.variety = 'Cultivar label must be 120 characters or fewer.';
     }
 
     const parseOptionalCount = (value: string, fieldLabel: string): number | null => {
@@ -3090,7 +3090,7 @@ function BatchesPage() {
 
         for (const issue of error.issues) {
           if (issue.path.includes('/cropId')) {
-            issueErrors.cropInput = 'Choose a valid crop.';
+            issueErrors.cropInput = 'Choose a valid crop record.';
           }
           if (issue.path.includes('/startedAt')) {
             issueErrors.startedAt = 'Enter a valid date and time.';
@@ -3169,7 +3169,7 @@ function BatchesPage() {
         <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
         <div className="batch-form-grid">
           <label>
-            Crop (search or type)
+            Crop
             <input
               list="batch-crop-options"
               value={formValues.cropInput}
@@ -3223,7 +3223,7 @@ function BatchesPage() {
           ) : null}
 
           <label>
-            Variety
+            Cultivar label (optional)
             <input
               type="text"
               value={formValues.variety}
@@ -3324,7 +3324,7 @@ function BatchesPage() {
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation only links to an existing crop. Create species and crop records separately first. Non-sowing start transitions are still planning-only.
+          Batch creation links directly to an existing crop record. Create species and crop records separately first. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
@@ -3735,7 +3735,7 @@ function BatchesPage() {
                   <p className="batch-item-meta">
                     Batch {batch.batchId} · Bed {getDerivedBedId(batch) ?? 'Unassigned'} · Started{' '}
                     {new Date(batch.startedAt).toLocaleString()}
-                    {batch.variety ? ` · Variety ${batch.variety}` : ''}
+                    {batch.variety ? ` · Cultivar label ${batch.variety}` : ''}
                   </p>
                 </div>
                 <span className="batch-stage-badge">{batch.stage}</span>
@@ -4298,7 +4298,7 @@ function BatchDetailPage() {
             </div>
             {batch.variety ? (
               <div>
-                <dt>Variety</dt>
+                <dt>Cultivar label</dt>
                 <dd>{batch.variety}</dd>
               </div>
             ) : null}
