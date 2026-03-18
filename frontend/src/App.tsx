@@ -5530,9 +5530,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         const mergedSpecies: Species = {
           ...currentSpecies,
           commonName: incomingSpecies.commonName,
-          scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName,
-          aliases: incomingSpecies.aliases ?? currentSpecies.aliases,
-          notes: incomingSpecies.notes ?? currentSpecies.notes,
+          ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
+            ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
+            : {}),
+          ...((incomingSpecies.aliases ?? currentSpecies.aliases) !== undefined
+            ? { aliases: incomingSpecies.aliases ?? currentSpecies.aliases }
+            : {}),
+          ...((incomingSpecies.notes ?? currentSpecies.notes) !== undefined
+            ? { notes: incomingSpecies.notes ?? currentSpecies.notes }
+            : {}),
         };
 
         const unchanged = JSON.stringify(currentSpecies) === JSON.stringify(mergedSpecies);
