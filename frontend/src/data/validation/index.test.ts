@@ -75,6 +75,15 @@ const validBed = {
 };
 
 
+const validSpecies = {
+  id: 'species_carrot',
+  commonName: 'Carrot',
+  scientificName: 'Daucus carota',
+  aliases: ['Garden carrot'],
+  notes: 'Cool-season root crop.',
+};
+
+
 const validCrop = {
   cropId: 'crop-1',
   name: 'Carrot',
@@ -255,6 +264,7 @@ const validAppState = {
   schemaVersion: 1,
   segments: [validSegment],
   beds: [validBed],
+  species: [validSpecies],
   crops: [validCrop],
   cropPlans: [validCropPlan],
   batches: [validBatch],
@@ -610,6 +620,42 @@ describeIndexedDb('indexeddb photo blob storage', () => {
 
 
 
+
+  it('merge mode persists new species entries after reload', async () => {
+    await saveAppStateToIndexedDb({
+      ...validAppState,
+      species: [{ ...validSpecies, notes: 'Existing notes.' }],
+    }, { mode: 'replace' });
+
+    const report = await saveAppStateToIndexedDb({
+      ...validAppState,
+      species: [
+        { ...validSpecies, notes: 'Updated imported notes.' },
+        {
+          id: 'species_pea',
+          commonName: 'Pea',
+          scientificName: 'Pisum sativum',
+          aliases: ['Garden pea'],
+          notes: 'Imported during merge.',
+        },
+      ],
+    }, { mode: 'merge' });
+
+    const loaded = await loadAppStateFromIndexedDb();
+
+    expect(loaded?.species).toEqual([
+      { ...validSpecies, notes: 'Updated imported notes.' },
+      {
+        id: 'species_pea',
+        commonName: 'Pea',
+        scientificName: 'Pisum sativum',
+        aliases: ['Garden pea'],
+        notes: 'Imported during merge.',
+      },
+    ]);
+    expect(report?.species.updated).toBe(1);
+    expect(report?.species.added).toBe(1);
+  });
 
   it('merge mode prevents duplicate entities and tasks by id/sourceKey', async () => {
     await resetToGoldenDataset();

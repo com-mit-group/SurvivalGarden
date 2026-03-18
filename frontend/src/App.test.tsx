@@ -20,6 +20,7 @@ vi.mock('./data', () => ({
   parseImportedAppState: vi.fn(),
   saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
   serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
+  assertValid: vi.fn((schemaName: string, value: unknown) => value),
   upsertCropInAppState: vi.fn((appState: { crops?: Array<{ cropId: string }> }, crop: { cropId: string }) => ({
     ...appState,
     crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
@@ -1008,6 +1009,79 @@ describe('App', () => {
     expect(screen.getByText('Tomato (plan_tomato_missing_mass) — missing mass expected yield')).toBeInTheDocument();
   });
 
+
+  it('keeps a created species after save and reload on the batches page', async () => {
+    let persistedAppState = {
+      schemaVersion: 1,
+      beds: [],
+      species: [],
+      crops: [],
+      cropPlans: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-US',
+        timezone: 'UTC',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    };
+
+    vi.mocked(loadAppStateFromIndexedDb).mockImplementation(async () => persistedAppState as never);
+    vi.mocked(saveAppStateToIndexedDb).mockImplementation(async (nextState) => {
+      persistedAppState = nextState as typeof persistedAppState;
+      return undefined as never;
+    });
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create species' })).toBeInTheDocument();
+    });
+
+    const createSpeciesForm = screen.getByRole('heading', { name: 'Create species' }).closest('form');
+    expect(createSpeciesForm).not.toBeNull();
+    const form = createSpeciesForm as HTMLFormElement;
+
+    fireEvent.change(within(form).getByLabelText('Species ID'), { target: { value: 'species_pea' } });
+    fireEvent.change(within(form).getByLabelText('Common name'), { target: { value: 'Pea' } });
+    fireEvent.change(within(form).getByLabelText('Scientific name'), { target: { value: 'Pisum sativum' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Create species' }));
+
+    await waitFor(() => {
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
+        species: [
+          expect.objectContaining({
+            id: 'species_pea',
+            commonName: 'Pea',
+            scientificName: 'Pisum sativum',
+          }),
+        ],
+      }));
+      expect(screen.getByText('Species created.')).toBeInTheDocument();
+    });
+
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      const editSpeciesForm = screen.getByRole('heading', { name: 'Edit species metadata' }).closest('form');
+      expect(editSpeciesForm).not.toBeNull();
+      expect(within(editSpeciesForm as HTMLFormElement).getByDisplayValue('Pea (Pisum sativum)')).toBeInTheDocument();
+    });
+  });
 
   it('supports custom crop flow in batches with scientific-name-only identity and variety/seed counts', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
