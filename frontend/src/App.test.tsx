@@ -93,7 +93,7 @@ describe('App', () => {
     fireEvent.click(resetButton);
     expect(resetToGoldenDataset).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /I understand reset will replace local data/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand this will replace local data/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Restore golden dataset' }));
 
     await waitFor(() => {
