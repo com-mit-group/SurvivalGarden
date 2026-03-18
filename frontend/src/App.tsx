@@ -4669,6 +4669,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   const [pendingBatchImportState, setPendingBatchImportState] = useState<unknown | null>(null);
   const [pendingBatchImportPreview, setPendingBatchImportPreview] = useState<Array<{ batchLabel: string; seedCount: number; eventCount: number }>>([]);
   const [pendingCropImportCrops, setPendingCropImportCrops] = useState<Crop[]>([]);
+  const [pendingSpeciesImportSpecies, setPendingSpeciesImportSpecies] = useState<Species[]>([]);
   const [pendingCropPlanImportPlans, setPendingCropPlanImportPlans] = useState<CropPlan[]>([]);
   const [pendingSegmentImportSegments, setPendingSegmentImportSegments] = useState<Segment[]>([]);
   const [pendingSegmentImportPreview, setPendingSegmentImportPreview] = useState<Array<{
@@ -4690,6 +4691,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     renamed: number;
   } | null>(null);
   const [cropImportStatusSummary, setCropImportStatusSummary] = useState<{
+    imported: number;
+    merged: number;
+    skipped: number;
+    rejected: number;
+  } | null>(null);
+  const [speciesImportStatusSummary, setSpeciesImportStatusSummary] = useState<{
     imported: number;
     merged: number;
     skipped: number;
@@ -4796,11 +4803,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -4832,11 +4841,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -4928,11 +4939,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -4998,6 +5011,94 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError]);
 
+  const handleImportSpeciesJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportState(null);
+    setPendingBatchImportState(null);
+    setPendingBatchImportPreview([]);
+    setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
+    setPendingCropPlanImportPlans([]);
+    setPendingSegmentImportSegments([]);
+    setPendingSegmentImportPreview([]);
+    setBatchImportStatusSummary(null);
+    setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
+    setCropPlanImportStatusSummary(null);
+    setSegmentImportStatusSummary(null);
+
+    try {
+      const payload = await file.text();
+      const rawParsed = JSON.parse(payload) as { species?: unknown[] };
+
+      if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.species)) {
+        throw new Error('Species import payload must be an object with a species array.');
+      }
+
+      const validSpecies: Species[] = [];
+      const validationErrors: Array<{ path: string; message: string }> = [];
+
+      rawParsed.species.forEach((candidate, index) => {
+        const fallbackPath = `/species/${index}`;
+
+        try {
+          const validatedSingleSpecies = parseImportedAppState(JSON.stringify({
+            schemaVersion: 1,
+            beds: [],
+            crops: [],
+            species: [candidate],
+            cropPlans: [],
+            batches: [],
+            seedInventoryItems: [],
+            tasks: [],
+          }));
+          const validatedSpecies = validatedSingleSpecies.species?.[0];
+          if (validatedSpecies) {
+            validSpecies.push(validatedSpecies);
+          }
+        } catch (validationError) {
+          if (validationError instanceof SchemaValidationError && validationError.issues.length > 0) {
+            validationErrors.push(
+              ...validationError.issues.map((issue) => ({
+                path: fallbackPath,
+                message: `schema_validation_failed (field: ${issue.path.split('/').filter(Boolean).pop() ?? 'unknown'}) - ${issue.message}`,
+              })),
+            );
+          } else {
+            validationErrors.push({
+              path: fallbackPath,
+              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+            });
+          }
+        }
+      });
+
+      if (validSpecies.length === 0) {
+        setImportMessage('Species import failed. No valid species passed validation.');
+        setImportErrors(validationErrors);
+        return;
+      }
+
+      setPendingSpeciesImportSpecies(validSpecies);
+      setImportMessage(`Species import ready: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length}. Confirm to import.`);
+      setImportErrors(validationErrors);
+    } catch (error) {
+      setImportMessage('Import failed. Fix the errors below and try again.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError]);
+
   const handleImportCropPlanJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
@@ -5013,11 +5114,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -5098,11 +5201,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setBatchImportStatusSummary(null);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -5393,6 +5498,78 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     }
   }, [isImporting, mapImportError, pendingCropImportCrops]);
 
+  const handleConfirmSpeciesImport = useCallback(async () => {
+    if (pendingSpeciesImportSpecies.length === 0 || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+    setImportErrors([]);
+
+    try {
+      const existingAppState = await loadAppStateFromIndexedDb();
+      if (!existingAppState) {
+        setImportMessage('Species import failed: local app state is unavailable.');
+        return;
+      }
+
+      const speciesById = new Map((existingAppState.species ?? []).map((entry) => [entry.id, entry]));
+      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+      const results: Array<{ path: string; message: string }> = [];
+
+      pendingSpeciesImportSpecies.forEach((incomingSpecies, index) => {
+        const currentSpecies = speciesById.get(incomingSpecies.id);
+
+        if (!currentSpecies) {
+          speciesById.set(incomingSpecies.id, incomingSpecies);
+          summary.imported += 1;
+          return;
+        }
+
+        const mergedSpecies: Species = {
+          ...currentSpecies,
+          commonName: incomingSpecies.commonName,
+          ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
+            ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
+            : {}),
+          ...((incomingSpecies.aliases ?? currentSpecies.aliases) !== undefined
+            ? { aliases: incomingSpecies.aliases ?? currentSpecies.aliases }
+            : {}),
+          ...((incomingSpecies.notes ?? currentSpecies.notes) !== undefined
+            ? { notes: incomingSpecies.notes ?? currentSpecies.notes }
+            : {}),
+        };
+
+        const unchanged = JSON.stringify(currentSpecies) === JSON.stringify(mergedSpecies);
+        speciesById.set(incomingSpecies.id, mergedSpecies);
+        if (unchanged) {
+          summary.skipped += 1;
+        } else {
+          summary.merged += 1;
+          if (currentSpecies.commonName !== incomingSpecies.commonName || currentSpecies.scientificName !== incomingSpecies.scientificName) {
+            results.push({
+              path: `/species/${index}`,
+              message: `merged (shared_reference_update): crop species references remain linked to ${incomingSpecies.id}`,
+            });
+          }
+        }
+      });
+
+      const nextState = { ...existingAppState, species: [...speciesById.values()] };
+      await saveAppStateToIndexedDb(nextState, { mode: 'replace' });
+      setSpeciesImportStatusSummary(summary);
+      setImportErrors(results);
+      setImportMessage(`Species import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      setPendingSpeciesImportSpecies([]);
+    } catch (error) {
+      setImportMessage('Import failed while saving.');
+      setImportErrors(mapImportError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, mapImportError, pendingSpeciesImportSpecies]);
+
   const handleConfirmCropPlanImport = useCallback(async () => {
     if (isImporting || pendingCropPlanImportPlans.length === 0) {
       return;
@@ -5517,10 +5694,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setPendingBatchImportState(null);
     setPendingBatchImportPreview([]);
     setPendingCropImportCrops([]);
+    setPendingSpeciesImportSpecies([]);
     setPendingCropPlanImportPlans([]);
     setPendingSegmentImportSegments([]);
     setPendingSegmentImportPreview([]);
     setCropImportStatusSummary(null);
+    setSpeciesImportStatusSummary(null);
     setCropPlanImportStatusSummary(null);
     setSegmentImportStatusSummary(null);
 
@@ -5623,6 +5802,45 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           setPendingCropImportCrops(validCrops);
           setImportErrors(validationErrors);
           setImportMessage(`Deep link ready: ${validCrops.length} valid crop(s) from ${rawParsed.crops.length} payload crop(s). Confirm to import.`);
+        }
+      } else if (importType === 'species') {
+        const rawParsed = JSON.parse(decodedPayload) as { species?: unknown[] };
+        if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.species)) {
+          throw new Error('Deep-link payload must decode to an object with a species array.');
+        }
+        const validSpecies: Species[] = [];
+        const validationErrors: Array<{ path: string; message: string }> = [];
+        rawParsed.species.forEach((candidate, index) => {
+          const fallbackPath = `/species/${index}`;
+          try {
+            const validatedSingleSpecies = parseImportedAppState(JSON.stringify({
+              schemaVersion: 1,
+              beds: [],
+              crops: [],
+              species: [candidate],
+              cropPlans: [],
+              batches: [],
+              seedInventoryItems: [],
+              tasks: [],
+            }));
+            const validatedSpecies = validatedSingleSpecies.species?.[0];
+            if (validatedSpecies) {
+              validSpecies.push(validatedSpecies);
+            }
+          } catch (validationError) {
+            validationErrors.push({
+              path: fallbackPath,
+              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+            });
+          }
+        });
+        if (validSpecies.length === 0) {
+          setImportMessage('Species import failed. No valid species records passed validation.');
+          setImportErrors(validationErrors);
+        } else {
+          setPendingSpeciesImportSpecies(validSpecies);
+          setImportErrors(validationErrors);
+          setImportMessage(`Deep link ready: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length} payload record(s). Confirm to import.`);
         }
       } else if (importType === 'crop-plans') {
         const rawParsed = JSON.parse(decodedPayload) as { cropPlans?: unknown[] };
@@ -5793,6 +6011,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <label>
+        Import Species JSON
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void handleImportSpeciesJson(event)}
+          disabled={isImporting}
+        />
+      </label>
+      <label>
         Import Crop Plan JSON
         <input
           type="file"
@@ -5813,6 +6040,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
       <p>Cultivar import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "id": "...", "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
       <p>Legacy species-level crop imports are auto-migrated into cultivar records linked to species metadata, using the deterministic placeholder <code>Unknown variety</code> when no cultivar is provided.</p>
+      <p>Species import endpoint contract: <code>POST /api/import/species</code> with <code>{'{ "species": [ { "id": "species_lettuce", "commonName": "Lettuce", "scientificName": "Lactuca sativa", "aliases": ["Garden lettuce"], "notes": "Cool-season leafy species." } ] }'}</code>.</p>
+      <p>Species edit support is available in-app for <code>commonName</code>, <code>scientificName</code>, <code>aliases</code>, and <code>notes</code>; <code>id</code> stays immutable so crop <code>speciesId</code> references remain intact.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
       <p>Segment import endpoint contract: <code>POST /api/import/segments</code> with <code>{'{ "segments": [ ... ] }'}</code>.</p>
       <p>
@@ -5913,6 +6142,34 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           </button>
         </>
       ) : null}
+      {pendingSpeciesImportSpecies.length > 0 ? (
+        <>
+          <section>
+            <h3>Species Import Preview</h3>
+            <ul>
+              {pendingSpeciesImportSpecies.slice(0, 5).map((species) => (
+                <li key={species.id}>
+                  {species.commonName} {species.scientificName ? `(${species.scientificName}) ` : ''}— {species.id}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <button type="button" onClick={() => void handleConfirmSpeciesImport()} disabled={isImporting}>
+            {isImporting ? 'Importing species…' : 'Import species'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingSpeciesImportSpecies([]);
+              setSpeciesImportStatusSummary(null);
+              setImportMessage('Species import canceled.');
+            }}
+            disabled={isImporting}
+          >
+            Cancel species import
+          </button>
+        </>
+      ) : null}
       {pendingCropPlanImportPlans.length > 0 ? (
         <>
           <section>
@@ -6000,6 +6257,17 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           </ul>
         </section>
       ) : null}
+      {speciesImportStatusSummary ? (
+        <section>
+          <h3>Species Import Summary</h3>
+          <ul>
+            <li>imported: {speciesImportStatusSummary.imported}</li>
+            <li>merged: {speciesImportStatusSummary.merged}</li>
+            <li>skipped: {speciesImportStatusSummary.skipped}</li>
+            <li>rejected: {speciesImportStatusSummary.rejected}</li>
+          </ul>
+        </section>
+      ) : null}
       {cropPlanImportStatusSummary ? (
         <section>
           <h3>Crop Plan Import Summary</h3>
@@ -6053,6 +6321,13 @@ function ImportCropsDeepLinkRoute() {
   const location = useLocation();
   const search = new URLSearchParams(location.search);
   search.set('importType', 'crops');
+  return <Navigate to={`/data?${search.toString()}`} replace />;
+}
+
+function ImportSpeciesDeepLinkRoute() {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search);
+  search.set('importType', 'species');
   return <Navigate to={`/data?${search.toString()}`} replace />;
 }
 
@@ -6183,6 +6458,7 @@ function App() {
           />
           <Route path="/import-batches" element={<ImportBatchesDeepLinkRoute />} />
           <Route path="/import-crops" element={<ImportCropsDeepLinkRoute />} />
+          <Route path="/import-species" element={<ImportSpeciesDeepLinkRoute />} />
           <Route path="/import-crop-plans" element={<ImportCropPlansDeepLinkRoute />} />
           <Route path="/import-segments" element={<ImportSegmentsDeepLinkRoute />} />
           <Route path="*" element={<Navigate to="/beds" replace />} />
