@@ -1912,6 +1912,14 @@ function BatchesPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
+  const [cropCreateValues, setCropCreateValues] = useState({
+    speciesId: '',
+    cultivar: '',
+    aliases: '',
+    notes: '',
+  });
+  const [cropCreateErrors, setCropCreateErrors] = useState<Record<string, string>>({});
+  const [cropCreateMessage, setCropCreateMessage] = useState<string | null>(null);
   const [editingCropId, setEditingCropId] = useState<string>('');
   const [cropEditValues, setCropEditValues] = useState({
     cultivar: '',
@@ -2203,6 +2211,13 @@ function BatchesPage() {
       setEditingSpeciesId(firstSelectableSpecies.speciesId);
     }
   }, [editingSpeciesId, selectableSpecies]);
+
+  useEffect(() => {
+    const firstSelectableSpecies = selectableSpecies[0];
+    if (!cropCreateValues.speciesId && firstSelectableSpecies) {
+      setCropCreateValues((current) => ({ ...current, speciesId: firstSelectableSpecies.speciesId }));
+    }
+  }, [cropCreateValues.speciesId, selectableSpecies]);
 
   useEffect(() => {
     if (!selectableSpecies.length) {
@@ -2824,6 +2839,112 @@ function BatchesPage() {
     }
   };
 
+  const handleCreateCropSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setCropCreateMessage(null);
+
+    const errors: Record<string, string> = {};
+    const speciesId = cropCreateValues.speciesId.trim();
+    const cultivar = cropCreateValues.cultivar.trim();
+    const aliases = parseCsvUnique(cropCreateValues.aliases);
+    const notes = cropCreateValues.notes.trim();
+
+    if (!speciesId) {
+      errors.speciesId = 'Select an existing species.';
+    }
+
+    if (!cultivar) {
+      errors.cultivar = 'Cultivar is required.';
+    }
+
+    if (notes.length > 2000) {
+      errors.notes = 'Notes must be 2000 characters or fewer.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setCropCreateErrors(errors);
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setCropCreateMessage('Unable to create crop because local app state is unavailable.');
+        return;
+      }
+
+      const species = (appState.species ?? []).find((entry) => entry.id === speciesId) ?? null;
+      if (!species) {
+        setCropCreateErrors({ speciesId: 'Select an existing species.' });
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const cropId = createUniqueUserCropId(cultivar, appState.crops.map((crop) => crop.cropId));
+      const nextState = upsertCropInAppState(appState, {
+        cropId,
+        name: cultivar,
+        cultivar,
+        speciesId: species.id,
+        ...(aliases.length > 0 ? { aliases } : {}),
+        species: {
+          id: species.id,
+          commonName: species.commonName,
+          ...(species.scientificName ? { scientificName: species.scientificName } : {}),
+        },
+        ...(notes ? { meta: { notes } } : {}),
+        isUserDefined: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      await saveAppStateToIndexedDb(nextState);
+      const nextSpeciesById = buildSpeciesLookup(nextState.species);
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+        ),
+      );
+      setCropAliases(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
+              ? (crop as { aliases?: string[] }).aliases ?? []
+              : [];
+            return [crop.cropId, aliasesForCrop];
+          }),
+        ),
+      );
+      setUserDefinedCropIds(
+        Object.fromEntries(
+          nextState.crops.map((crop) => {
+            const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
+            return [crop.cropId, isUserDefined === true];
+          }),
+        ),
+      );
+      setEditingCropId(cropId);
+      setCropCreateValues({
+        speciesId: species.id,
+        cultivar: '',
+        aliases: '',
+        notes: '',
+      });
+      setCropCreateErrors({});
+      setCropCreateMessage('Crop created. You can now create batches that reference it.');
+    } catch (error) {
+      if (error instanceof SchemaValidationError && error.issues.length > 0) {
+        setCropCreateMessage('Please fix invalid crop fields before saving.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to create crop.';
+      setCropCreateMessage(message);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSaveMessage(null);
@@ -2831,9 +2952,9 @@ function BatchesPage() {
     const resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
 
     if (!formValues.cropInput.trim()) {
-      errors.cropInput = 'Choose or type a crop.';
+      errors.cropInput = 'Select an existing crop.';
     } else if (!resolvedCropId) {
-      errors.cropInput = 'Choose an existing crop or create one inline.';
+      errors.cropInput = 'Select an existing crop before creating a batch.';
     }
 
     if (!formValues.startedAt) {
@@ -3038,7 +3159,13 @@ function BatchesPage() {
         </label>
       </div>
 
-      <form className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
+      <nav className="batch-form-actions" aria-label="Creation flows">
+        <button type="button">Batch form</button>
+        <button type="button">Crop form</button>
+        <button type="button">Species form</button>
+      </nav>
+
+      <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
         <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
         <div className="batch-form-grid">
           <label>
@@ -3196,6 +3323,10 @@ function BatchesPage() {
             {formErrors.plantCountAliveConfidence ? <span className="form-error">{formErrors.plantCountAliveConfidence}</span> : null}
           </label>
         </div>
+        <p className="batch-form-note">
+          Batch creation only links to an existing crop. Create species and crop records separately first. Non-sowing start transitions are still planning-only.
+        </p>
+        {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
           {isAddingNewCrop ? (
             <>
@@ -3211,12 +3342,6 @@ function BatchesPage() {
               Add new crop
             </button>
           )}
-        </div>
-        <p className="batch-form-note">
-          Create new cultivar records inline, then save the batch. Non-sowing start transitions are still planning-only.
-        </p>
-        {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
-        <div className="batch-form-actions">
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3224,6 +3349,63 @@ function BatchesPage() {
             </button>
           ) : null}
           {saveMessage ? <p className="batch-form-message">{saveMessage}</p> : null}
+        </div>
+      </form>
+
+      <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
+        <h3>Create crop</h3>
+        <div className="batch-form-grid">
+          <label>
+            Species
+            <select
+              value={cropCreateValues.speciesId}
+              onChange={(event) => setCropCreateValues((current) => ({ ...current, speciesId: event.target.value }))}
+            >
+              <option value="">Select species</option>
+              {selectableSpecies.map((species) => (
+                <option key={species.speciesId} value={species.speciesId}>
+                  {species.label}
+                </option>
+              ))}
+            </select>
+            {cropCreateErrors.speciesId ? <span className="form-error">{cropCreateErrors.speciesId}</span> : null}
+          </label>
+
+          <label>
+            Cultivar / variety
+            <input
+              type="text"
+              value={cropCreateValues.cultivar}
+              onChange={(event) => setCropCreateValues((current) => ({ ...current, cultivar: event.target.value }))}
+              placeholder="Laura"
+            />
+            {cropCreateErrors.cultivar ? <span className="form-error">{cropCreateErrors.cultivar}</span> : null}
+          </label>
+
+          <label>
+            Aliases (comma-separated)
+            <input
+              type="text"
+              value={cropCreateValues.aliases}
+              onChange={(event) => setCropCreateValues((current) => ({ ...current, aliases: event.target.value }))}
+              placeholder="Optional"
+            />
+          </label>
+
+          <label>
+            Notes
+            <textarea
+              value={cropCreateValues.notes}
+              onChange={(event) => setCropCreateValues((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+            />
+            {cropCreateErrors.notes ? <span className="form-error">{cropCreateErrors.notes}</span> : null}
+          </label>
+        </div>
+        <p className="batch-form-note">Crop creation creates only a cultivar linked to the selected species.</p>
+        <div className="batch-form-actions">
+          <button type="submit">Save crop</button>
+          {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
         </div>
       </form>
 
@@ -3396,7 +3578,7 @@ function BatchesPage() {
         </p>
       </section>
 
-      <form className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
+      <form id="create-species" className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
         <h3>Create species</h3>
         <div className="batch-form-grid">
           <label>
