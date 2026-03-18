@@ -3160,9 +3160,9 @@ function BatchesPage() {
       </div>
 
       <nav className="batch-form-actions" aria-label="Creation flows">
-        <button type="button">Create batch</button>
-        <button type="button">Create crop</button>
-        <button type="button">Create species</button>
+        <button type="button">Batch form</button>
+        <button type="button">Crop form</button>
+        <button type="button">Species form</button>
       </nav>
 
       <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
