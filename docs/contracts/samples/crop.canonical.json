@@ -3,16 +3,6 @@
   "name": "Tomato",
   "cultivar": "San Marzano",
   "speciesId": "species_tomato",
-  "species": {
-    "id": "species_tomato",
-    "commonName": "Tomato",
-    "scientificName": "Solanum lycopersicum",
-    "taxonomy": {
-      "family": "Solanaceae",
-      "genus": "Solanum",
-      "species": "lycopersicum"
-    }
-  },
   "aliases": [
     "Garden Tomato"
   ],

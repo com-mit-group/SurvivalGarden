@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/species.schema.json",
+  "title": "Species",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "commonName",
+    "scientificName"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,118}[A-Za-z0-9])?$"
+    },
+    "commonName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "scientificName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "uniqueItems": true
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "genus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "species": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

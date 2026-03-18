@@ -9,11 +9,28 @@
       "updatedAt": "2026-01-01T08:00:00Z"
     }
   ],
+  "species": [
+    {
+      "id": "species_tomato",
+      "commonName": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "aliases": [
+        "Garden Tomato"
+      ],
+      "notes": "Canonical species record for cultivar-linked tomato crops.",
+      "taxonomy": {
+        "family": "Solanaceae",
+        "genus": "Solanum",
+        "species": "lycopersicum"
+      }
+    }
+  ],
   "crops": [
     {
       "cropId": "crop_tomato",
       "name": "Tomato",
-      "scientificName": "Solanum lycopersicum",
+      "cultivar": "San Marzano",
+      "speciesId": "species_tomato",
       "createdAt": "2026-01-10T09:00:00Z",
       "updatedAt": "2026-02-01T09:00:00Z"
     }

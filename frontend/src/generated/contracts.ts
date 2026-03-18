@@ -167,6 +167,19 @@ export interface CropNutritionItem {
   assumptions: string;
 }
 
+export interface Species {
+  id: string;
+  commonName: string;
+  scientificName: string;
+  aliases?: string[];
+  notes?: string;
+  taxonomy?: {
+    family?: string;
+    genus?: string;
+    species?: string;
+  };
+}
+
 export interface Crop {
   cropId: string;
   name: string;
@@ -325,6 +338,7 @@ export interface AppState {
   schemaVersion: number;
   segments?: Segment[];
   beds: Bed[];
+  species?: Species[];
   crops: Crop[];
   cropPlans: CropPlan[];
   batches: Batch[];
