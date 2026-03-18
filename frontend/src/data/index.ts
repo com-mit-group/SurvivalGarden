@@ -574,7 +574,7 @@ export {
 
 export const parseImportedAppState = (rawPayload: string): AppState => {
   const parsed: unknown = JSON.parse(rawPayload);
-  const migrationResult = migrateLegacyLayoutModel(migrateLegacyCropSemantics(migrateLegacyBedTypes(parsed)));
+  const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
 
   if (migrationResult.report.warnings.length > 0) {
     console.warn('AppState migration warnings', migrationResult.report.warnings);
