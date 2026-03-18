@@ -702,7 +702,7 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     schemaVersion: incomingState.schemaVersion,
     settings: incomingState.settings,
     beds: mergeCollectionById('beds', currentState.beds, incomingState.beds, report),
-    species: mergeCollectionById('species', currentState.species, incomingState.species, report),
+    species: mergeCollectionById('species', currentState.species ?? [], incomingState.species ?? [], report),
     crops: mergeCollectionById('crops', currentState.crops, incomingState.crops, report),
     cropPlans: mergeCollectionById('cropPlans', currentState.cropPlans, incomingState.cropPlans, report),
     batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
