@@ -12,13 +12,13 @@ describe('task.schema.json', () => {
     sourceKey: buildTaskSourceKey(
       'batch',
       '2026-03-01',
-      'crop_tomato',
+      'crop_tomato_san_marzano',
       'bed_001',
       'water',
     ),
     date: '2026-03-01',
     type: 'water',
-    cropId: 'crop_tomato',
+    cropId: 'crop_tomato_san_marzano',
     bedId: 'bed_001',
     batchId: 'batch_2026_03',
     checklist: [{ label: 'Water thoroughly', done: false }],
@@ -60,19 +60,19 @@ describe('task.schema.json', () => {
     const sourceKeyA = buildTaskSourceKey(
       'batch',
       '2026-03-01',
-      'crop_tomato',
+      'crop_tomato_san_marzano',
       'bed_001',
       'water',
     );
     const sourceKeyB = buildTaskSourceKey(
       'batch',
       '2026-03-01',
-      'crop_tomato',
+      'crop_tomato_san_marzano',
       'bed_001',
       'water',
     );
 
-    expect(sourceKeyA).toBe('batch_2026-03-01_crop_tomato_bed_001_water');
+    expect(sourceKeyA).toBe('batch_2026-03-01_crop_tomato_san_marzano_bed_001_water');
     expect(sourceKeyB).toBe(sourceKeyA);
   });
 });

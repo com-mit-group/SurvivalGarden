@@ -97,7 +97,7 @@ describe('crop.schema.json', () => {
 
   it('accepts minimal payload with migration aliases and partial rules', () => {
     const payload = {
-      id: 'crop_garlic',
+      id: 'crop_garlic_unknown_variety',
       commonName: 'Garlic',
       createdAt: '2026-01-01T01:00:00+01:00',
       updatedAt: '2026-01-01T01:00:00+01:00',

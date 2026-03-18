@@ -1,7 +1,7 @@
 {
   "batchId": "batch_tomato_seed_2026",
-  "cropId": "crop_tomato",
-  "variety": "Roma",
+  "cropId": "crop_tomato_san_marzano",
+  "variety": "San Marzano",
   "startedAt": "2026-03-01T08:00:00Z",
   "propagationType": "seed",
   "startMethod": "indoor tray",
@@ -45,7 +45,7 @@
       "assignedAt": "2026-05-01T07:00:00Z"
     }
   ],
-  "notes": "Main spring tomato sowing.",
+  "notes": "Main spring San Marzano tomato sowing.",
   "meta": {
     "confidence": "exact"
   }

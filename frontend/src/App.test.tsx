@@ -959,8 +959,10 @@ describe('App', () => {
           updatedAt: '2026-01-01T00:00:00Z',
         },
         {
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           name: 'Tomato',
+          cultivar: 'San Marzano',
+          speciesId: 'species_tomato',
           companionsGood: [],
           companionsAvoid: [],
           rules: {
@@ -984,7 +986,7 @@ describe('App', () => {
         },
         {
           planId: 'plan_tomato_missing_mass',
-          cropId: 'crop_tomato',
+          cropId: 'crop_tomato_san_marzano',
           seasonYear: 2026,
           plannedWindows: { sowing: [], harvest: [] },
           expectedYield: { amount: 8, unit: 'pieces' },

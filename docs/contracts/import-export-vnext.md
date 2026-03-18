@@ -55,7 +55,7 @@ Before (legacy accepted):
 ```json
 {
   "id": "batch_tomato_2026",
-  "cropId": "crop_tomato",
+  "cropId": "crop_tomato_san_marzano",
   "startedAt": "2026-03-01T08:00:00Z",
   "stage": "seedling",
   "stageEvents": [
@@ -78,7 +78,7 @@ After (canonical export):
 ```json
 {
   "batchId": "batch_tomato_2026",
-  "cropId": "crop_tomato",
+  "cropId": "crop_tomato_san_marzano",
   "startedAt": "2026-03-01T08:00:00Z",
   "currentStage": "seedling",
   "stageEvents": [
@@ -111,8 +111,8 @@ Before (legacy accepted):
 
 ```json
 {
-  "id": "crop_beans",
-  "commonName": "Pole Bean",
+  "id": "crop_beans_unknown_variety",
+  "commonName": "Beans",
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
@@ -122,8 +122,10 @@ After (canonical export):
 
 ```json
 {
-  "cropId": "crop_beans",
-  "name": "Pole Bean",
+  "cropId": "crop_beans_unknown_variety",
+  "name": "Beans",
+  "cultivar": "Unknown variety",
+  "speciesId": "species_beans",
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
