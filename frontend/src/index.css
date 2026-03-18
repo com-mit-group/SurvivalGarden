@@ -643,6 +643,36 @@ textarea {
   color: #6b7280;
 }
 
+.crop-repair-preview {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+}
+
+.crop-repair-impact-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  color: #374151;
+  font-size: 0.84rem;
+}
+
+.crop-repair-preview textarea {
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  font: 0.8rem/1.4 ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  background: #ffffff;
+  color: #111827;
+}
+
 .batch-detail-page {
   width: min(900px, 100%);
   margin: 0 auto;
