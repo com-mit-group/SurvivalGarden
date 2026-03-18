@@ -1048,7 +1048,7 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add new crop' }));
-    fireEvent.change(screen.getByLabelText('Crop (search or type)'), { target: { value: 'Custom Runner' } });
+    fireEvent.change(screen.getByLabelText('Crop'), { target: { value: 'Custom Runner' } });
     fireEvent.change(screen.getByLabelText('New crop category'), { target: { value: 'leafy' } });
     fireEvent.change(screen.getByLabelText('New crop scientific name'), { target: { value: 'Brassica' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create crop' }));
@@ -1057,7 +1057,7 @@ describe('App', () => {
       expect(screen.getByText(/Crop created and selected/)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText('Variety'), { target: { value: 'Early Purple' } });
+    fireEvent.change(screen.getByLabelText('Cultivar label (optional)'), { target: { value: 'Early Purple' } });
     fireEvent.change(screen.getByLabelText('Seed count planned'), { target: { value: '24' } });
     fireEvent.change(screen.getByLabelText('Seed count germinated'), { target: { value: '20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create batch' }));
