@@ -94,10 +94,210 @@ const EPSILON = 1e-9;
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
 const toFiniteNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 const MAX_EXPANDED_FORMULA_POINTS = 5000;
+
+const UNKNOWN_VARIETY_KEY = 'unknown_variety';
+
+const normalizeKey = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/^crop_/, '')
+    .replace(/^species_/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_');
+
+const addKeyVariants = (keys: Set<string>, raw: unknown): void => {
+  const value = asString(raw);
+  if (!value) {
+    return;
+  }
+
+  const normalized = normalizeKey(value);
+  if (!normalized) {
+    return;
+  }
+
+  const variants = new Set<string>([normalized]);
+  normalized.split('_').forEach((part) => {
+    if (!part) {
+      return;
+    }
+
+    variants.add(part);
+    if (part.endsWith('s') && part.length > 1) {
+      variants.add(part.slice(0, -1));
+    } else {
+      variants.add(`${part}s`);
+    }
+  });
+
+  variants.forEach((variant) => {
+    if (variant) {
+      keys.add(variant);
+    }
+  });
+};
+
+const isUnknownVarietyValue = (value: unknown): boolean => {
+  const normalized = normalizeKey(asString(value) ?? '');
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized === 'unknown'
+    || normalized === UNKNOWN_VARIETY_KEY
+    || normalized.startsWith('unknown_');
+};
+
+type CropReferenceCandidate = {
+  cropId: string;
+  cultivarKeys: Set<string>;
+  speciesKeys: Set<string>;
+  placeholder: boolean;
+};
+
+const buildCropReferenceCandidates = (payload: Record<string, unknown>): CropReferenceCandidate[] => {
+  const crops = Array.isArray(payload.crops) ? payload.crops : [];
+
+  return crops.flatMap((crop) => {
+    if (!isObjectRecord(crop) || typeof crop.cropId !== 'string' || crop.cropId.length === 0) {
+      return [];
+    }
+
+    const species = (isObjectRecord(crop.species) ? crop.species : {}) as Record<string, unknown>;
+    const speciesKeys = new Set<string>();
+    addKeyVariants(speciesKeys, crop.cropId);
+    addKeyVariants(speciesKeys, crop.name);
+    addKeyVariants(speciesKeys, crop.speciesId);
+    addKeyVariants(speciesKeys, crop.scientificName);
+    addKeyVariants(speciesKeys, species.id);
+    addKeyVariants(speciesKeys, species.commonName);
+    addKeyVariants(speciesKeys, species.scientificName);
+
+    const cultivarKeys = new Set<string>();
+    addKeyVariants(cultivarKeys, crop.cultivar);
+    addKeyVariants(cultivarKeys, crop.name);
+
+    return [{
+      cropId: crop.cropId,
+      cultivarKeys,
+      speciesKeys,
+      placeholder:
+        isUnknownVarietyValue(crop.cultivar)
+        || normalizeKey(crop.cropId).endsWith(UNKNOWN_VARIETY_KEY)
+        || normalizeKey(asString(crop.name) ?? '') === UNKNOWN_VARIETY_KEY,
+    }];
+  });
+};
+
+const resolveMigratedCropId = (
+  record: Record<string, unknown>,
+  cropsById: Map<string, CropReferenceCandidate>,
+  cropCandidates: CropReferenceCandidate[],
+): string | undefined => {
+  const currentCropId = asString(record.cropId);
+  const preferredVariety = asString(record.variety);
+
+  const existing = currentCropId ? cropsById.get(currentCropId) : undefined;
+  const currentMatchesPreferred =
+    existing
+      ? (preferredVariety && !isUnknownVarietyValue(preferredVariety)
+          ? existing.cultivarKeys.has(normalizeKey(preferredVariety))
+          : !preferredVariety || isUnknownVarietyValue(preferredVariety)
+            ? existing.placeholder
+            : false)
+      : false;
+
+  if (existing && (!preferredVariety || currentMatchesPreferred)) {
+    return currentCropId;
+  }
+
+  const sourceKeys = new Set<string>();
+  addKeyVariants(sourceKeys, currentCropId);
+  addKeyVariants(sourceKeys, record.speciesId);
+  addKeyVariants(sourceKeys, record.scientificName);
+  if (isObjectRecord(record.species)) {
+    const species = record.species;
+    addKeyVariants(sourceKeys, species.id);
+    addKeyVariants(sourceKeys, species.commonName);
+    addKeyVariants(sourceKeys, species.scientificName);
+  }
+
+  const matchingCandidates = cropCandidates.filter((candidate) =>
+    [...sourceKeys].some((key) => candidate.speciesKeys.has(key)),
+  );
+
+  if (matchingCandidates.length === 0) {
+    return currentCropId;
+  }
+
+  if (preferredVariety && !isUnknownVarietyValue(preferredVariety)) {
+    const preferredKey = normalizeKey(preferredVariety);
+    const cultivarMatch = matchingCandidates.find((candidate) => candidate.cultivarKeys.has(preferredKey));
+    if (cultivarMatch) {
+      return cultivarMatch.cropId;
+    }
+  }
+
+  const placeholderMatch = matchingCandidates.find((candidate) => candidate.placeholder);
+  if (placeholderMatch) {
+    return placeholderMatch.cropId;
+  }
+
+  return matchingCandidates[0]?.cropId ?? currentCropId;
+};
+
+const stripLegacyTaxonomyFields = (record: Record<string, unknown>): Record<string, unknown> => {
+  const nextRecord = { ...record };
+  delete nextRecord.scientificName;
+  delete nextRecord.speciesId;
+  delete nextRecord.species;
+  return nextRecord;
+};
+
+const remapLegacyCropReferences = (payload: unknown): unknown => {
+  if (!isObjectRecord(payload)) {
+    return payload;
+  }
+
+  const cropCandidates = buildCropReferenceCandidates(payload);
+  if (cropCandidates.length === 0) {
+    return payload;
+  }
+
+  const cropsById = new Map(cropCandidates.map((candidate) => [candidate.cropId, candidate]));
+
+  const remapCollection = (items: unknown, options?: { stripTaxonomy?: boolean }): unknown =>
+    Array.isArray(items)
+      ? items.map((item) => {
+          if (!isObjectRecord(item)) {
+            return item;
+          }
+
+          const remappedCropId = resolveMigratedCropId(item, cropsById, cropCandidates);
+          const nextItem = {
+            ...(options?.stripTaxonomy ? stripLegacyTaxonomyFields(item) : item),
+            ...(remappedCropId ? { cropId: remappedCropId } : {}),
+          };
+
+          return nextItem;
+        })
+      : items;
+
+  return {
+    ...payload,
+    cropPlans: remapCollection(payload.cropPlans, { stripTaxonomy: true }),
+    batches: remapCollection(payload.batches, { stripTaxonomy: true }),
+  };
+};
 
 type PlacementPoint = { x: number; y: number };
 
@@ -681,18 +881,19 @@ export const validateSchema = <T extends SchemaName>(
   payload: unknown,
 ): ValidationResult<T> => {
   const validator = validators[schemaName];
+  const normalizedPayload = schemaName === 'appState' ? remapLegacyCropReferences(payload) : payload;
 
-  if (validator(payload)) {
-    const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
-    const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
-    const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
+  if (validator(normalizedPayload)) {
+    const geometryIssues = collectSegmentGeometryIssues(schemaName, normalizedPayload);
+    const pathPlacementIssues = collectPathPlacementIssues(schemaName, normalizedPayload);
+    const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, normalizedPayload);
 
     if (
       geometryIssues.length === 0
       && pathPlacementIssues.length === 0
       && cropPlanReferenceIssues.length === 0
     ) {
-      return { ok: true, value: payload };
+      return { ok: true, value: normalizedPayload as SchemaTypeMap[T] };
     }
 
     return {
@@ -702,9 +903,9 @@ export const validateSchema = <T extends SchemaName>(
   }
 
   const issues = (validator.errors || []).map((error) => normalizeError(schemaName, error));
-  const geometryIssues = collectSegmentGeometryIssues(schemaName, payload);
-  const pathPlacementIssues = collectPathPlacementIssues(schemaName, payload);
-  const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, payload);
+  const geometryIssues = collectSegmentGeometryIssues(schemaName, normalizedPayload);
+  const pathPlacementIssues = collectPathPlacementIssues(schemaName, normalizedPayload);
+  const cropPlanReferenceIssues = collectCropPlanReferenceIssues(schemaName, normalizedPayload);
   return {
     ok: false,
     issues: [...issues, ...geometryIssues, ...pathPlacementIssues, ...cropPlanReferenceIssues],
