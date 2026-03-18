@@ -1048,7 +1048,7 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add new crop' }));
-    fireEvent.change(screen.getByLabelText('Crop'), { target: { value: 'Custom Runner' } });
+    fireEvent.change(within(document.getElementById('create-batch') as HTMLElement).getByLabelText('Crop'), { target: { value: 'Custom Runner' } });
     fireEvent.change(screen.getByLabelText('New crop category'), { target: { value: 'leafy' } });
     fireEvent.change(screen.getByLabelText('New crop scientific name'), { target: { value: 'Brassica' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create crop' }));
