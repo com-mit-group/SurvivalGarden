@@ -845,7 +845,7 @@ describe('App', () => {
       },
       crops: [
         {
-          cropId: 'crop_potato',
+          cropId: 'crop_potato_unknown_variety',
           name: 'Potato',
           companionsGood: [],
           companionsAvoid: [],
@@ -863,7 +863,7 @@ describe('App', () => {
           updatedAt: '2026-01-01T00:00:00Z',
         },
         {
-          cropId: 'crop_beans',
+          cropId: 'crop_beans_unknown_variety',
           name: 'Beans',
           companionsGood: [],
           companionsAvoid: [],
@@ -884,14 +884,14 @@ describe('App', () => {
       cropPlans: [
         {
           planId: 'plan_1',
-          cropId: 'crop_potato',
+          cropId: 'crop_potato_unknown_variety',
           seasonYear: 2026,
           plannedWindows: { sowing: [], harvest: [] },
           expectedYield: { amount: 22, unit: 'kg' },
         },
         {
           planId: 'plan_2',
-          cropId: 'crop_beans',
+          cropId: 'crop_beans_unknown_variety',
           seasonYear: 2026,
           plannedWindows: { sowing: [], harvest: [] },
           expectedYield: { amount: 8, unit: 'kg' },

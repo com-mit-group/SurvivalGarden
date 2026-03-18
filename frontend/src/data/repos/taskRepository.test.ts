@@ -21,7 +21,7 @@ const createGenerationScenario = (): AppState => ({
   batches: [
     {
       batchId: 'batch-alpha',
-      cropId: 'crop_potato',
+      cropId: 'crop_potato_unknown_variety',
       startedAt: '2026-03-01T00:00:00Z',
       stage: 'transplant',
       stageEvents: [
@@ -36,7 +36,7 @@ const createGenerationScenario = (): AppState => ({
     },
     {
       batchId: 'batch-beta',
-      cropId: 'crop_carrot',
+      cropId: 'crop_carrot_unknown_variety',
       startedAt: '2026-02-01T00:00:00Z',
       stage: 'harvest',
       stageEvents: [
