@@ -5182,7 +5182,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       }
 
       setPendingCropImportCrops(validCrops);
-      setImportMessage(`Crop import ready: ${validCrops.length} valid crop(s) from ${rawParsed.crops.length}. Confirm to import.`);
+      setImportMessage(`Cultivar taxonomy repair ready: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length}. Confirm to import.`);
       setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
@@ -6058,7 +6058,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         } else {
           setPendingCropImportCrops(validCrops);
           setImportErrors(validationErrors);
-          setImportMessage(`Deep link ready: ${validCrops.length} valid crop(s) from ${rawParsed.crops.length} payload crop(s). Confirm to import.`);
+          setImportMessage(`Deep link taxonomy repair ready: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length} payload crop(s). Confirm to import.`);
         }
       } else if (importType === 'species') {
         const rawParsed = JSON.parse(decodedPayload) as { species?: unknown[] };
@@ -6296,7 +6296,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
       <p>Cultivar import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "id": "...", "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
-      <p>Legacy species-level crop imports are auto-migrated into cultivar records linked to species metadata, using the deterministic placeholder <code>Unknown variety</code> when no cultivar is provided.</p>
+      <p>Legacy species-level or phantom-species crop payloads are treated as taxonomy repairs: the surviving crop should be a cultivar record linked by <code>speciesId</code> to a real top-level species.</p>
+      <p>When variety data is missing, the importer keeps the crop active as a placeholder cultivar using the deterministic label <code>Unknown variety</code> instead of leaving a ghost canonical crop behind.</p>
       <p>Species import endpoint contract: <code>POST /api/import/species</code> with <code>{'{ "species": [ { "id": "species_lettuce", "commonName": "Lettuce", "scientificName": "Lactuca sativa", "aliases": ["Garden lettuce"], "notes": "Cool-season leafy species." } ] }'}</code>.</p>
       <p>Species edit support is available in-app for <code>commonName</code>, <code>scientificName</code>, <code>aliases</code>, and <code>notes</code>; <code>id</code> stays immutable so crop <code>speciesId</code> references remain intact.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
@@ -6376,15 +6377,16 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       {pendingCropImportCrops.length > 0 ? (
         <>
           <section>
-            <h3>Cultivar Import Preview</h3>
+            <h3>Cultivar Taxonomy Repair Preview</h3>
+            <p>Previewing the surviving cultivar records that will remain linked to real species after import.</p>
             <ul>
               {pendingCropImportCrops.slice(0, 5).map((crop) => (
-                <li key={crop.cropId}>Cultivar {(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — species {getCropSpeciesCommonName(crop) || crop.cropId} ({crop.cropId})</li>
+                <li key={crop.cropId}>Cultivar {(crop as Crop & { cultivar?: string }).cultivar ?? crop.name} — real species {getCropSpeciesCommonName(crop) || crop.cropId} ({crop.cropId})</li>
               ))}
             </ul>
           </section>
           <button type="button" onClick={() => void handleConfirmCropImport()} disabled={isImporting}>
-            {isImporting ? 'Importing crops…' : 'Import crops'}
+            {isImporting ? 'Importing cultivar repairs…' : 'Import cultivar repairs'}
           </button>
           <button
             type="button"
@@ -6505,13 +6507,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       ) : null}
       {cropImportStatusSummary ? (
         <section>
-          <h3>Crop Import Summary</h3>
+          <h3>Cultivar Taxonomy Repair Summary</h3>
           <ul>
             <li>imported: {cropImportStatusSummary.imported}</li>
             <li>merged: {cropImportStatusSummary.merged}</li>
             <li>skipped: {cropImportStatusSummary.skipped}</li>
             <li>rejected: {cropImportStatusSummary.rejected}</li>
           </ul>
+          <p>Imported and merged records represent cultivar crops that remain linked to real species metadata; rejected rows need manual cleanup before they can replace phantom canonical crops.</p>
         </section>
       ) : null}
       {speciesImportStatusSummary ? (
