@@ -3073,9 +3073,15 @@ function BatchesPage() {
       </div>
 
       <nav className="batch-form-actions" aria-label="Creation flows">
-        <a href="#create-batch">Create batch</a>
-        <a href="#create-crop">Create crop</a>
-        <a href="#create-species">Create species</a>
+        <button type="button" onClick={() => document.getElementById('create-batch')?.scrollIntoView()}>
+          Create batch
+        </button>
+        <button type="button" onClick={() => document.getElementById('create-crop')?.scrollIntoView()}>
+          Create crop
+        </button>
+        <button type="button" onClick={() => document.getElementById('create-species')?.scrollIntoView()}>
+          Create species
+        </button>
       </nav>
 
       <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
@@ -3206,6 +3212,9 @@ function BatchesPage() {
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
+          <button type="button" onClick={() => document.getElementById('create-crop')?.scrollIntoView()}>
+            Add new crop
+          </button>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
