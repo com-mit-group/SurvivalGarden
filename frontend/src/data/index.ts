@@ -582,6 +582,7 @@ type MergeReportSection = {
 
 type MergeReport = {
   beds: MergeReportSection;
+  species: MergeReportSection;
   crops: MergeReportSection;
   cropPlans: MergeReportSection;
   batches: MergeReportSection;
@@ -591,12 +592,13 @@ type MergeReport = {
   warnings: string[];
 };
 
-type EntityType = 'beds' | 'crops' | 'cropPlans' | 'batches' | 'seedInventoryItems';
+type EntityType = 'beds' | 'species' | 'crops' | 'cropPlans' | 'batches' | 'seedInventoryItems';
 
 const createEmptyMergeReportSection = (): MergeReportSection => ({ added: 0, updated: 0, unchanged: 0 });
 
 const createEmptyMergeReport = (): MergeReport => ({
   beds: createEmptyMergeReportSection(),
+  species: createEmptyMergeReportSection(),
   crops: createEmptyMergeReportSection(),
   cropPlans: createEmptyMergeReportSection(),
   batches: createEmptyMergeReportSection(),
@@ -608,6 +610,7 @@ const createEmptyMergeReport = (): MergeReport => ({
 
 const ENTITY_ID_KEY: Record<EntityType, string> = {
   beds: 'bedId',
+  species: 'id',
   crops: 'cropId',
   cropPlans: 'planId',
   batches: 'batchId',
@@ -699,6 +702,7 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     schemaVersion: incomingState.schemaVersion,
     settings: incomingState.settings,
     beds: mergeCollectionById('beds', currentState.beds, incomingState.beds, report),
+    species: mergeCollectionById('species', currentState.species, incomingState.species, report),
     crops: mergeCollectionById('crops', currentState.crops, incomingState.crops, report),
     cropPlans: mergeCollectionById('cropPlans', currentState.cropPlans, incomingState.cropPlans, report),
     batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
