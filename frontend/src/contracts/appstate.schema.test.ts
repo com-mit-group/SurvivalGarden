@@ -18,6 +18,7 @@ import pathSchema from './path.schema.json';
 import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import segmentSchema from './segment.schema.json';
 import settingsSchema from './settings.schema.json';
+import speciesSchema from './species.schema.json';
 import taskSchema from './task.schema.json';
 import type { AppState } from '../generated/contracts';
 import { normalizeBatchesWithReport } from '../data/repos/batchRepository';
@@ -82,6 +83,7 @@ describe('AppState schema', () => {
     ajv.addSchema(taskSchema);
     ajv.addSchema(seedInventoryItemSchema);
     ajv.addSchema(settingsSchema);
+    ajv.addSchema(speciesSchema);
     return ajv.compile(appStateSchema);
   };
 
@@ -98,6 +100,13 @@ describe('AppState schema', () => {
           type: 'vegetable_bed',
           createdAt: '2026-01-05T00:00:00Z',
           updatedAt: '2026-01-05T00:00:00Z',
+        },
+      ],
+      species: [
+        {
+          id: 'species_tomato',
+          commonName: 'Tomato',
+          scientificName: 'Solanum lycopersicum',
         },
       ],
       crops: [

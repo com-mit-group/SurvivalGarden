@@ -59,10 +59,12 @@
       "description": "Cultivar or variety name for this crop record."
     },
     "speciesId": {
-      "$ref": "#/$defs/id"
+      "$ref": "#/$defs/id",
+      "description": "Reference to a top-level species record for this cultivar/crop."
     },
     "species": {
       "type": "object",
+      "description": "Deprecated compatibility-only embedded species payload for migration.",
       "additionalProperties": false,
       "required": [
         "commonName",
@@ -109,11 +111,11 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 160,
-      "description": "Migration alias for species.scientificName."
+      "description": "Deprecated migration alias for species.scientificName."
     },
     "taxonomy": {
       "type": "object",
-      "description": "Migration alias for species.taxonomy.",
+      "description": "Deprecated migration alias for species.taxonomy.",
       "additionalProperties": false,
       "properties": {
         "family": {

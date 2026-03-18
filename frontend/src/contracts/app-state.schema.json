@@ -31,6 +31,12 @@
         "$ref": "https://survivalgarden/contracts/segment.schema.json"
       }
     },
+    "species": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/species.schema.json"
+      }
+    },
     "crops": {
       "type": "array",
       "items": {

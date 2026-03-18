@@ -7,6 +7,7 @@ import pathSchema from './path.schema.json';
 import seedInventoryItemSchema from './seed-inventory-item.schema.json';
 import segmentSchema from './segment.schema.json';
 import settingsSchema from './settings.schema.json';
+import speciesSchema from './species.schema.json';
 import taskSchema from './task.schema.json';
 
 export {
@@ -19,6 +20,7 @@ export {
   seedInventoryItemSchema,
   segmentSchema,
   settingsSchema,
+  speciesSchema,
   taskSchema,
 };
 

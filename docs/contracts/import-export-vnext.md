@@ -7,6 +7,7 @@ This document defines the canonical import/export contract for vNext and provide
 - `frontend/src/contracts/app-state.schema.json`
 - `frontend/src/contracts/crop.schema.json`
 - `frontend/src/contracts/batch.schema.json`
+- `frontend/src/contracts/species.schema.json`
 - `frontend/src/contracts/task.schema.json`
 
 Canonical samples:
@@ -28,7 +29,8 @@ Canonical samples:
 ## vNext schema evolution notes
 
 - Canonical vNext payloads use `AppState.schemaVersion = 2`.
-- Crop now supports richer metadata (`scientificName`, `taxonomy`, `aliases`, `isUserDefined`).
+- Species is now a top-level collection for normalized taxonomy and future enrichment.
+- Crop now supports cultivar-oriented metadata and `speciesId` references; legacy taxonomy fields on Crop are compatibility-only for migration.
 - Crop also supports **partial records** for staged data entry/sync: only identity (`cropId` or `id`, `name` or `commonName`) plus timestamps are required.
 - `rules`, `taskRules`, and `nutritionProfile` are optional and may be omitted for user-defined crops.
 - Batch modeling shifts from implicit nested legacy structures to explicit event/quantity fields:
@@ -42,6 +44,7 @@ Canonical samples:
   - `batch.id` (alias of `batchId`)
   - `crop.id` (alias of `cropId`)
   - `crop.commonName` (alias of `name`)
+- `crop.scientificName` / `crop.taxonomy` / `crop.species` remain accepted as deprecated compatibility fields during migration
 
 ## Migration mapping examples (before/after)
 

@@ -10,6 +10,7 @@ import {
   seedInventoryItemSchema,
   segmentSchema,
   settingsSchema,
+  speciesSchema,
   taskSchema,
 } from '../../contracts';
 import type {
@@ -85,6 +86,7 @@ ajv.addSchema(taskSchema);
 ajv.addSchema(seedInventoryItemSchema);
 ajv.addSchema(segmentSchema);
 ajv.addSchema(settingsSchema);
+ajv.addSchema(speciesSchema);
 
 
 const EPSILON = 1e-9;
