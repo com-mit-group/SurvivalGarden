@@ -3404,7 +3404,7 @@ function BatchesPage() {
         </div>
         <p className="batch-form-note">Crop creation creates only a cultivar linked to the selected species.</p>
         <div className="batch-form-actions">
-          <button type="submit">Create crop</button>
+          <button type="submit">Save crop</button>
           {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
         </div>
       </form>
