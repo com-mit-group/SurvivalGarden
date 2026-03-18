@@ -129,6 +129,12 @@ After (canonical export):
 }
 ```
 
+Taxonomy repair note:
+
+- Legacy species-level or phantom-species crop payloads should be normalized into cultivar records that reference a real top-level `Species` via `speciesId`.
+- When a cultivar is unknown but the species is deterministic, preserve the record as a placeholder cultivar such as `Unknown variety` rather than keeping a ghost canonical crop active.
+- Ambiguous historical payloads should surface warnings for explicit cleanup instead of silently guessing a cultivar.
+
 ### 3) Partial user-defined crop (canonical)
 
 ```json
