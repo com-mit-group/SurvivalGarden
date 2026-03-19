@@ -467,8 +467,35 @@ export {
   assertValid,
 } from './validation';
 
+const normalizeImportedSpeciesRecords = (payload: unknown): unknown => {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  const record = payload as Record<string, unknown>;
+  if (!Array.isArray(record.species)) {
+    return payload;
+  }
+
+  return {
+    ...record,
+    species: record.species.map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return entry;
+      }
+
+      const species = { ...(entry as Record<string, unknown>) };
+      if (typeof species.commonName !== 'string' || species.commonName.trim().length === 0) {
+        delete species.commonName;
+      }
+
+      return species;
+    }),
+  };
+};
+
 export const parseImportedAppState = (rawPayload: string): AppState => {
-  const parsed: unknown = JSON.parse(rawPayload);
+  const parsed: unknown = normalizeImportedSpeciesRecords(JSON.parse(rawPayload));
   const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
 
   if (migrationResult.report.warnings.length > 0) {

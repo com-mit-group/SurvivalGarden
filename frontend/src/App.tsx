@@ -1823,7 +1823,7 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
     return `${crop.name} (${crop.scientificName})`;
   }
 
-  return crop.name ?? crop.cropId;
+  return crop.name ?? crop.scientificName ?? crop.cropId;
 };
 
 const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
@@ -2324,7 +2324,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
       return {
         ...current,
-        id: createUniqueSpeciesId(current.commonName, Object.keys(speciesById)),
+        id: createUniqueSpeciesId(current.commonName || current.scientificName, Object.keys(speciesById)),
       };
     });
   }, [speciesById]);
@@ -2364,11 +2364,15 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             {
               ...crop,
               speciesId: replacementSpecies.id,
-              species: {
-                id: replacementSpecies.id,
-                commonName: replacementSpecies.commonName,
-                scientificName: replacementSpecies.scientificName,
-              },
+              ...(replacementSpecies.commonName && replacementSpecies.scientificName
+                ? {
+                    species: {
+                      id: replacementSpecies.id,
+                      commonName: replacementSpecies.commonName,
+                      scientificName: replacementSpecies.scientificName,
+                    },
+                  }
+                : {}),
               updatedAt: new Date().toISOString(),
             },
           ],
@@ -2537,10 +2541,6 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
     const aliases = parseCsvUnique(speciesEditValues.aliases);
     const notes = speciesEditValues.notes.trim();
 
-    if (!commonName) {
-      errors.commonName = 'Common name is required.';
-    }
-
     if (scientificName.length > 160) {
       errors.scientificName = 'Scientific name must be 160 characters or fewer.';
     }
@@ -2571,11 +2571,23 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       const nextSpecies: Species = {
         ...existingSpecies,
         id: existingSpecies.id,
-        commonName,
-        scientificName,
+        ...(commonName ? { commonName } : {}),
+        ...(scientificName ? { scientificName } : {}),
         ...(aliases.length > 0 ? { aliases } : {}),
         ...(notes ? { notes } : {}),
       };
+      if (!commonName) {
+        delete (nextSpecies as { commonName?: string }).commonName;
+      }
+      if (!scientificName) {
+        delete (nextSpecies as { scientificName?: string }).scientificName;
+      }
+      if (aliases.length === 0) {
+        delete (nextSpecies as { aliases?: string[] }).aliases;
+      }
+      if (!notes) {
+        delete (nextSpecies as { notes?: string }).notes;
+      }
       const nextSpeciesCollection = (appState.species ?? []).map((entry) => (entry.id === existingSpecies.id ? nextSpecies : entry));
       const nextState = assertValid('appState', {
         ...appState,
@@ -2633,12 +2645,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
     const scientificName = speciesCreateValues.scientificName.trim();
     const aliases = parseCsvUnique(speciesCreateValues.aliases);
     const notes = speciesCreateValues.notes.trim();
-    const normalizedId = normalizeSpeciesIdInput(speciesCreateValues.id) || createUniqueSpeciesId(commonName, Object.keys(speciesById));
+    const normalizedId = normalizeSpeciesIdInput(speciesCreateValues.id) || createUniqueSpeciesId(commonName || scientificName, Object.keys(speciesById));
     const speciesId = normalizedId.startsWith('species_') ? normalizedId : `species_${normalizedId}`;
-
-    if (!commonName) {
-      errors.commonName = 'Common name is required.';
-    }
 
     if (!speciesId) {
       errors.id = 'Species ID is required.';
@@ -2676,7 +2684,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
       const nextSpecies: Species = {
         id: speciesId,
-        commonName,
+        ...(commonName ? { commonName } : {}),
         ...(scientificName ? { scientificName } : {}),
         ...(aliases.length > 0 ? { aliases } : {}),
         ...(notes ? { notes } : {}),
@@ -2811,11 +2819,15 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         cultivar,
         speciesId: species.id,
         ...(aliases.length > 0 ? { aliases } : {}),
-        species: {
-          id: species.id,
-          commonName: species.commonName,
-          ...(species.scientificName ? { scientificName: species.scientificName } : {}),
-        },
+        ...(species.commonName && species.scientificName
+          ? {
+              species: {
+                id: species.id,
+                commonName: species.commonName,
+                scientificName: species.scientificName,
+              },
+            }
+          : {}),
         ...(notes ? { meta: { notes } } : {}),
         isUserDefined: true,
         createdAt,
@@ -3527,15 +3539,16 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
 
           <label>
-            Common name
+            Common name (optional)
             <input
+              aria-label="Common name"
               type="text"
               value={speciesCreateValues.commonName}
               onChange={(event) =>
                 setSpeciesCreateValues((current) => ({
                   ...current,
                   commonName: event.target.value,
-                  id: current.id.trim() ? current.id : createUniqueSpeciesId(event.target.value, Object.keys(speciesById)),
+                  id: current.id.trim() ? current.id : createUniqueSpeciesId(event.target.value || current.scientificName, Object.keys(speciesById)),
                 }))}
             />
             {speciesCreateErrors.commonName ? <span className="form-error">{speciesCreateErrors.commonName}</span> : null}
@@ -3546,7 +3559,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             <input
               type="text"
               value={speciesCreateValues.scientificName}
-              onChange={(event) => setSpeciesCreateValues((current) => ({ ...current, scientificName: event.target.value }))}
+              onChange={(event) =>
+                setSpeciesCreateValues((current) => ({
+                  ...current,
+                  scientificName: event.target.value,
+                  id: current.id.trim() ? current.id : createUniqueSpeciesId(current.commonName || event.target.value, Object.keys(speciesById)),
+                }))}
             />
             {speciesCreateErrors.scientificName ? <span className="form-error">{speciesCreateErrors.scientificName}</span> : null}
           </label>
@@ -3597,8 +3615,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
 
           <label>
-            Common name
+            Common name (optional)
             <input
+              aria-label="Common name"
               type="text"
               value={speciesEditValues.commonName}
               onChange={(event) => setSpeciesEditValues((current) => ({ ...current, commonName: event.target.value }))}
@@ -5833,7 +5852,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
         const mergedSpecies: Species = {
           ...currentSpecies,
-          commonName: incomingSpecies.commonName,
+          ...((incomingSpecies.commonName ?? currentSpecies.commonName) !== undefined
+            ? { commonName: incomingSpecies.commonName ?? currentSpecies.commonName }
+            : {}),
           ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
             ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
             : {}),
@@ -6531,7 +6552,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             <ul>
               {pendingSpeciesImportSpecies.slice(0, 5).map((species) => (
                 <li key={species.id}>
-                  {species.commonName} {species.scientificName ? `(${species.scientificName}) ` : ''}— {species.id}
+                  {formatCropOptionLabel({ cropId: species.id, name: species.commonName, scientificName: species.scientificName })} — {species.id}
                 </li>
               ))}
             </ul>

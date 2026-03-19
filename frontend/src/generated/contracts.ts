@@ -169,7 +169,7 @@ export interface CropNutritionItem {
 
 export interface Species {
   id: string;
-  commonName: string;
+  commonName?: string;
   scientificName?: string;
   aliases?: string[];
   notes?: string;
