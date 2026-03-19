@@ -85,7 +85,7 @@ describe('App', () => {
 
 
   it('renders recovery mode and requires explicit reset confirmation', async () => {
-    render(<RecoveryScreen error={new Error('corrupt state')} onRetry={vi.fn()} />);
+    render(<RecoveryScreen error={new Error('corrupt state')} onRetry={vi.fn()} showDevResetButton />);
 
     expect(screen.getByRole('heading', { name: 'Recovery mode' })).toBeInTheDocument();
     const resetButton = screen.getByRole('button', { name: 'Restore golden dataset' });
@@ -123,6 +123,13 @@ describe('App', () => {
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(resetToGoldenDataset).not.toHaveBeenCalled();
+  });
+
+  it('hides recovery reset action when flag-backed prop is disabled', () => {
+    render(<RecoveryScreen error={new Error('fail')} onRetry={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Restore golden dataset' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /I understand this will replace local data/i })).not.toBeInTheDocument();
   });
 
   it('renders the app title and primary navigation', () => {
@@ -270,6 +277,34 @@ describe('App', () => {
 
     expect(resetToGoldenDataset).toHaveBeenCalledTimes(1);
     expect(initializeAppStateStorage).toHaveBeenCalled();
+  });
+
+  it('hides taxonomy repair flow when flag is disabled', async () => {
+    render(
+      <MemoryRouter initialEntries={['/taxonomy']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create crop' })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Repair crop taxonomy' })).not.toBeInTheDocument();
+  });
+
+  it('shows taxonomy repair flow when flag is enabled', async () => {
+    vi.stubEnv('VITE_ENABLE_DEV_RESET', 'true');
+
+    render(
+      <MemoryRouter initialEntries={['/taxonomy']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Repair crop taxonomy' })).toBeInTheDocument();
+    });
   });
 
   it('exports JSON from current app state and triggers download', async () => {
