@@ -277,7 +277,7 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
 
   const cropsById = new Map(cropCandidates.map((candidate) => [candidate.cropId, candidate]));
 
-  const remapCollection = (items: unknown, options?: { stripTaxonomy?: boolean; batchCultivarLink?: boolean }): unknown =>
+  const remapCollection = (items: unknown, options?: { stripTaxonomy?: boolean }): unknown =>
     Array.isArray(items)
       ? items.map((item) => {
           if (!isObjectRecord(item)) {
@@ -288,7 +288,6 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
           const nextItem = {
             ...(options?.stripTaxonomy ? stripLegacyTaxonomyFields(item) : item),
             ...(remappedCropId ? { cropId: remappedCropId } : {}),
-            ...(options?.batchCultivarLink ? { cultivarId: asString(item.cultivarId) ?? remappedCropId } : {}),
           };
 
           return nextItem;
@@ -298,7 +297,7 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
   return {
     ...payload,
     cropPlans: remapCollection(payload.cropPlans, { stripTaxonomy: true }),
-    batches: remapCollection(payload.batches, { stripTaxonomy: true, batchCultivarLink: true }),
+    batches: remapCollection(payload.batches, { stripTaxonomy: true }),
   };
 };
 
