@@ -1030,15 +1030,15 @@ function BedDetailPage() {
                 <div className="bed-detail-batch-head">
                   <Link to={`/batches/${batch.batchId}`}>
                     <CropIdentityLabel
-                      cropId={batch.cropId || batch.batchId}
-                      name={cropNames[batch.cropId]}
-                      scientificName={cropScientificNames[batch.cropId]}
+                      cropId={batch.cultivarId ?? batch.cropId ?? batch.batchId}
+                      name={cropNames[batch.cultivarId ?? batch.cropId ?? '']}
+                      scientificName={cropScientificNames[batch.cultivarId ?? batch.cropId ?? '']}
                     />
                   </Link>
                   <span className="crop-capability-badges" aria-label="Crop capabilities">
                     {getCropCapabilityLabels({
-                      isUserDefined: userDefinedCropIds[batch.cropId],
-                      hasTaskRules: cropHasTaskRules[batch.cropId],
+                      isUserDefined: userDefinedCropIds[batch.cultivarId ?? batch.cropId ?? ''],
+                      hasTaskRules: cropHasTaskRules[batch.cultivarId ?? batch.cropId ?? ''],
                     }).map((label) => (
                       <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
                         {label}
@@ -2358,7 +2358,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         scientificName: replacementSpecies.scientificName,
       });
       const cropPlanCount = appState.cropPlans.filter((plan) => plan.cropId === crop.cropId).length;
-      const batchCount = appState.batches.filter((batch) => batch.cropId === crop.cropId).length;
+      const batchCount = appState.batches.filter((batch) => (batch.cultivarId ?? batch.cropId) === crop.cropId).length;
       const importPayload = JSON.stringify(
         {
           crops: [
@@ -2731,9 +2731,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
     setFormValues({
       cropInput: formatCropOptionLabel({
-        cropId: batch.cropId,
-        name: cropNames[batch.cropId],
-        scientificName: cropScientificNames[batch.cropId],
+        cropId: batch.cultivarId ?? batch.cropId ?? batch.batchId,
+        name: cropNames[batch.cultivarId ?? batch.cropId ?? ''],
+        scientificName: cropScientificNames[batch.cultivarId ?? batch.cropId ?? ''],
       }),
       cropCategory: '',
       cropScientificName: '',
@@ -2886,12 +2886,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
     event.preventDefault();
     setSaveMessage(null);
     const errors: Record<string, string> = {};
-    const resolvedCropId = resolveCropIdFromInput(formValues.cropInput);
+    const resolvedCultivarId = resolveCropIdFromInput(formValues.cropInput);
 
     if (!formValues.cropInput.trim()) {
-      errors.cropInput = 'Select an existing crop record.';
-    } else if (!resolvedCropId) {
-      errors.cropInput = 'Select an existing crop record before creating a batch.';
+      errors.cropInput = 'Select an existing cultivar record.';
+    } else if (!resolvedCultivarId) {
+      errors.cropInput = 'Select an existing cultivar record before creating a batch.';
     }
 
     if (!formValues.startedAt) {
@@ -2967,8 +2967,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         return;
       }
 
-      if (!resolvedCropId) {
-        setSaveMessage('Unable to save because crop is not selected.');
+      if (!resolvedCultivarId) {
+        setSaveMessage('Unable to save because cultivar is not selected.');
         return;
       }
 
@@ -2990,7 +2990,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
       const nextBatch: Batch = {
         batchId,
-        cropId: resolvedCropId,
+        cultivarId: resolvedCultivarId,
+        cropId: resolvedCultivarId,
         ...(trimmedVariety ? { variety: trimmedVariety } : {}),
         startedAt,
         stage: existingBatch?.stage ?? 'sowing',
@@ -3026,8 +3027,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         const issueErrors: Record<string, string> = {};
 
         for (const issue of error.issues) {
-          if (issue.path.includes('/cropId')) {
-            issueErrors.cropInput = 'Choose a valid crop record.';
+          if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+            issueErrors.cropInput = 'Choose a valid cultivar record.';
           }
           if (issue.path.includes('/startedAt')) {
             issueErrors.startedAt = 'Enter a valid date and time.';
@@ -3064,7 +3065,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         <>
           <div className="batch-filters">
             <label>
-              Crop type
+              Cultivar
               <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
                 <option value="">All</option>
                 {cropOptions.map((crop) => (
@@ -3125,12 +3126,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
         <div className="batch-form-grid">
           <label>
-            Crop
+            Cultivar
             <input
               list="batch-crop-options"
               value={formValues.cropInput}
               onChange={(event) => setFormValues((current) => ({ ...current, cropInput: event.target.value }))}
-              placeholder="Common (Scientific)"
+              placeholder="Cultivar (Species)"
             />
             <datalist id="batch-crop-options">
               {cropInputOptions.map((crop) => (
@@ -3280,11 +3281,11 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation links directly to an existing crop type record. Use the dedicated taxonomy tab for species and crop type setup before creating batches. Non-sowing start transitions are still planning-only.
+          Batch creation links directly to an existing cultivar record, which can then resolve back through crop type and species metadata for display. Use taxonomy and inventory screens to prepare those reusable records before creating batches. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
+          <Link to="/seed-inventory">Open cultivar inventory</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3675,14 +3676,14 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
                 <div>
                   <p className="batch-item-title">
                     <CropIdentityLabel
-                      cropId={batch.cropId}
-                      name={cropNames[batch.cropId]}
-                      scientificName={cropScientificNames[batch.cropId]}
+                      cropId={batch.cultivarId ?? batch.cropId}
+                      name={cropNames[batch.cultivarId ?? batch.cropId ?? '']}
+                      scientificName={cropScientificNames[batch.cultivarId ?? batch.cropId ?? '']}
                     />
                     <span className="crop-capability-badges" aria-label="Crop capabilities">
                       {getCropCapabilityLabels({
-                        isUserDefined: userDefinedCropIds[batch.cropId],
-                        hasTaskRules: cropHasTaskRules[batch.cropId],
+                        isUserDefined: userDefinedCropIds[batch.cultivarId ?? batch.cropId ?? ''],
+                        hasTaskRules: cropHasTaskRules[batch.cultivarId ?? batch.cropId ?? ''],
                       }).map((label) => (
                         <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
                           {label}
@@ -3775,7 +3776,7 @@ function BatchDetailPage() {
         return;
       }
 
-      const crop = appState.crops.find((candidate) => candidate.cropId === nextBatch.cropId);
+      const crop = appState.crops.find((candidate) => candidate.cropId === (nextBatch.cultivarId ?? nextBatch.cropId));
       setCropName(crop?.name ?? null);
       setCropScientificName(crop ? getCropSpeciesScientificName(crop, buildSpeciesLookup(appState.species)) || null : null);
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
@@ -4228,7 +4229,7 @@ function BatchDetailPage() {
         ← Back to batches
       </Link>
       <h2>
-        <CropIdentityLabel cropId={batch.cropId} name={cropName ?? undefined} scientificName={cropScientificName ?? undefined} />
+        <CropIdentityLabel cropId={batch.cultivarId ?? batch.cropId} name={cropName ?? undefined} scientificName={cropScientificName ?? undefined} />
       </h2>
       <p className="crop-capability-badges" aria-label="Crop capabilities">
         {getCropCapabilityLabels({ isUserDefined: cropIsUserDefined, hasTaskRules: cropHasTaskRules }).map((label) => (
@@ -4247,8 +4248,8 @@ function BatchDetailPage() {
               <dd>{batch.batchId}</dd>
             </div>
             <div>
-              <dt>Crop ID</dt>
-              <dd>{batch.cropId}</dd>
+              <dt>Cultivar ID</dt>
+              <dd>{batch.cultivarId ?? batch.cropId}</dd>
             </div>
             <div>
               <dt>Stage</dt>

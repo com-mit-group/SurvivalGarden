@@ -56,7 +56,9 @@ export interface BatchStartQuantity {
 
 export interface Batch {
   batchId: string;
-  cropId: string;
+  cultivarId: string;
+  cropId?: string;
+  cropTypeId?: string;
   variety?: string;
   startedAt: string;
   propagationType?: BatchPropagationType;
