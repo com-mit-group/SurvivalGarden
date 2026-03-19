@@ -144,22 +144,25 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
     warnings.push({ batchId, code: 'bed_assignments_alias_mapped', message: 'Mapped bedAssignments alias to assignments.' });
   }
 
-  const cultivarId = candidate.cultivarId ?? candidate.cropId;
-
-  if (!asString(candidate.cultivarId) && asString(candidate.cropId)) {
-    warnings.push({ batchId, code: 'legacy_crop_id_mapped', message: 'Mapped legacy cropId to cultivarId.' });
-  }
-
   const normalized: Record<string, unknown> = {
     batchId: candidate.batchId ?? candidate.id,
-    cultivarId,
-    cropId: candidate.cropId ?? candidate.cultivarId,
-    cropTypeId: candidate.cropTypeId,
     startedAt: canonicalStart,
     stage,
     stageEvents,
     assignments,
   };
+
+  if (candidate.cultivarId !== undefined) {
+    normalized.cultivarId = candidate.cultivarId;
+  }
+
+  if (candidate.cropId !== undefined) {
+    normalized.cropId = candidate.cropId;
+  }
+
+  if (candidate.cropTypeId !== undefined) {
+    normalized.cropTypeId = candidate.cropTypeId;
+  }
 
   if (candidate.currentStage !== undefined || forMigrationReport) {
     normalized.currentStage = asString(candidate.currentStage) ?? stage;

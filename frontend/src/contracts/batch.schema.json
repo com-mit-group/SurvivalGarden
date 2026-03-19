@@ -6,11 +6,18 @@
   "additionalProperties": false,
   "required": [
     "batchId",
-    "cultivarId",
     "startedAt",
     "stage",
     "stageEvents",
     "assignments"
+  ],
+  "anyOf": [
+    {
+      "required": ["cultivarId"]
+    },
+    {
+      "required": ["cropId"]
+    }
   ],
   "properties": {
     "id": {

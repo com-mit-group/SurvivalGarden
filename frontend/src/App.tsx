@@ -3285,7 +3285,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/seed-inventory">Open cultivar inventory</Link>
+          <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
