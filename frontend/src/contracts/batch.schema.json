@@ -6,11 +6,24 @@
   "additionalProperties": false,
   "required": [
     "batchId",
-    "cropId",
     "startedAt",
     "stage",
     "stageEvents",
     "assignments"
+  ],
+  "anyOf": [
+    {
+      "required": ["cultivarId"],
+      "properties": {
+        "cultivarId": {}
+      }
+    },
+    {
+      "required": ["cropId"],
+      "properties": {
+        "cropId": {}
+      }
+    }
   ],
   "properties": {
     "id": {
@@ -20,8 +33,17 @@
     "batchId": {
       "$ref": "#/$defs/id"
     },
+    "cultivarId": {
+      "$ref": "#/$defs/id",
+      "description": "Canonical reference to the cultivar record represented by this batch."
+    },
     "cropId": {
-      "$ref": "#/$defs/id"
+      "$ref": "#/$defs/id",
+      "description": "Legacy migration alias for cultivarId."
+    },
+    "cropTypeId": {
+      "$ref": "#/$defs/id",
+      "description": "Optional denormalized crop type reference resolved from the selected cultivar."
     },
     "variety": {
       "type": "string",

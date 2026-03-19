@@ -791,8 +791,9 @@ const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown
       return;
     }
 
-    if (typeof batch.cropId === 'string' && !cropIds.has(batch.cropId)) {
-      pushInvalidRef(`/batches/${batchIndex}/cropId`, `batch references unknown cropId '${batch.cropId}'`);
+    const batchCultivarId = typeof batch.cultivarId === 'string' ? batch.cultivarId : typeof batch.cropId === 'string' ? batch.cropId : null;
+    if (batchCultivarId && !cropIds.has(batchCultivarId)) {
+      pushInvalidRef(`/batches/${batchIndex}/cultivarId`, `batch references unknown cultivarId '${batchCultivarId}'`);
     }
 
     const checkAssignments = (assignmentKey: 'assignments' | 'bedAssignments') => {

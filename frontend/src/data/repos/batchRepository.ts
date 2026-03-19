@@ -5,6 +5,7 @@ import type { BatchListFilter, ListQuery } from './interfaces';
 
 
 export type BatchMigrationWarningCode =
+  | 'legacy_crop_id_mapped'
   | 'legacy_variety_cultivar'
   | 'legacy_counts_mapped'
   | 'legacy_start_mapped'
@@ -145,12 +146,23 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
 
   const normalized: Record<string, unknown> = {
     batchId: candidate.batchId ?? candidate.id,
-    cropId: candidate.cropId,
     startedAt: canonicalStart,
     stage,
     stageEvents,
     assignments,
   };
+
+  if (candidate.cultivarId !== undefined) {
+    normalized.cultivarId = candidate.cultivarId;
+  }
+
+  if (candidate.cropId !== undefined) {
+    normalized.cropId = candidate.cropId;
+  }
+
+  if (candidate.cropTypeId !== undefined) {
+    normalized.cropTypeId = candidate.cropTypeId;
+  }
 
   if (candidate.currentStage !== undefined || forMigrationReport) {
     normalized.currentStage = asString(candidate.currentStage) ?? stage;
@@ -491,7 +503,7 @@ export const listBatchesFromAppState = (
         return false;
       }
 
-      if (filter.cropId && batch.cropId !== filter.cropId) {
+      if (filter.cropId && batch.cultivarId !== filter.cropId && batch.cropId !== filter.cropId) {
         return false;
       }
 
