@@ -287,10 +287,10 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Create crop' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Create crop type' })).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('heading', { name: 'Repair crop taxonomy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Repair crop type taxonomy' })).not.toBeInTheDocument();
   });
 
   it('shows taxonomy repair flow when flag is enabled', async () => {
@@ -303,7 +303,7 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Repair crop taxonomy' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Repair crop type taxonomy' })).toBeInTheDocument();
     });
   });
 
@@ -1155,7 +1155,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Add new crop' })).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('link', { name: 'Open taxonomy crop form' })).toHaveAttribute('href', '/taxonomy#create-crop');
+    expect(screen.getByRole('link', { name: 'Open crop type taxonomy form' })).toHaveAttribute('href', '/taxonomy#create-crop');
   });
 
   it('shows crop cultivar editing on batches instead of taxonomy', async () => {
@@ -1207,9 +1207,9 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Edit crop cultivar metadata' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Edit crop type metadata' })).toBeInTheDocument();
     });
-    expect(screen.getByRole('link', { name: 'Edit crop metadata' })).toHaveAttribute('href', '/batches#edit-crop');
+    expect(screen.getByRole('link', { name: 'Edit crop type metadata' })).toHaveAttribute('href', '/batches#edit-crop');
 
     unmount();
 
@@ -1220,9 +1220,9 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Create crop' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Create crop type' })).toBeInTheDocument();
     });
-    expect(screen.queryByRole('heading', { name: 'Edit crop cultivar metadata' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Edit crop type metadata' })).not.toBeInTheDocument();
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {

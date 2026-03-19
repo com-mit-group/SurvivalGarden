@@ -30,7 +30,8 @@ Canonical samples:
 
 - Canonical vNext payloads use `AppState.schemaVersion = 2`.
 - Species is now a top-level collection for normalized taxonomy and future enrichment.
-- Crop now supports cultivar-oriented metadata and `speciesId` references; legacy taxonomy fields on Crop are compatibility-only for migration.
+- Crop is the current persisted identifier for the middle taxonomy layer, but semantically it represents a **crop type** (an agricultural/garden crop form under a species, such as broccoli or kohlrabi).
+- Multiple crop records may reference the same `speciesId`; legacy taxonomy fields on Crop remain compatibility-only during migration to explicit crop-type wording.
 - Crop also supports **partial records** for staged data entry/sync: only identity (`cropId` or `id`, `name` or `commonName`) plus timestamps are required.
 - `rules`, `taskRules`, and `nutritionProfile` are optional and may be omitted for user-defined crops.
 - Batch modeling shifts from implicit nested legacy structures to explicit event/quantity fields:
