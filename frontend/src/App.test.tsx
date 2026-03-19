@@ -1123,6 +1123,73 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Open taxonomy crop form' })).toHaveAttribute('href', '/taxonomy#create-crop');
   });
 
+  it('shows crop cultivar editing on batches instead of taxonomy', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      species: [
+        {
+          id: 'species_potato',
+          commonName: 'Potato',
+          scientificName: 'Solanum tuberosum',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      crops: [
+        {
+          cropId: 'crop_user_agria',
+          name: 'Agria',
+          cultivar: 'Agria',
+          speciesId: 'species_potato',
+          species: {
+            id: 'species_potato',
+            commonName: 'Potato',
+            scientificName: 'Solanum tuberosum',
+          },
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      cropPlans: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-US',
+        timezone: 'UTC',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    } as never);
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Edit crop cultivar metadata' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('link', { name: 'Edit crop metadata' })).toHaveAttribute('href', '/batches#edit-crop');
+
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={['/taxonomy']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create crop' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit crop cultivar metadata' })).not.toBeInTheDocument();
+  });
+
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
