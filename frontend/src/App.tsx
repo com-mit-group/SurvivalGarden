@@ -2465,7 +2465,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       const speciesScientificName = cropEditValues.speciesScientificName.trim();
       const speciesId = cropEditValues.speciesId.trim();
 
-      const nextCrop: Crop & { cultivarGroup?: string } = {
+      const nextCrop: Crop & { cultivarGroup?: string; meta?: Record<string, unknown> } = {
         ...existingCrop,
         cropId: existingCrop.cropId,
         name: cultivar,
