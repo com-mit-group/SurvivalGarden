@@ -9,6 +9,8 @@
 
 For vNext contract details and migration mappings, see `docs/contracts/import-export-vnext.md`.
 
+Taxonomy semantics: `species` is the biological species record, while each `crop` record currently represents a crop type layer beneath species (for example `Brassica oleracea` → broccoli/kale/cabbage, or `Beta vulgaris` → beetroot/chard) before cultivar-level naming.
+
 Canonical sample payloads live in `docs/contracts/samples/`:
 - `crop.canonical.json`
 - `batch.seed.canonical.json`

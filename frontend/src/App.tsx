@@ -3050,7 +3050,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       {taxonomyOnly ? (
         <>
           <p className="batch-form-note">
-            Manage reusable taxonomy records here. Create and edit species and crop types independently from operational batch workflows.
+            Manage reusable taxonomy records here. Species define the biological taxon, while crop types define the garden/agricultural form under that species before any cultivar naming.
           </p>
           <nav className="batch-form-actions" aria-label="Taxonomy forms">
             <Link to="/taxonomy#create-species">Create species</Link>
@@ -3440,7 +3440,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
               type="text"
               value={cropCreateValues.cultivar}
               onChange={(event) => setCropCreateValues((current) => ({ ...current, cultivar: event.target.value }))}
-              placeholder="Kohlrabi"
+              placeholder="Kohlrabi, Broccoli, Beetroot, or Chard"
             />
             {cropCreateErrors.cultivar ? <span className="form-error">{cropCreateErrors.cultivar}</span> : null}
           </label>
@@ -3465,7 +3465,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             {cropCreateErrors.notes ? <span className="form-error">{cropCreateErrors.notes}</span> : null}
           </label>
         </div>
-        <p className="batch-form-note">Crop type creation defines the agricultural crop form linked to the selected species.</p>
+        <p className="batch-form-note">Crop type creation defines the agricultural crop form linked to the selected species, for example Brassica oleracea → Kohlrabi, Broccoli, Kale, or Cabbage before naming a cultivar.</p>
         <div className="batch-form-actions">
           <button type="submit">Save crop type</button>
           {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
