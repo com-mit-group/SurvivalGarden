@@ -43,6 +43,12 @@
         "$ref": "https://survivalgarden/contracts/crop.schema.json"
       }
     },
+    "cultivars": {
+      "type": "array",
+      "items": {
+        "$ref": "https://survivalgarden/contracts/cultivar.schema.json"
+      }
+    },
     "cropPlans": {
       "type": "array",
       "items": {

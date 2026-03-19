@@ -5,6 +5,7 @@ import {
   batchSchema,
   bedSchema,
   cropPlanSchema,
+  cultivarSchema,
   cropSchema,
   pathSchema,
   seedInventoryItemSchema,
@@ -80,6 +81,7 @@ ajv.addSchema(appStateSchema);
 ajv.addSchema(batchSchema);
 ajv.addSchema(bedSchema);
 ajv.addSchema(cropSchema);
+ajv.addSchema(cultivarSchema);
 ajv.addSchema(cropPlanSchema);
 ajv.addSchema(pathSchema);
 ajv.addSchema(taskSchema);

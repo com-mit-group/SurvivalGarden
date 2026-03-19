@@ -1672,19 +1672,20 @@ function SeedInventoryPage() {
   return (
     <section className="seed-inventory-page">
       <h2>Seed Inventory</h2>
+      <p className="batch-form-note">Cultivars are managed independently from batches here: record the named variety once, keep it inventory-aware, and link it back to a crop type for reuse.</p>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
         <input
           type="text"
           value={formValues.variety}
           onChange={(event) => setFormValues((current) => ({ ...current, variety: event.target.value }))}
-          placeholder="Variety"
+          placeholder="Cultivar name"
           required
         />
         <select
           value={formValues.cropId}
           onChange={(event) => setFormValues((current) => ({ ...current, cropId: event.target.value }))}
         >
-          <option value={UNLINKED_CROP_ID}>Unlinked crop</option>
+          <option value={UNLINKED_CROP_ID}>Unlinked crop type</option>
           {cropIds.map((cropId) => (
             <option key={cropId} value={cropId}>
               {cropNames[cropId] ?? cropId}
@@ -1732,7 +1733,7 @@ function SeedInventoryPage() {
               <div>
                 <p className="seed-inventory-primary">{item.variety}</p>
                 <p className="seed-inventory-meta">
-                  Crop: {item.cropId === UNLINKED_CROP_ID ? 'Unlinked' : cropNames[item.cropId] ?? 'Unknown crop'}
+                  Crop type: {item.cropId === UNLINKED_CROP_ID ? 'Unlinked' : cropNames[item.cropId] ?? 'Unknown crop type'}
                 </p>
                 <p className="seed-inventory-meta">
                   {item.quantity} {item.unit} • {item.status}
@@ -3050,12 +3051,13 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       {taxonomyOnly ? (
         <>
           <p className="batch-form-note">
-            Manage reusable taxonomy records here. Species define the biological taxon, while crop types define the garden/agricultural form under that species before any cultivar naming.
+            Manage reusable taxonomy records here. Species define the biological taxon, crop types define the garden/agricultural form, and cultivars remain separate reusable named inventory records under those crop types.
           </p>
           <nav className="batch-form-actions" aria-label="Taxonomy forms">
             <Link to="/taxonomy#create-species">Create species</Link>
             <Link to="/taxonomy#edit-species">Edit species</Link>
             <Link to="/taxonomy#create-crop">Create crop type</Link>
+            <Link to="/seed-inventory">Manage cultivars</Link>
           </nav>
         </>
       ) : (
@@ -3112,6 +3114,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             <Link to="/batches#create-batch">Batch form</Link>
             <Link to="/batches#edit-crop">Edit crop type metadata</Link>
             <Link to="/taxonomy#create-crop">Crop type taxonomy</Link>
+            <Link to="/seed-inventory">Cultivars</Link>
             <Link to="/taxonomy#create-species">Species taxonomy</Link>
           </nav>
         </>
