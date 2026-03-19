@@ -2763,6 +2763,82 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
     setFormErrors({});
   };
 
+  const handleCreateCropInline = async () => {
+    const errors: Record<string, string> = {};
+    const cropName = formValues.cropInput.trim();
+
+    if (!cropName) {
+      errors.cropInput = 'Enter a crop name.';
+    }
+
+    if (!formValues.cropCategory.trim()) {
+      errors.cropCategory = 'Category is required for new crops.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors((current) => ({ ...current, ...errors }));
+      return;
+    }
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setSaveMessage('Unable to create crop because local app state is unavailable.');
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const cropId = createUniqueUserCropId(cropName, appState.crops.map((crop) => crop.cropId));
+      const aliases = formValues.cropAliases
+        .split(',')
+        .map((alias) => alias.trim())
+        .filter((alias) => alias.length > 0);
+
+      const speciesScientificName = formValues.cropScientificName.trim();
+      const nextState = upsertCropInAppState(appState, {
+        cropId,
+        name: cropName,
+        cultivar: cropName,
+        ...(speciesScientificName ? { scientificName: speciesScientificName } : {}),
+        species:
+          speciesScientificName.length > 0
+            ? { commonName: cropName, scientificName: speciesScientificName }
+            : undefined,
+        category: formValues.cropCategory.trim(),
+        aliases: aliases.length > 0 ? aliases : undefined,
+        isUserDefined: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      await saveAppStateToIndexedDb(nextState);
+      setCropIds(nextState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      setCropScientificNames(
+        Object.fromEntries(
+          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+        ),
+      );
+      setFormValues((current) => ({
+        ...current,
+        cropInput: formatCropOptionLabel({ cropId, name: cropName, scientificName: formValues.cropScientificName.trim() || undefined }),
+        cropCategory: '',
+        cropScientificName: '',
+        cropAliases: '',
+      }));
+      setFormErrors((current) => ({
+        ...current,
+        cropInput: '',
+        cropCategory: '',
+      }));
+      setIsAddingNewCrop(false);
+      setSaveMessage('Crop created and selected. Warning: task rules are missing for this crop, but batch operations are still allowed.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create crop.';
+      setSaveMessage(message);
+    }
+  };
+
   const handleCreateCropSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setCropCreateMessage(null);
@@ -3269,7 +3345,20 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/taxonomy#create-crop">Open taxonomy crop form</Link>
+          {isAddingNewCrop ? (
+            <>
+              <button type="button" onClick={() => setIsAddingNewCrop(false)}>
+                Cancel new crop
+              </button>
+              <button type="button" onClick={() => void handleCreateCropInline()}>
+                Create crop
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setIsAddingNewCrop(true)}>
+              Add new crop
+            </button>
+          )}
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3281,8 +3370,6 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
       </form>
       ) : null}
 
-      {taxonomyOnly ? (
-        <>
       <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
         <h3>Create crop</h3>
         <div className="batch-form-grid">
@@ -3637,8 +3724,6 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
           {speciesEditMessage ? <p className="batch-form-message">{speciesEditMessage}</p> : null}
         </div>
       </form>
-        </>
-      ) : null}
 
       {!taxonomyOnly && isLoading ? <p className="batch-empty-state">Loading batches…</p> : null}
 
