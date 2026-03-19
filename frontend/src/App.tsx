@@ -3541,6 +3541,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           <label>
             Common name (optional)
             <input
+              aria-label="Common name"
               type="text"
               value={speciesCreateValues.commonName}
               onChange={(event) =>
@@ -3616,6 +3617,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           <label>
             Common name (optional)
             <input
+              aria-label="Common name"
               type="text"
               value={speciesEditValues.commonName}
               onChange={(event) => setSpeciesEditValues((current) => ({ ...current, commonName: event.target.value }))}
