@@ -1916,6 +1916,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
   const [cropCreateValues, setCropCreateValues] = useState({
     speciesId: '',
     cultivar: '',
+    cultivarGroup: '',
     aliases: '',
     notes: '',
   });
@@ -1924,6 +1925,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
   const [editingCropId, setEditingCropId] = useState<string>('');
   const [cropEditValues, setCropEditValues] = useState({
     cultivar: '',
+    cultivarGroup: '',
     speciesId: '',
     speciesCommonName: '',
     speciesScientificName: '',
@@ -2240,6 +2242,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       if (!editingCropId) {
         setCropEditValues({
           cultivar: '',
+          cultivarGroup: '',
           speciesId: '',
           speciesCommonName: '',
           speciesScientificName: '',
@@ -2264,6 +2267,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       const speciesRecord = speciesId ? nextSpeciesById[speciesId] : undefined;
       setCropEditValues({
         cultivar: (crop as (Crop & { cultivar?: string }) | null)?.cultivar ?? crop?.name ?? '',
+        cultivarGroup: (crop as (Crop & { cultivarGroup?: string }) | null)?.cultivarGroup ?? '',
         speciesId,
         speciesCommonName:
           speciesRecord?.commonName
@@ -2411,8 +2415,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
     }
 
     const cultivar = cropEditValues.cultivar.trim();
+    const cultivarGroup = cropEditValues.cultivarGroup.trim();
     if (!cultivar) {
       errors.cultivar = 'Cultivar is required.';
+    }
+    if (cultivarGroup.length > 120) {
+      errors.cultivarGroup = 'Cultivar group must be 120 characters or fewer.';
     }
 
     if (!cropEditValues.speciesId.trim()) {
@@ -2457,11 +2465,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       const speciesScientificName = cropEditValues.speciesScientificName.trim();
       const speciesId = cropEditValues.speciesId.trim();
 
-      const nextCrop = {
+      const nextCrop: Crop & { cultivarGroup?: string } = {
         ...existingCrop,
         cropId: existingCrop.cropId,
         name: cultivar,
         cultivar,
+        ...(cultivarGroup ? { cultivarGroup } : {}),
         speciesId,
         ...(aliases.length > 0 ? { aliases } : {}),
         species:
@@ -2483,6 +2492,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         },
         updatedAt,
       };
+      if (!cultivarGroup) {
+        delete nextCrop.cultivarGroup;
+      }
 
       const nextState = upsertCropInAppState(appState, nextCrop);
       await saveAppStateToIndexedDb(nextState);
@@ -2779,6 +2791,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
     const errors: Record<string, string> = {};
     const speciesId = cropCreateValues.speciesId.trim();
     const cultivar = cropCreateValues.cultivar.trim();
+    const cultivarGroup = cropCreateValues.cultivarGroup.trim();
     const aliases = parseCsvUnique(cropCreateValues.aliases);
     const notes = cropCreateValues.notes.trim();
 
@@ -2788,6 +2801,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
     if (!cultivar) {
       errors.cultivar = 'Cultivar is required.';
+    }
+    if (cultivarGroup.length > 120) {
+      errors.cultivarGroup = 'Cultivar group must be 120 characters or fewer.';
     }
 
     if (notes.length > 2000) {
@@ -2818,6 +2834,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         cropId,
         name: cultivar,
         cultivar,
+        ...(cultivarGroup ? { cultivarGroup } : {}),
         speciesId: species.id,
         ...(aliases.length > 0 ? { aliases } : {}),
         ...(species.commonName && species.scientificName
@@ -2866,6 +2883,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       setCropCreateValues({
         speciesId: species.id,
         cultivar: '',
+        cultivarGroup: '',
         aliases: '',
         notes: '',
       });
@@ -3329,6 +3347,18 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             </label>
 
             <label>
+              Cultivar group (optional)
+              <input
+                type="text"
+                value={cropEditValues.cultivarGroup}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, cultivarGroup: event.target.value }))}
+                placeholder="Acephala Group, Italica Group, or Gongylodes Group"
+              />
+              <span className="batch-form-note">Informational taxonomy only; use this for group labels, not cultivar names.</span>
+              {cropEditErrors.cultivarGroup ? <span className="form-error">{cropEditErrors.cultivarGroup}</span> : null}
+            </label>
+
+            <label>
               Species common name
               <input type="text" value={cropEditValues.speciesCommonName} readOnly disabled />
             </label>
@@ -3447,6 +3477,18 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
               placeholder="Kohlrabi, Broccoli, Beetroot, or Chard"
             />
             {cropCreateErrors.cultivar ? <span className="form-error">{cropCreateErrors.cultivar}</span> : null}
+          </label>
+
+          <label>
+            Cultivar group (optional)
+            <input
+              type="text"
+              value={cropCreateValues.cultivarGroup}
+              onChange={(event) => setCropCreateValues((current) => ({ ...current, cultivarGroup: event.target.value }))}
+              placeholder="Acephala Group, Italica Group, or Gongylodes Group"
+            />
+            <span className="batch-form-note">Informational taxonomy only; leave blank for everyday workflows.</span>
+            {cropCreateErrors.cultivarGroup ? <span className="form-error">{cropCreateErrors.cultivarGroup}</span> : null}
           </label>
 
           <label>
@@ -5757,6 +5799,9 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
         if (incomingCrop.category !== undefined) {
           mergedCrop.category = incomingCrop.category;
+        }
+        if (incomingCrop.cultivarGroup !== undefined) {
+          mergedCrop.cultivarGroup = incomingCrop.cultivarGroup;
         }
         if (incomingCrop.taskRules !== undefined) {
           mergedCrop.taskRules = incomingCrop.taskRules;

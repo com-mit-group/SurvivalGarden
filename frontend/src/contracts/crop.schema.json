@@ -59,6 +59,12 @@
       "maxLength": 120,
       "description": "Cultivar or variety name for this crop record."
     },
+    "cultivarGroup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Optional informational cultivar group label for crop-type taxonomy clarity."
+    },
     "speciesId": {
       "$ref": "#/$defs/id",
       "description": "Required reference to a top-level species record for this cultivar/crop."
