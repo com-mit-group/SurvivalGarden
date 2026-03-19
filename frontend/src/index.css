@@ -466,7 +466,7 @@ summary:focus-visible {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 0.25rem;
   padding: 0.5rem max(0.5rem, env(safe-area-inset-left)) calc(0.5rem + env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-right));
   border-top: 1px solid #e5e7eb;
@@ -611,6 +611,7 @@ textarea {
   align-items: center;
 }
 
+.batch-form-actions a,
 .batch-form-actions button,
 .batch-edit-button {
   border: 1px solid #d1d5db;
@@ -618,6 +619,7 @@ textarea {
   background: #ffffff;
   color: #111827;
   padding: 0.45rem 0.7rem;
+  text-decoration: none;
   cursor: pointer;
 }
 

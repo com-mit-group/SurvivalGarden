@@ -1882,7 +1882,7 @@ const createUniqueSpeciesId = (name: string, existingSpeciesIds: string[]): stri
   return candidate;
 };
 
-function BatchesPage() {
+function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [cropIds, setCropIds] = useState<string[]>([]);
@@ -3109,63 +3109,80 @@ function BatchesPage() {
 
   return (
     <section className="batches-page">
-      <h2>Batches</h2>
+      <h2>{taxonomyOnly ? 'Taxonomy' : 'Batches'}</h2>
 
-      <div className="batch-filters">
-        <label>
-          Crop
-          <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
-            <option value="">All</option>
-            {cropOptions.map((crop) => (
-              <option key={crop.value} value={crop.value}>
-                {crop.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      {taxonomyOnly ? (
+        <>
+          <p className="batch-form-note">
+            Manage reusable taxonomy records here. Create and edit species and crops independently from operational batch workflows.
+          </p>
+          <nav className="batch-form-actions" aria-label="Taxonomy forms">
+            <Link to="/taxonomy#create-species">Create species</Link>
+            <Link to="/taxonomy#edit-species">Edit species</Link>
+            <Link to="/taxonomy#create-crop">Create crop</Link>
+            <Link to="/taxonomy#edit-crop">Edit crop</Link>
+          </nav>
+        </>
+      ) : (
+        <>
+          <div className="batch-filters">
+            <label>
+              Crop
+              <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
+                <option value="">All</option>
+                {cropOptions.map((crop) => (
+                  <option key={crop.value} value={crop.value}>
+                    {crop.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label>
-          Stage
-          <select value={filters.stage} onChange={(event) => updateFilter('stage', event.target.value)}>
-            <option value="">All</option>
-            {stageOptions.map((stage) => (
-              <option key={stage} value={stage}>
-                {stage}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              Stage
+              <select value={filters.stage} onChange={(event) => updateFilter('stage', event.target.value)}>
+                <option value="">All</option>
+                {stageOptions.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label>
-          Bed
-          <select value={filters.bed} onChange={(event) => updateFilter('bed', event.target.value)}>
-            <option value="">All</option>
-            {bedOptions.map((bedId) => (
-              <option key={bedId} value={bedId}>
-                {bedId}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              Bed
+              <select value={filters.bed} onChange={(event) => updateFilter('bed', event.target.value)}>
+                <option value="">All</option>
+                {bedOptions.map((bedId) => (
+                  <option key={bedId} value={bedId}>
+                    {bedId}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label>
-          From
-          <input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
-        </label>
+            <label>
+              From
+              <input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
+            </label>
 
-        <label>
-          To
-          <input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
-        </label>
-      </div>
+            <label>
+              To
+              <input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
+            </label>
+          </div>
 
-      <nav className="batch-form-actions" aria-label="Creation flows">
-        <button type="button">Batch form</button>
-        <button type="button">Crop form</button>
-        <button type="button">Species form</button>
-      </nav>
+          <nav className="batch-form-actions" aria-label="Creation flows">
+            <Link to="/batches#create-batch">Batch form</Link>
+            <Link to="/taxonomy#create-crop">Crop taxonomy</Link>
+            <Link to="/taxonomy#create-species">Species taxonomy</Link>
+          </nav>
+        </>
+      )}
 
-      <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
+      {!taxonomyOnly ? (
+        <form id="create-batch" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
         <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
         <div className="batch-form-grid">
           <label>
@@ -3324,24 +3341,11 @@ function BatchesPage() {
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation links directly to an existing crop record. Create species and crop records separately first. Non-sowing start transitions are still planning-only.
+          Batch creation links directly to an existing crop record. Use the dedicated taxonomy tab for species and crop setup before creating batches. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          {isAddingNewCrop ? (
-            <>
-              <button type="button" onClick={() => setIsAddingNewCrop(false)}>
-                Cancel new crop
-              </button>
-              <button type="button" onClick={() => void handleCreateCropInline()}>
-                Create crop
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={() => setIsAddingNewCrop(true)}>
-              Add new crop
-            </button>
-          )}
+          <Link to="/taxonomy#create-crop">Open taxonomy crop form</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3351,7 +3355,10 @@ function BatchesPage() {
           {saveMessage ? <p className="batch-form-message">{saveMessage}</p> : null}
         </div>
       </form>
+      ) : null}
 
+      {taxonomyOnly ? (
+        <>
       <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
         <h3>Create crop</h3>
         <div className="batch-form-grid">
@@ -3410,7 +3417,7 @@ function BatchesPage() {
       </form>
 
 
-      <form className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
+      <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
         <h3>Edit crop cultivar metadata</h3>
         <div className="batch-form-grid">
           <label>
@@ -3642,7 +3649,7 @@ function BatchesPage() {
         </div>
       </form>
 
-      <form className="batch-form" onSubmit={(event) => void handleSpeciesEditSubmit(event)}>
+      <form id="edit-species" className="batch-form" onSubmit={(event) => void handleSpeciesEditSubmit(event)}>
         <h3>Edit species metadata</h3>
         <div className="batch-form-grid">
           <label>
@@ -3706,10 +3713,12 @@ function BatchesPage() {
           {speciesEditMessage ? <p className="batch-form-message">{speciesEditMessage}</p> : null}
         </div>
       </form>
+        </>
+      ) : null}
 
-      {isLoading ? <p className="batch-empty-state">Loading batches…</p> : null}
+      {!taxonomyOnly && isLoading ? <p className="batch-empty-state">Loading batches…</p> : null}
 
-      {!isLoading ? (
+      {!taxonomyOnly && !isLoading ? (
         <ul className="batch-list">
           {filteredBatches.map((batch) => (
             <li key={batch.batchId}>
@@ -3748,7 +3757,7 @@ function BatchesPage() {
         </ul>
       ) : null}
 
-      {!isLoading && filteredBatches.length === 0 ? (
+      {!taxonomyOnly && !isLoading && filteredBatches.length === 0 ? (
         <p className="batch-empty-state">No batches match these filters.</p>
       ) : null}
     </section>
@@ -6932,6 +6941,7 @@ function App() {
           <Route path="/beds/:bedId" element={<BedDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
+          <Route path="/taxonomy" element={<BatchesPage taxonomyOnly />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
           <Route path="/seed-inventory" element={<SeedInventoryPage />} />
@@ -6958,6 +6968,7 @@ function App() {
       <nav className="tab-nav" aria-label="Primary">
         <NavLink to="/beds">Beds</NavLink>
         <NavLink to="/calendar">Calendar</NavLink>
+        <NavLink to="/taxonomy">Taxonomy</NavLink>
         <NavLink to="/batches">Batches</NavLink>
         <NavLink to="/nutrition">Nutrition</NavLink>
         <NavLink to="/seed-inventory">Seeds</NavLink>
