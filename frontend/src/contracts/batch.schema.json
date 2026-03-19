@@ -13,10 +13,16 @@
   ],
   "anyOf": [
     {
-      "required": ["cultivarId"]
+      "required": ["cultivarId"],
+      "properties": {
+        "cultivarId": {}
+      }
     },
     {
-      "required": ["cropId"]
+      "required": ["cropId"],
+      "properties": {
+        "cropId": {}
+      }
     }
   ],
   "properties": {
