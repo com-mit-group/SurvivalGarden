@@ -3038,19 +3038,19 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       {taxonomyOnly ? (
         <>
           <p className="batch-form-note">
-            Manage reusable taxonomy records here. Create and edit species and crops independently from operational batch workflows.
+            Manage reusable taxonomy records here. Create and edit species and crop types independently from operational batch workflows.
           </p>
           <nav className="batch-form-actions" aria-label="Taxonomy forms">
             <Link to="/taxonomy#create-species">Create species</Link>
             <Link to="/taxonomy#edit-species">Edit species</Link>
-            <Link to="/taxonomy#create-crop">Create crop</Link>
+            <Link to="/taxonomy#create-crop">Create crop type</Link>
           </nav>
         </>
       ) : (
         <>
           <div className="batch-filters">
             <label>
-              Crop
+              Crop type
               <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
                 <option value="">All</option>
                 {cropOptions.map((crop) => (
@@ -3098,8 +3098,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
           <nav className="batch-form-actions" aria-label="Creation flows">
             <Link to="/batches#create-batch">Batch form</Link>
-            <Link to="/batches#edit-crop">Edit crop metadata</Link>
-            <Link to="/taxonomy#create-crop">Crop taxonomy</Link>
+            <Link to="/batches#edit-crop">Edit crop type metadata</Link>
+            <Link to="/taxonomy#create-crop">Crop type taxonomy</Link>
             <Link to="/taxonomy#create-species">Species taxonomy</Link>
           </nav>
         </>
@@ -3131,7 +3131,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           {isAddingNewCrop ? (
             <>
               <label>
-                New crop category
+                New crop type
                 <input
                   type="text"
                   value={formValues.cropCategory}
@@ -3142,7 +3142,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
               </label>
 
               <label>
-                New crop scientific name
+                Crop type scientific name
                 <input
                   type="text"
                   value={formValues.cropScientificName}
@@ -3152,7 +3152,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
               </label>
 
               <label>
-                New crop aliases
+                Crop type aliases
                 <input
                   type="text"
                   value={formValues.cropAliases}
@@ -3265,11 +3265,11 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation links directly to an existing crop record. Use the dedicated taxonomy tab for species and crop setup before creating batches. Non-sowing start transitions are still planning-only.
+          Batch creation links directly to an existing crop type record. Use the dedicated taxonomy tab for species and crop type setup before creating batches. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/taxonomy#create-crop">Open taxonomy crop form</Link>
+          <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3283,10 +3283,10 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
       {!taxonomyOnly ? (
         <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
-          <h3>Edit crop cultivar metadata</h3>
+          <h3>Edit crop type metadata</h3>
           <div className="batch-form-grid">
             <label>
-              Cultivar record
+              Crop type record
               <select value={editingCropId} onChange={(event) => setEditingCropId(event.target.value)}>
                 {selectableCrops.map((crop) => (
                   <option key={crop.cropId} value={crop.cropId}>
@@ -3298,12 +3298,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             </label>
 
             <label>
-              Cultivar ID (immutable)
+              Crop type ID (immutable)
               <input type="text" value={editingCropId} readOnly disabled />
             </label>
 
             <label>
-              Cultivar / variety
+              Crop type name
               <input
                 type="text"
                 value={cropEditValues.cultivar}
@@ -3395,7 +3395,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </div>
           <p className="batch-form-note">Species identity is locked here. Use the taxonomy tab's species editor to update shared species metadata safely.</p>
           <div className="batch-form-actions">
-            <button type="submit">Save crop changes</button>
+            <button type="submit">Save crop type changes</button>
             {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
           </div>
         </form>
@@ -3404,7 +3404,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       {taxonomyOnly ? (
         <>
       <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
-        <h3>Create crop</h3>
+        <h3>Create crop type</h3>
         <div className="batch-form-grid">
           <label>
             Species
@@ -3423,12 +3423,12 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
 
           <label>
-            Cultivar / variety
+            Crop type name
             <input
               type="text"
               value={cropCreateValues.cultivar}
               onChange={(event) => setCropCreateValues((current) => ({ ...current, cultivar: event.target.value }))}
-              placeholder="Laura"
+              placeholder="Kohlrabi"
             />
             {cropCreateErrors.cultivar ? <span className="form-error">{cropCreateErrors.cultivar}</span> : null}
           </label>
@@ -3453,19 +3453,19 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             {cropCreateErrors.notes ? <span className="form-error">{cropCreateErrors.notes}</span> : null}
           </label>
         </div>
-        <p className="batch-form-note">Crop creation creates only a cultivar linked to the selected species.</p>
+        <p className="batch-form-note">Crop type creation defines the agricultural crop form linked to the selected species.</p>
         <div className="batch-form-actions">
-          <button type="submit">Save crop</button>
+          <button type="submit">Save crop type</button>
           {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
         </div>
       </form>
 
       {showAdminDataSurgery ? (
         <section className="batch-form">
-          <h3>Repair crop taxonomy</h3>
+          <h3>Repair crop type taxonomy</h3>
           <div className="batch-form-grid">
             <label>
-              Crop to repair
+              Crop type to repair
               <input type="text" value={editingCropId} readOnly disabled />
             </label>
 
@@ -3487,7 +3487,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </div>
           <div className="crop-repair-preview">
             <p className="batch-form-note">
-              Admin repair flow preview only. Normal crop edits still keep <code>speciesId</code> locked.
+              Admin repair flow preview only. Normal crop type edits still keep <code>speciesId</code> locked.
             </p>
             {cropRepairPreview ? (
               <>
@@ -3507,7 +3507,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             )}
           </div>
           <p className="batch-form-note">
-            Use the generated payload with <strong>Import Crop JSON</strong> below to run a controlled reassignment while preserving the existing crop identity.
+            Use the generated payload with <strong>Import Crop JSON</strong> below to run a controlled reassignment while preserving the existing crop type identity.
           </p>
         </section>
       ) : null}
