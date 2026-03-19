@@ -3044,7 +3044,6 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
             <Link to="/taxonomy#create-species">Create species</Link>
             <Link to="/taxonomy#edit-species">Edit species</Link>
             <Link to="/taxonomy#create-crop">Create crop</Link>
-            <Link to="/taxonomy#edit-crop">Edit crop</Link>
           </nav>
         </>
       ) : (
@@ -3099,6 +3098,7 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
 
           <nav className="batch-form-actions" aria-label="Creation flows">
             <Link to="/batches#create-batch">Batch form</Link>
+            <Link to="/batches#edit-crop">Edit crop metadata</Link>
             <Link to="/taxonomy#create-crop">Crop taxonomy</Link>
             <Link to="/taxonomy#create-species">Species taxonomy</Link>
           </nav>
@@ -3281,6 +3281,126 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
       </form>
       ) : null}
 
+      {!taxonomyOnly ? (
+        <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
+          <h3>Edit crop cultivar metadata</h3>
+          <div className="batch-form-grid">
+            <label>
+              Cultivar record
+              <select value={editingCropId} onChange={(event) => setEditingCropId(event.target.value)}>
+                {selectableCrops.map((crop) => (
+                  <option key={crop.cropId} value={crop.cropId}>
+                    {crop.label}
+                  </option>
+                ))}
+              </select>
+              {cropEditErrors.cropId ? <span className="form-error">{cropEditErrors.cropId}</span> : null}
+            </label>
+
+            <label>
+              Cultivar ID (immutable)
+              <input type="text" value={editingCropId} readOnly disabled />
+            </label>
+
+            <label>
+              Cultivar / variety
+              <input
+                type="text"
+                value={cropEditValues.cultivar}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, cultivar: event.target.value }))}
+              />
+              {cropEditErrors.cultivar ? <span className="form-error">{cropEditErrors.cultivar}</span> : null}
+            </label>
+
+            <label>
+              Species common name
+              <input type="text" value={cropEditValues.speciesCommonName} readOnly disabled />
+            </label>
+
+            <label>
+              Species scientific name
+              <input type="text" value={cropEditValues.speciesScientificName} readOnly disabled />
+              {cropEditErrors.speciesScientificName ? <span className="form-error">{cropEditErrors.speciesScientificName}</span> : null}
+            </label>
+
+            <label>
+              Species ID (immutable)
+              <input type="text" value={cropEditValues.speciesId} readOnly disabled />
+              {cropEditErrors.speciesId ? <span className="form-error">{cropEditErrors.speciesId}</span> : null}
+            </label>
+
+            <label>
+              Aliases (comma-separated)
+              <input
+                type="text"
+                value={cropEditValues.aliases}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, aliases: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Varieties (comma-separated)
+              <input
+                type="text"
+                value={cropEditValues.varieties}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, varieties: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Spacing metadata
+              <input
+                type="text"
+                value={cropEditValues.spacing}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, spacing: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Sowing / transplant metadata
+              <input
+                type="text"
+                value={cropEditValues.sowingTransplant}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, sowingTransplant: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Lifecycle metadata
+              <input
+                type="text"
+                value={cropEditValues.lifecycle}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, lifecycle: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Tags (comma-separated)
+              <input
+                type="text"
+                value={cropEditValues.tags}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, tags: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Notes
+              <textarea
+                value={cropEditValues.notes}
+                onChange={(event) => setCropEditValues((current) => ({ ...current, notes: event.target.value }))}
+                rows={3}
+              />
+              {cropEditErrors.notes ? <span className="form-error">{cropEditErrors.notes}</span> : null}
+            </label>
+          </div>
+          <p className="batch-form-note">Species identity is locked here. Use the taxonomy tab's species editor to update shared species metadata safely.</p>
+          <div className="batch-form-actions">
+            <button type="submit">Save crop changes</button>
+            {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
+          </div>
+        </form>
+      ) : null}
+
       {taxonomyOnly ? (
         <>
       <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
@@ -3337,125 +3457,6 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
         <div className="batch-form-actions">
           <button type="submit">Save crop</button>
           {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
-        </div>
-      </form>
-
-
-      <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
-        <h3>Edit crop cultivar metadata</h3>
-        <div className="batch-form-grid">
-          <label>
-            Cultivar record
-            <select value={editingCropId} onChange={(event) => setEditingCropId(event.target.value)}>
-              {selectableCrops.map((crop) => (
-                <option key={crop.cropId} value={crop.cropId}>
-                  {crop.label}
-                </option>
-              ))}
-            </select>
-            {cropEditErrors.cropId ? <span className="form-error">{cropEditErrors.cropId}</span> : null}
-          </label>
-
-          <label>
-            Cultivar ID (immutable)
-            <input type="text" value={editingCropId} readOnly disabled />
-          </label>
-
-          <label>
-            Cultivar / variety
-            <input
-              type="text"
-              value={cropEditValues.cultivar}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, cultivar: event.target.value }))}
-            />
-            {cropEditErrors.cultivar ? <span className="form-error">{cropEditErrors.cultivar}</span> : null}
-          </label>
-
-          <label>
-            Species common name
-            <input type="text" value={cropEditValues.speciesCommonName} readOnly disabled />
-          </label>
-
-          <label>
-            Species scientific name
-            <input type="text" value={cropEditValues.speciesScientificName} readOnly disabled />
-            {cropEditErrors.speciesScientificName ? <span className="form-error">{cropEditErrors.speciesScientificName}</span> : null}
-          </label>
-
-          <label>
-            Species ID (immutable)
-            <input type="text" value={cropEditValues.speciesId} readOnly disabled />
-            {cropEditErrors.speciesId ? <span className="form-error">{cropEditErrors.speciesId}</span> : null}
-          </label>
-
-          <label>
-            Aliases (comma-separated)
-            <input
-              type="text"
-              value={cropEditValues.aliases}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, aliases: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Varieties (comma-separated)
-            <input
-              type="text"
-              value={cropEditValues.varieties}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, varieties: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Spacing metadata
-            <input
-              type="text"
-              value={cropEditValues.spacing}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, spacing: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Sowing / transplant metadata
-            <input
-              type="text"
-              value={cropEditValues.sowingTransplant}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, sowingTransplant: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Lifecycle metadata
-            <input
-              type="text"
-              value={cropEditValues.lifecycle}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, lifecycle: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Tags (comma-separated)
-            <input
-              type="text"
-              value={cropEditValues.tags}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, tags: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            Notes
-            <textarea
-              value={cropEditValues.notes}
-              onChange={(event) => setCropEditValues((current) => ({ ...current, notes: event.target.value }))}
-              rows={3}
-            />
-            {cropEditErrors.notes ? <span className="form-error">{cropEditErrors.notes}</span> : null}
-          </label>
-        </div>
-        <p className="batch-form-note">Species identity is locked here. Use the species editor below to update shared species metadata safely.</p>
-        <div className="batch-form-actions">
-          <button type="submit">Save crop changes</button>
-          {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
         </div>
       </form>
 
