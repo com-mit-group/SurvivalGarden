@@ -1037,7 +1037,7 @@ describe('App', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter initialEntries={['/batches']}>
+      <MemoryRouter initialEntries={['/taxonomy']}>
         <App />
       </MemoryRouter>
     );
@@ -1071,7 +1071,7 @@ describe('App', () => {
     unmount();
 
     render(
-      <MemoryRouter initialEntries={['/batches']}>
+      <MemoryRouter initialEntries={['/taxonomy']}>
         <App />
       </MemoryRouter>
     );
@@ -1083,7 +1083,7 @@ describe('App', () => {
     });
   });
 
-  it('supports custom crop flow in batches with scientific-name-only identity and variety/seed counts', async () => {
+  it('routes crop creation to taxonomy instead of batches', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
       beds: [
@@ -1118,43 +1118,9 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add new crop' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add new crop' })).not.toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add new crop' }));
-    fireEvent.change(within(document.getElementById('create-batch') as HTMLElement).getByLabelText('Crop'), { target: { value: 'Custom Runner' } });
-    fireEvent.change(screen.getByLabelText('New crop category'), { target: { value: 'leafy' } });
-    fireEvent.change(screen.getByLabelText('New crop scientific name'), { target: { value: 'Brassica' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create crop' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Crop created and selected/)).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText('Cultivar label (optional)'), { target: { value: 'Early Purple' } });
-    fireEvent.change(screen.getByLabelText('Seed count planned'), { target: { value: '24' } });
-    fireEvent.change(screen.getByLabelText('Seed count germinated'), { target: { value: '20' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create batch' }));
-
-    await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalled();
-      expect(screen.getByText('Batch created.')).toBeInTheDocument();
-    });
-
-    const savedStates = vi.mocked(saveAppStateToIndexedDb).mock.calls.map((call) => call[0] as { crops?: Array<{ name?: string; scientificName?: string }>; batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> });
-    expect(
-      savedStates.some((state: { crops?: Array<{ name?: string; scientificName?: string }> }) =>
-        state?.crops?.some((crop: { name?: string; scientificName?: string }) => crop.name === 'Custom Runner' && crop.scientificName === 'Brassica'),
-      ),
-    ).toBe(true);
-    expect(
-      savedStates.some((state: { batches?: Array<{ variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }> }) =>
-        state?.batches?.some(
-          (batch: { variety?: string; seedCountPlanned?: number; seedCountGerminated?: number }) =>
-            batch.variety === 'Early Purple' && batch.seedCountPlanned === 24 && batch.seedCountGerminated === 20,
-        ),
-      ),
-    ).toBe(true);
+    expect(screen.getByRole('link', { name: 'Open taxonomy crop form' })).toHaveAttribute('href', '/taxonomy#create-crop');
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
