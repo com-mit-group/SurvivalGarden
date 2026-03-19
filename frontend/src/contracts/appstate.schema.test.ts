@@ -13,6 +13,7 @@ import appStateSchema from './app-state.schema.json';
 import batchSchema from './batch.schema.json';
 import bedSchema from './bed.schema.json';
 import cropPlanSchema from './crop-plan.schema.json';
+import cultivarSchema from './cultivar.schema.json';
 import cropSchema from './crop.schema.json';
 import pathSchema from './path.schema.json';
 import seedInventoryItemSchema from './seed-inventory-item.schema.json';
@@ -78,6 +79,7 @@ describe('AppState schema', () => {
     ajv.addSchema(bedSchema);
     ajv.addSchema(cropSchema);
     ajv.addSchema(cropPlanSchema);
+    ajv.addSchema(cultivarSchema);
     ajv.addSchema(pathSchema);
     ajv.addSchema(segmentSchema);
     ajv.addSchema(taskSchema);
