@@ -1882,7 +1882,7 @@ const createUniqueSpeciesId = (name: string, existingSpeciesIds: string[]): stri
   return candidate;
 };
 
-function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
+function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { taxonomyOnly?: boolean; showAdminDataSurgery?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [cropIds, setCropIds] = useState<string[]>([]);
@@ -3460,55 +3460,57 @@ function BatchesPage({ taxonomyOnly = false }: { taxonomyOnly?: boolean }) {
         </div>
       </form>
 
-      <section className="batch-form">
-        <h3>Repair crop taxonomy</h3>
-        <div className="batch-form-grid">
-          <label>
-            Crop to repair
-            <input type="text" value={editingCropId} readOnly disabled />
-          </label>
+      {showAdminDataSurgery ? (
+        <section className="batch-form">
+          <h3>Repair crop taxonomy</h3>
+          <div className="batch-form-grid">
+            <label>
+              Crop to repair
+              <input type="text" value={editingCropId} readOnly disabled />
+            </label>
 
-          <label>
-            Current species
-            <input type="text" value={cropRepairPreview?.currentSpeciesLabel ?? cropEditValues.speciesId} readOnly disabled />
-          </label>
+            <label>
+              Current species
+              <input type="text" value={cropRepairPreview?.currentSpeciesLabel ?? cropEditValues.speciesId} readOnly disabled />
+            </label>
 
-          <label>
-            Replacement species
-            <select value={repairSpeciesId} onChange={(event) => setRepairSpeciesId(event.target.value)}>
-              {selectableSpecies.map((species) => (
-                <option key={species.speciesId} value={species.speciesId}>
-                  {species.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="crop-repair-preview">
+            <label>
+              Replacement species
+              <select value={repairSpeciesId} onChange={(event) => setRepairSpeciesId(event.target.value)}>
+                {selectableSpecies.map((species) => (
+                  <option key={species.speciesId} value={species.speciesId}>
+                    {species.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="crop-repair-preview">
+            <p className="batch-form-note">
+              Admin repair flow preview only. Normal crop edits still keep <code>speciesId</code> locked.
+            </p>
+            {cropRepairPreview ? (
+              <>
+                <ul className="crop-repair-impact-list">
+                  <li>Replacement species: {cropRepairPreview.replacementSpeciesLabel}</li>
+                  <li>Affected crop plans: {cropRepairPreview.cropPlanCount}</li>
+                  <li>Affected batches: {cropRepairPreview.batchCount}</li>
+                  <li>Audit metadata: <code>{cropRepairPreview.auditNote}</code></li>
+                </ul>
+                <label>
+                  Import payload for explicit repair
+                  <textarea value={cropRepairPreview.importPayload} readOnly rows={12} />
+                </label>
+              </>
+            ) : (
+              <p className="batch-form-note">Select a replacement species to preview the repair payload and impact summary.</p>
+            )}
+          </div>
           <p className="batch-form-note">
-            Admin repair flow preview only. Normal crop edits still keep <code>speciesId</code> locked.
+            Use the generated payload with <strong>Import Crop JSON</strong> below to run a controlled reassignment while preserving the existing crop identity.
           </p>
-          {cropRepairPreview ? (
-            <>
-              <ul className="crop-repair-impact-list">
-                <li>Replacement species: {cropRepairPreview.replacementSpeciesLabel}</li>
-                <li>Affected crop plans: {cropRepairPreview.cropPlanCount}</li>
-                <li>Affected batches: {cropRepairPreview.batchCount}</li>
-                <li>Audit metadata: <code>{cropRepairPreview.auditNote}</code></li>
-              </ul>
-              <label>
-                Import payload for explicit repair
-                <textarea value={cropRepairPreview.importPayload} readOnly rows={12} />
-              </label>
-            </>
-          ) : (
-            <p className="batch-form-note">Select a replacement species to preview the repair payload and impact summary.</p>
-          )}
-        </div>
-        <p className="batch-form-note">
-          Use the generated payload with <strong>Import Crop JSON</strong> below to run a controlled reassignment while preserving the existing crop identity.
-        </p>
-      </section>
+        </section>
+      ) : null}
 
       <form id="create-species" className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
         <h3>Create species</h3>
@@ -4773,11 +4775,12 @@ type DataPageProps = {
 type RecoveryScreenProps = {
   error: unknown;
   onRetry: () => void;
+  showDevResetButton?: boolean;
 };
 
 const EMPTY_ALL_DATA_CONFIRMATION = 'DELETE ALL DATA';
 
-export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
+export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: RecoveryScreenProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -4905,15 +4908,19 @@ export function RecoveryScreen({ error, onRetry }: RecoveryScreenProps) {
         </button>
       ) : null}
       {importMessage ? <p>{importMessage}</p> : null}
-      <p>Restore golden dataset is separate from “Empty all data” and repopulates local storage with the bundled starter records.</p>
-      <label>
-        <input type="checkbox" checked={confirmReset} onChange={(event) => setConfirmReset(event.currentTarget.checked)} disabled={isResetting} />
-        I understand this will replace local data with the golden dataset.
-      </label>
-      <button type="button" onClick={() => void handleReset()} disabled={!confirmReset || isResetting}>
-        {isResetting ? 'Restoring golden dataset…' : 'Restore golden dataset'}
-      </button>
-      {resetMessage ? <p>{resetMessage}</p> : null}
+      {showDevResetButton ? (
+        <>
+          <p>Restore golden dataset is separate from “Empty all data” and repopulates local storage with the bundled starter records.</p>
+          <label>
+            <input type="checkbox" checked={confirmReset} onChange={(event) => setConfirmReset(event.currentTarget.checked)} disabled={isResetting} />
+            I understand this will replace local data with the golden dataset.
+          </label>
+          <button type="button" onClick={() => void handleReset()} disabled={!confirmReset || isResetting}>
+            {isResetting ? 'Restoring golden dataset…' : 'Restore golden dataset'}
+          </button>
+          {resetMessage ? <p>{resetMessage}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -6840,14 +6847,20 @@ function App() {
       <div className="storage-error-screen" role="alert">
         <h1>Local storage unavailable</h1>
         <p>{storageError}</p>
-        <p>Try again, or restore the golden dataset if migration is blocked or corrupted.</p>
+        <p>
+          {isDevResetEnabled
+            ? 'Try again, or restore the golden dataset if migration is blocked or corrupted.'
+            : 'Try again if migration or local storage initialization was interrupted.'}
+        </p>
         <div className="storage-error-actions">
           <button type="button" onClick={() => void initializeStorage()}>
             Retry
           </button>
-          <button type="button" onClick={() => void handleReset()}>
-            Restore golden dataset
-          </button>
+          {isDevResetEnabled ? (
+            <button type="button" onClick={() => void handleReset()}>
+              Restore golden dataset
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -6866,7 +6879,7 @@ function App() {
           <Route path="/beds/:bedId" element={<BedDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
-          <Route path="/taxonomy" element={<BatchesPage taxonomyOnly />} />
+          <Route path="/taxonomy" element={<BatchesPage taxonomyOnly showAdminDataSurgery={isDevResetEnabled} />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
           <Route path="/seed-inventory" element={<SeedInventoryPage />} />
