@@ -2262,6 +2262,38 @@ function SeedInventoryPage() {
 const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(batch, new Date().toISOString())?.bedId ?? null;
 
 const BATCH_DRAFT_STORAGE_KEY = 'survival-garden.batch-draft';
+const INITIAL_BATCH_METHODS = {
+  sowing: { stage: 'sowing', startMethod: undefined },
+  pre_sow_paper_towel: { stage: 'pre_sown', startMethod: 'pre_sow_paper_towel' },
+  pre_sow_indoor: { stage: 'pre_sown', startMethod: 'pre_sow_indoor' },
+  direct_sow: { stage: 'sowing', startMethod: 'direct_sow' },
+  sow_indoor: { stage: 'sowing', startMethod: 'sow_indoor' },
+} as const;
+const LEGACY_INITIAL_BATCH_METHOD_ALIASES: Record<string, keyof typeof INITIAL_BATCH_METHODS> = {
+  'pre-sow': 'pre_sow_paper_towel',
+  'sow-in-pot': 'sow_indoor',
+  'sow-in-ground': 'direct_sow',
+};
+
+const normalizeInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS => {
+  if (value in INITIAL_BATCH_METHODS) {
+    return value as keyof typeof INITIAL_BATCH_METHODS;
+  }
+
+  return LEGACY_INITIAL_BATCH_METHOD_ALIASES[value] ?? 'sowing';
+};
+
+const getInitialBatchMethodForBatch = (batch: Batch): keyof typeof INITIAL_BATCH_METHODS => {
+  if (typeof batch.startMethod === 'string' && batch.startMethod.length > 0) {
+    return normalizeInitialBatchMethod(batch.startMethod);
+  }
+
+  if (batch.stage === 'pre_sown') {
+    return 'pre_sow_paper_towel';
+  }
+
+  return 'sowing';
+};
 
 const saveBatchDraftState = (draft: BatchDraftState) => {
   try {
@@ -2293,7 +2325,10 @@ const loadBatchDraftState = (): BatchDraftState | null => {
         seedCountGerminatedConfidence: typeof parsed.formValues.seedCountGerminatedConfidence === 'string' ? parsed.formValues.seedCountGerminatedConfidence : '',
         plantCountAlive: typeof parsed.formValues.plantCountAlive === 'string' ? parsed.formValues.plantCountAlive : '',
         plantCountAliveConfidence: typeof parsed.formValues.plantCountAliveConfidence === 'string' ? parsed.formValues.plantCountAliveConfidence : '',
-        initialMethod: typeof parsed.formValues.initialMethod === 'string' ? parsed.formValues.initialMethod : 'sowing',
+        initialMethod:
+          typeof parsed.formValues.initialMethod === 'string'
+            ? normalizeInitialBatchMethod(parsed.formValues.initialMethod)
+            : 'sowing',
       },
     };
   } catch {
@@ -3480,7 +3515,7 @@ function BatchesPage({
         typeof meta.seedCountGerminatedConfidence === 'string' ? meta.seedCountGerminatedConfidence : '',
       plantCountAlive: batch.plantCountAlive?.toString() ?? '',
       plantCountAliveConfidence: typeof meta.plantCountAliveConfidence === 'string' ? meta.plantCountAliveConfidence : '',
-      initialMethod: batch.stage,
+      initialMethod: getInitialBatchMethodForBatch(batch),
     });
     setFormErrors({});
     setSaveMessage(null);
@@ -3684,8 +3719,11 @@ function BatchesPage({
       'plantCountAliveConfidence',
     );
 
-    if (formValues.initialMethod !== 'sowing') {
-      errors.initialMethod = 'Only sowing can be saved with current state transitions.';
+    const initialMethod = normalizeInitialBatchMethod(formValues.initialMethod);
+    const initialMethodConfig = INITIAL_BATCH_METHODS[initialMethod];
+
+    if (!initialMethodConfig) {
+      errors.initialMethod = 'Choose a supported sowing start method.';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -3729,14 +3767,20 @@ function BatchesPage({
         cropTypeId: resolvedCultivar.cropTypeId,
         ...(existingBatch?.variety ? { variety: existingBatch.variety } : {}),
         startedAt,
-        stage: existingBatch?.stage ?? 'sowing',
+        stage: existingBatch?.stage ?? initialMethodConfig.stage,
         stageEvents:
           existingBatch?.stageEvents ?? [
             {
-              stage: 'sowing',
+              stage: initialMethodConfig.stage,
               occurredAt: startedAt,
+              ...(initialMethodConfig.startMethod ? { method: initialMethodConfig.startMethod } : {}),
             },
           ],
+        ...(existingBatch?.startMethod
+          ? { startMethod: existingBatch.startMethod }
+          : initialMethodConfig.startMethod
+            ? { startMethod: initialMethodConfig.startMethod }
+            : {}),
         assignments: existingBatch?.assignments ?? [],
         ...(seedCountPlanned !== null ? { seedCountPlanned } : {}),
         ...(seedCountGerminated !== null ? { seedCountGerminated } : {}),
@@ -3912,15 +3956,15 @@ function BatchesPage({
             <select
               value={formValues.initialMethod}
               onChange={(event) => setFormValues((current) => ({ ...current, initialMethod: event.target.value }))}
+              disabled={Boolean(editingBatchId)}
             >
-              <option value="sowing">Sow (supported)</option>
-              <option value="pre-sow">Pre-sow (wet paper)</option>
-              <option value="sow-in-pot">Sow in pot</option>
-              <option value="sow-in-ground">Sow in ground</option>
-              <option value="pre-start-cutting">Pre-start from cutting</option>
-              <option value="start-cutting-pot">Start cutting in pot</option>
-              <option value="start-cutting-ground">Start cutting in ground</option>
+              <option value="sowing">Sow</option>
+              <option value="pre_sow_paper_towel">Pre-sow (wet paper)</option>
+              <option value="pre_sow_indoor">Pre-sow tray / indoor</option>
+              <option value="direct_sow">Direct sow</option>
+              <option value="sow_indoor">Sow indoor</option>
             </select>
+            <span className="batch-form-note">Supported sowing-stage starts can be created here. Start stage and method become read-only after save.</span>
             {formErrors.initialMethod ? <span className="form-error">{formErrors.initialMethod}</span> : null}
           </label>
 
@@ -3989,7 +4033,7 @@ function BatchesPage({
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation now links directly to an existing cultivar record. If the cultivar you need is missing, create it in Cultivar Admin first, then return here. Non-sowing start transitions are still planning-only.
+          Batch creation now links directly to an existing cultivar record. If the cultivar you need is missing, create it in Cultivar Admin first, then return here. Sowing-stage starts like pre-sow, direct sow, and sow indoor can be saved here.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
