@@ -2274,14 +2274,18 @@ const LEGACY_INITIAL_BATCH_METHOD_ALIASES: Record<string, keyof typeof INITIAL_B
   'sow-in-pot': 'sow_indoor',
   'sow-in-ground': 'direct_sow',
 };
+const INITIAL_BATCH_METHOD_ERROR =
+  'This batch can only be created from a supported sowing-stage start method: Sow, Pre-sow (wet paper), Pre-sow tray / indoor, Direct sow, or Sow indoor.';
 
-const normalizeInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS => {
+const resolveInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS | null => {
   if (value in INITIAL_BATCH_METHODS) {
     return value as keyof typeof INITIAL_BATCH_METHODS;
   }
 
-  return LEGACY_INITIAL_BATCH_METHOD_ALIASES[value] ?? 'sowing';
+  return LEGACY_INITIAL_BATCH_METHOD_ALIASES[value] ?? null;
 };
+
+const normalizeInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS => resolveInitialBatchMethod(value) ?? 'sowing';
 
 const getInitialBatchMethodForBatch = (batch: Batch): keyof typeof INITIAL_BATCH_METHODS => {
   if (typeof batch.startMethod === 'string' && batch.startMethod.length > 0) {
@@ -3719,11 +3723,11 @@ function BatchesPage({
       'plantCountAliveConfidence',
     );
 
-    const initialMethod = normalizeInitialBatchMethod(formValues.initialMethod);
-    const initialMethodConfig = INITIAL_BATCH_METHODS[initialMethod];
+    const initialMethod = resolveInitialBatchMethod(formValues.initialMethod);
+    const initialMethodConfig = initialMethod ? INITIAL_BATCH_METHODS[initialMethod] : null;
 
     if (!initialMethodConfig) {
-      errors.initialMethod = 'Choose a supported sowing start method.';
+      errors.initialMethod = INITIAL_BATCH_METHOD_ERROR;
     }
 
     if (Object.keys(errors).length > 0) {
@@ -3964,7 +3968,7 @@ function BatchesPage({
               <option value="direct_sow">Direct sow</option>
               <option value="sow_indoor">Sow indoor</option>
             </select>
-            <span className="batch-form-note">Supported sowing-stage starts can be created here. Start stage and method become read-only after save.</span>
+            <span className="batch-form-note">Choose a supported sowing-stage start method. Pre-sow options save as pre-sown lifecycle entries, and start stage/method become read-only after save.</span>
             {formErrors.initialMethod ? <span className="form-error">{formErrors.initialMethod}</span> : null}
           </label>
 
@@ -4033,7 +4037,7 @@ function BatchesPage({
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation now links directly to an existing cultivar record. If the cultivar you need is missing, create it in Cultivar Admin first, then return here. Sowing-stage starts like pre-sow, direct sow, and sow indoor can be saved here.
+          Batch creation now links directly to an existing cultivar record. If the cultivar you need is missing, create it in Cultivar Admin first, then return here. Supported sowing-stage starts here are Sow, Pre-sow (wet paper), Pre-sow tray / indoor, Direct sow, and Sow indoor.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
