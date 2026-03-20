@@ -31,7 +31,7 @@ import {
   removeBatchFromBed,
   assertValid,
 } from './data';
-import { applyStageEvent, canTransition } from './domain';
+import { applyStageEvent, canTransition, inferBatchStartMethod } from './domain';
 
 type CultivarRecord = {
   cultivarId: string;
@@ -2264,8 +2264,8 @@ const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(
 const BATCH_DRAFT_STORAGE_KEY = 'survival-garden.batch-draft';
 const INITIAL_BATCH_METHODS = {
   sowing: { label: 'Sow', stage: 'sowing', startMethod: undefined },
-  pre_sow_paper_towel: { label: 'Pre-sow (wet paper)', stage: 'pre_sown', startMethod: 'pre_sow_paper_towel' },
-  pre_sow_indoor: { label: 'Pre-sow tray / indoor', stage: 'pre_sown', startMethod: 'pre_sow_indoor' },
+  pre_sow_paper_towel: { label: 'Pre-sow (wet paper)', stage: 'sowing', startMethod: 'pre_sow_paper_towel' },
+  pre_sow_indoor: { label: 'Pre-sow tray / indoor', stage: 'sowing', startMethod: 'pre_sow_indoor' },
   direct_sow: { label: 'Direct sow', stage: 'sowing', startMethod: 'direct_sow' },
   sow_indoor: { label: 'Sow indoor', stage: 'sowing', startMethod: 'sow_indoor' },
 } as const;
@@ -2298,12 +2298,20 @@ const normalizeInitialBatchMethod = (value: string): InitialBatchMethodKey => {
 };
 
 const getInitialBatchMethodForBatch = (batch: Batch): InitialBatchMethodKey => {
-  if (typeof batch.startMethod === 'string' && batch.startMethod.length > 0) {
-    return resolveInitialBatchMethod(batch.startMethod) ?? 'sowing';
-  }
+  const firstStageEvent = batch.stageEvents[0];
+  const normalizedStartMethod = inferBatchStartMethod(
+    typeof (firstStageEvent?.meta as Record<string, unknown> | undefined)?.legacyStage === 'string'
+      ? (firstStageEvent?.meta as Record<string, unknown>).legacyStage as string
+      : batch.stage,
+    typeof batch.startMethod === 'string' && batch.startMethod.length > 0
+      ? batch.startMethod
+      : typeof firstStageEvent?.method === 'string'
+        ? firstStageEvent.method
+        : undefined,
+  );
 
-  if (batch.stage === 'pre_sown') {
-    return 'pre_sow_paper_towel';
+  if (normalizedStartMethod) {
+    return resolveInitialBatchMethod(normalizedStartMethod) ?? 'sowing';
   }
 
   return 'sowing';
