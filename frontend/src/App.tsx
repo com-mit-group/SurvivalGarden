@@ -6462,9 +6462,17 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         />
       </label>
       <p>Expected format: {'{ "batches": [ ... ] }'}</p>
+      <p>
+        Recommended backup-first taxonomy migration flow: export the current dataset, import species records, import cultivar/crop records, then
+        import batches so legacy <code>cropId</code> references can be reviewed in order.
+      </p>
       <p>Cultivar import endpoint contract: <code>POST /api/import/crops</code> with <code>{'{ "crops": [ { "cropId": "...", "cultivar": "...", "speciesId": "...", "species": { "id": "...", "commonName": "...", "scientificName": "..." } } ] }'}</code>.</p>
       <p>Legacy species-level or phantom-species crop payloads are treated as taxonomy repairs: the surviving crop should be a cultivar record linked by <code>speciesId</code> to a real top-level species.</p>
       <p>When variety data is missing, the importer keeps the crop active as a placeholder cultivar using the deterministic label <code>Unknown variety</code> instead of leaving a ghost canonical crop behind.</p>
+      <p>
+        Conservative repair guidance: keep ambiguous legacy crop records as placeholder cultivars until you can prove the correct species/crop-type
+        split, and treat exported JSON plus deterministic IDs as the audit trail for old-to-new mapping.
+      </p>
       <p>Species import endpoint contract: <code>POST /api/import/species</code> with <code>{'{ "species": [ { "id": "species_lettuce", "commonName": "Lettuce", "scientificName": "Lactuca sativa", "aliases": ["Garden lettuce"], "notes": "Cool-season leafy species." } ] }'}</code>.</p>
       <p>Species edit support is available in-app for <code>commonName</code>, <code>scientificName</code>, <code>aliases</code>, and <code>notes</code>; <code>id</code> stays immutable so crop <code>speciesId</code> references remain intact.</p>
       <p>Crop plan import endpoint contract: <code>POST /api/import/crop-plans</code> with <code>{'{ "cropPlans": [ ... ] }'}</code>.</p>
@@ -6488,6 +6496,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         Merge behavior: existing batches are matched by <code>batchId</code>; stage events use deterministic dedupe by{' '}
         <code>type + date + location</code>; immutable fields (<code>cropId</code>, <code>startedAt</code>,{' '}
         <code>startMethod</code>, <code>startLocation</code>) cannot change; <code>currentStage</code> follows the latest event.
+      </p>
+      <p>
+        Batch relink review: confirm imported batches still point at the intended cultivar/crop placeholder before saving, especially when the crop
+        payload used <code>Unknown variety</code> or other migration-era stand-ins.
       </p>
       <label>
         <input
