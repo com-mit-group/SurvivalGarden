@@ -733,7 +733,9 @@ const canonicalizeForExport = (appState: AppState): AppState => {
   return withCultivars({
     ...appState,
     beds: sortCollectionByKey(appState.beds, ['bedId', 'gardenId', 'name']),
-    species: appState.species ? sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) : appState.species,
+    ...(appState.species
+      ? { species: sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) }
+      : {}),
     crops: sortCollectionByKey(appState.crops, ['speciesId', 'cropId', 'name', 'cultivar']),
     cropPlans: sortCollectionByKey(appState.cropPlans, ['cropId', 'planId']),
     batches: sortBatchesForHierarchy(appState.batches),
