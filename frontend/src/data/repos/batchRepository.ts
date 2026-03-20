@@ -61,7 +61,11 @@ const normalizeStageEvent = (
   event: Record<string, unknown>,
   fallbackStage?: string,
 ): Record<string, unknown> => {
-  const rawStage = asString(event.stage) ?? asString(event.type) ?? fallbackStage;
+  const rawStage = 'stage' in event
+    ? (typeof event.stage === 'string' ? event.stage : undefined)
+    : 'type' in event
+      ? (typeof event.type === 'string' ? event.type : undefined)
+      : fallbackStage;
   const normalizedStage = rawStage ? normalizeBatchStage(rawStage) : undefined;
   const normalizedMethod = inferBatchStartMethod(rawStage, asString(event.method));
   const nextMeta = asRecord(event.meta);
