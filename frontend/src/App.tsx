@@ -1671,8 +1671,8 @@ function SeedInventoryPage() {
 
   return (
     <section className="seed-inventory-page">
-      <h2>Seed Inventory</h2>
-      <p className="batch-form-note">Cultivars are managed independently from batches here: record the named variety once, keep it inventory-aware, and link it back to a crop type for reuse.</p>
+      <h2>Cultivar Admin</h2>
+      <p className="batch-form-note">Cultivars are managed independently from batches here: record the named variety once, keep it inventory-aware, and link it back to an existing crop type for reuse in batch workflows.</p>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
         <input
           type="text"
@@ -1765,7 +1765,7 @@ function SeedInventoryPage() {
           ))}
         </ul>
       ) : null}
-      {!isLoading && items.length === 0 ? <p>No seed inventory items yet.</p> : null}
+      {!isLoading && items.length === 0 ? <p>No cultivars in inventory yet. Create species first, then crop types, then add cultivars here for batch selection.</p> : null}
     </section>
   );
 }
@@ -1883,7 +1883,15 @@ const createUniqueSpeciesId = (name: string, existingSpeciesIds: string[]): stri
   return candidate;
 };
 
-function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { taxonomyOnly?: boolean; showAdminDataSurgery?: boolean }) {
+function BatchesPage({
+  taxonomyOnly = false,
+  showAdminDataSurgery = false,
+  taxonomySection = 'overview',
+}: {
+  taxonomyOnly?: boolean;
+  showAdminDataSurgery?: boolean;
+  taxonomySection?: 'overview' | 'species' | 'crop-types';
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [cropIds, setCropIds] = useState<string[]>([]);
@@ -1898,9 +1906,6 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cropInput: '',
-    cropCategory: '',
-    cropScientificName: '',
-    cropAliases: '',
     variety: '',
     startedAt: getLocalDateTimeDefault(),
     seedCountPlanned: '',
@@ -1912,7 +1917,6 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [isAddingNewCrop, setIsAddingNewCrop] = useState(false);
   const [cropCreateValues, setCropCreateValues] = useState({
     speciesId: '',
     cultivar: '',
@@ -2747,9 +2751,6 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         name: cropNames[batch.cultivarId ?? batch.cropId ?? ''],
         scientificName: cropScientificNames[batch.cultivarId ?? batch.cropId ?? ''],
       }),
-      cropCategory: '',
-      cropScientificName: '',
-      cropAliases: '',
       variety: batch.variety ?? '',
       startedAt,
       seedCountPlanned: batch.seedCountPlanned?.toString() ?? '',
@@ -2766,12 +2767,8 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
   const resetForm = () => {
     setEditingBatchId(null);
-    setIsAddingNewCrop(false);
     setFormValues({
       cropInput: '',
-      cropCategory: '',
-      cropScientificName: '',
-      cropAliases: '',
       variety: '',
       startedAt: getLocalDateTimeDefault(),
       seedCountPlanned: '',
@@ -3065,19 +3062,24 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
   return (
     <section className="batches-page">
-      <h2>{taxonomyOnly ? 'Taxonomy' : 'Batches'}</h2>
+      <h2>{taxonomyOnly ? (taxonomySection === 'species' ? 'Species Admin' : taxonomySection === 'crop-types' ? 'Crop Type Admin' : 'Taxonomy Admin') : 'Batches'}</h2>
 
       {taxonomyOnly ? (
         <>
           <p className="batch-form-note">
-            Manage reusable taxonomy records here. Species define the biological taxon, crop types define the garden/agricultural form, and cultivars remain separate reusable named inventory records under those crop types.
+            Manage reusable taxonomy records here. Species define the biological taxon, crop types define the garden form under that species, and cultivars stay in seed inventory as explicit named records that batches consume.
           </p>
-          <nav className="batch-form-actions" aria-label="Taxonomy forms">
-            <Link to="/taxonomy#create-species">Create species</Link>
-            <Link to="/taxonomy#edit-species">Edit species</Link>
-            <Link to="/taxonomy#create-crop">Create crop type</Link>
-            <Link to="/seed-inventory">Manage cultivars</Link>
+          <nav className="batch-form-actions" aria-label="Taxonomy admin views">
+            <Link to="/taxonomy">Hierarchy overview</Link>
+            <Link to="/taxonomy/species">Species</Link>
+            <Link to="/taxonomy/crop-types">Crop types</Link>
+            <Link to="/taxonomy/cultivars">Cultivars</Link>
           </nav>
+          {taxonomySection === 'overview' ? (
+            <p className="batch-form-note">
+              Start with species, then define crop types, then manage cultivars in inventory. Batch workflows should only select an existing cultivar.
+            </p>
+          ) : null}
         </>
       ) : (
         <>
@@ -3129,12 +3131,11 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             </label>
           </div>
 
-          <nav className="batch-form-actions" aria-label="Creation flows">
+          <nav className="batch-form-actions" aria-label="Batch and admin flows">
             <Link to="/batches#create-batch">Batch form</Link>
+            <Link to="/seed-inventory">Cultivar admin</Link>
             <Link to="/batches#edit-crop">Edit crop type metadata</Link>
-            <Link to="/taxonomy#create-crop">Crop type taxonomy</Link>
-            <Link to="/seed-inventory">Cultivars</Link>
-            <Link to="/taxonomy#create-species">Species taxonomy</Link>
+            <Link to="/taxonomy/species">Species admin</Link>
           </nav>
         </>
       )}
@@ -3161,41 +3162,6 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
             </datalist>
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
           </label>
-
-          {isAddingNewCrop ? (
-            <>
-              <label>
-                New crop type
-                <input
-                  type="text"
-                  value={formValues.cropCategory}
-                  onChange={(event) => setFormValues((current) => ({ ...current, cropCategory: event.target.value }))}
-                  placeholder="Required"
-                />
-                {formErrors.cropCategory ? <span className="form-error">{formErrors.cropCategory}</span> : null}
-              </label>
-
-              <label>
-                Crop type scientific name
-                <input
-                  type="text"
-                  value={formValues.cropScientificName}
-                  onChange={(event) => setFormValues((current) => ({ ...current, cropScientificName: event.target.value }))}
-                  placeholder="Optional"
-                />
-              </label>
-
-              <label>
-                Crop type aliases
-                <input
-                  type="text"
-                  value={formValues.cropAliases}
-                  onChange={(event) => setFormValues((current) => ({ ...current, cropAliases: event.target.value }))}
-                  placeholder="Optional, comma-separated"
-                />
-              </label>
-            </>
-          ) : null}
 
           <label>
             Cultivar label (optional)
@@ -3299,11 +3265,13 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation links directly to an existing cultivar record, which can then resolve back through crop type and species metadata for display. Use taxonomy and inventory screens to prepare those reusable records before creating batches. Non-sowing start transitions are still planning-only.
+          Batch creation only links to an existing cultivar record. If you need a new species, crop type, or cultivar, create it first in the dedicated admin views, then come back and select that saved cultivar here. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
+          <Link to="/seed-inventory">Open cultivar admin</Link>
           <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
+          <Link to="/taxonomy/species">Open species admin</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
             <button type="button" onClick={resetForm}>
@@ -3315,7 +3283,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
       </form>
       ) : null}
 
-      {!taxonomyOnly ? (
+      {(!taxonomyOnly || taxonomySection === 'crop-types') ? (
         <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
           <h3>Edit crop type metadata</h3>
           <div className="batch-form-grid">
@@ -3439,7 +3407,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
               {cropEditErrors.notes ? <span className="form-error">{cropEditErrors.notes}</span> : null}
             </label>
           </div>
-          <p className="batch-form-note">Species identity is locked here. Use the taxonomy tab's species editor to update shared species metadata safely.</p>
+          <p className="batch-form-note">Species identity is locked here. Use Species Admin to update shared species metadata safely.</p>
           <div className="batch-form-actions">
             <button type="submit">Save crop type changes</button>
             {cropEditMessage ? <p className="batch-form-message">{cropEditMessage}</p> : null}
@@ -3449,6 +3417,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
 
       {taxonomyOnly ? (
         <>
+      {taxonomySection !== 'species' ? (
       <form id="create-crop" className="batch-form" onSubmit={(event) => void handleCreateCropSubmit(event)}>
         <h3>Create crop type</h3>
         <div className="batch-form-grid">
@@ -3517,8 +3486,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           {cropCreateMessage ? <p className="batch-form-message">{cropCreateMessage}</p> : null}
         </div>
       </form>
+      ) : null}
 
-      {showAdminDataSurgery ? (
+      {showAdminDataSurgery && taxonomySection !== 'species' ? (
         <section className="batch-form">
           <h3>Repair crop type taxonomy</h3>
           <div className="batch-form-grid">
@@ -3570,6 +3540,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
         </section>
       ) : null}
 
+      {taxonomySection !== 'crop-types' ? (
       <form id="create-species" className="batch-form" onSubmit={(event) => void handleSpeciesCreateSubmit(event)}>
         <h3>Create species</h3>
         <div className="batch-form-grid">
@@ -3639,7 +3610,9 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           {speciesCreateMessage ? <p className="batch-form-message">{speciesCreateMessage}</p> : null}
         </div>
       </form>
+      ) : null}
 
+      {taxonomySection !== 'crop-types' ? (
       <form id="edit-species" className="batch-form" onSubmit={(event) => void handleSpeciesEditSubmit(event)}>
         <h3>Edit species metadata</h3>
         <div className="batch-form-grid">
@@ -3705,6 +3678,7 @@ function BatchesPage({ taxonomyOnly = false, showAdminDataSurgery = false }: { t
           {speciesEditMessage ? <p className="batch-form-message">{speciesEditMessage}</p> : null}
         </div>
       </form>
+      ) : null}
         </>
       ) : null}
 
@@ -6950,6 +6924,9 @@ function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/batches" element={<BatchesPage />} />
           <Route path="/taxonomy" element={<BatchesPage taxonomyOnly showAdminDataSurgery={isDevResetEnabled} />} />
+          <Route path="/taxonomy/species" element={<BatchesPage taxonomyOnly taxonomySection="species" showAdminDataSurgery={isDevResetEnabled} />} />
+          <Route path="/taxonomy/crop-types" element={<BatchesPage taxonomyOnly taxonomySection="crop-types" showAdminDataSurgery={isDevResetEnabled} />} />
+          <Route path="/taxonomy/cultivars" element={<SeedInventoryPage />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
           <Route path="/seed-inventory" element={<SeedInventoryPage />} />
@@ -6976,7 +6953,7 @@ function App() {
       <nav className="tab-nav" aria-label="Primary">
         <NavLink to="/beds">Beds</NavLink>
         <NavLink to="/calendar">Calendar</NavLink>
-        <NavLink to="/taxonomy">Taxonomy</NavLink>
+        <NavLink to="/taxonomy">Admin</NavLink>
         <NavLink to="/batches">Batches</NavLink>
         <NavLink to="/nutrition">Nutrition</NavLink>
         <NavLink to="/seed-inventory">Seeds</NavLink>
