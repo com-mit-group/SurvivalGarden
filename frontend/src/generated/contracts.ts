@@ -186,6 +186,7 @@ export interface Crop {
   cropId: string;
   name: string;
   cultivar?: string;
+  cultivarGroup?: string;
   speciesId?: string;
   species?: {
     id?: string;
