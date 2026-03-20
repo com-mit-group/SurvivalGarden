@@ -1,0 +1,218 @@
+{
+  "batches": [],
+  "beds": [],
+  "cropPlans": [],
+  "crops": [
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_beetroot",
+      "name": "Beetroot",
+      "speciesId": "species_beta_vulgaris",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_broccoli",
+      "name": "Broccoli",
+      "speciesId": "species_brassica_oleracea",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_cabbage",
+      "name": "Cabbage",
+      "speciesId": "species_brassica_oleracea",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_chard",
+      "name": "Chard",
+      "speciesId": "species_beta_vulgaris",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_kale",
+      "name": "Kale",
+      "speciesId": "species_brassica_oleracea",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_kohlrabi",
+      "name": "Kohlrabi",
+      "speciesId": "species_brassica_oleracea",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_pea_shelling",
+      "name": "Shelling Pea",
+      "speciesId": "species_pisum_sativum",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_pea_snow",
+      "name": "Snow Pea",
+      "speciesId": "species_pisum_sativum",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropId": "crop_type_potato",
+      "name": "Potato",
+      "speciesId": "species_solanum_tuberosum",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    }
+  ],
+  "cultivars": [
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_beetroot",
+      "cultivarId": "cultivar_beetroot_detroit_dark_red",
+      "name": "Detroit Dark Red",
+      "notes": "Reference beetroot cultivar under the beetroot crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_broccoli",
+      "cultivarId": "cultivar_broccoli_calabrese",
+      "name": "Calabrese",
+      "notes": "Reference broccoli cultivar under the broccoli crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_cabbage",
+      "cultivarId": "cultivar_cabbage_golden_acre",
+      "name": "Golden Acre",
+      "notes": "Reference cabbage cultivar under the cabbage crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_chard",
+      "cultivarId": "cultivar_chard_fordhook_giant",
+      "name": "Fordhook Giant",
+      "notes": "Reference chard cultivar under the chard crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_kale",
+      "cultivarId": "cultivar_kale_nero_di_toscana",
+      "name": "Nero di Toscana",
+      "notes": "Reference kale cultivar under the kale crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_kohlrabi",
+      "cultivarId": "cultivar_kohlrabi_purple_vienna",
+      "name": "Purple Vienna",
+      "notes": "Reference kohlrabi cultivar under the kohlrabi crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_pea_shelling",
+      "cultivarId": "cultivar_pea_shelling_kelvedon_wonder",
+      "name": "Kelvedon Wonder",
+      "notes": "Reference shelling pea cultivar under the shelling pea crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_pea_snow",
+      "cultivarId": "cultivar_pea_snow_oregon_sugar_pod_ii",
+      "name": "Oregon Sugar Pod II",
+      "notes": "Reference snow pea cultivar under the snow pea crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-03-20T00:00:00Z",
+      "cropTypeId": "crop_type_potato",
+      "cultivarId": "cultivar_potato_bintje",
+      "name": "Bintje",
+      "notes": "Reference potato cultivar under the potato crop type.",
+      "updatedAt": "2026-03-20T00:00:00Z"
+    }
+  ],
+  "schemaVersion": 2,
+  "seedInventoryItems": [],
+  "settings": {
+    "createdAt": "2026-03-20T00:00:00Z",
+    "locale": "de-DE",
+    "settingsId": "settings_001",
+    "timezone": "Europe/Berlin",
+    "units": {
+      "temperature": "celsius",
+      "yield": "metric"
+    },
+    "updatedAt": "2026-03-20T00:00:00Z",
+    "weekStartsOn": "monday"
+  },
+  "species": [
+    {
+      "aliases": [
+        "Wild cabbage"
+      ],
+      "commonName": "Brassica crops",
+      "id": "species_brassica_oleracea",
+      "notes": "Canonical species parent for broccoli, cabbage, kale, and kohlrabi crop types.",
+      "scientificName": "Brassica oleracea",
+      "taxonomy": {
+        "family": "Brassicaceae",
+        "genus": "Brassica",
+        "species": "oleracea"
+      }
+    },
+    {
+      "aliases": [
+        "Beet",
+        "Swiss chard"
+      ],
+      "commonName": "Beet and chard",
+      "id": "species_beta_vulgaris",
+      "notes": "Canonical species parent for beetroot and chard crop types.",
+      "scientificName": "Beta vulgaris",
+      "taxonomy": {
+        "family": "Amaranthaceae",
+        "genus": "Beta",
+        "species": "vulgaris"
+      }
+    },
+    {
+      "aliases": [
+        "Garden pea"
+      ],
+      "commonName": "Pea",
+      "id": "species_pisum_sativum",
+      "notes": "Canonical species parent for shelling pea and snow pea crop types.",
+      "scientificName": "Pisum sativum",
+      "taxonomy": {
+        "family": "Fabaceae",
+        "genus": "Pisum",
+        "species": "sativum"
+      }
+    },
+    {
+      "aliases": [
+        "Irish potato"
+      ],
+      "commonName": "Potato",
+      "id": "species_solanum_tuberosum",
+      "notes": "Canonical species parent for potato crop types and cultivars.",
+      "scientificName": "Solanum tuberosum",
+      "taxonomy": {
+        "family": "Solanaceae",
+        "genus": "Solanum",
+        "species": "tuberosum"
+      }
+    }
+  ],
+  "tasks": []
+}
