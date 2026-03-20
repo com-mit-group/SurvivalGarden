@@ -1044,34 +1044,30 @@ function BedDetailPage() {
           <p className="beds-empty-state">No active batches assigned to this bed.</p>
         ) : (
           <ul className="bed-detail-batch-list">
-            {batches.map((batch) => (
-              <li key={batch.batchId}>
-                {(() => {
-                  const batchDisplay = getBatchCultivarDisplay({
-                    batch,
-                    cultivarsById,
-                    cropNames,
-                    cropScientificNames,
-                  });
+            {batches.map((batch) => {
+              const batchDisplay = getBatchCultivarDisplay({
+                batch,
+                cultivarsById,
+                cropNames,
+                cropScientificNames,
+              });
 
-                  return (
-                    <div className="bed-detail-batch-head">
-                      <Link to={`/batches/${batch.batchId}`}>
-                        <CropIdentityLabel cropId={batchDisplay.identityId} name={batchDisplay.name} scientificName={batchDisplay.scientificName} />
-                      </Link>
-                      <span className="crop-capability-badges" aria-label="Crop capabilities">
-                        {getCropCapabilityLabels({
-                          isUserDefined: userDefinedCropIds[batchDisplay.capabilityCropId],
-                          hasTaskRules: cropHasTaskRules[batchDisplay.capabilityCropId],
-                        }).map((label) => (
-                          <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
-                            {label}
-                          </span>
-                        ))}
+              return (
+                <li key={batch.batchId}>
+                <div className="bed-detail-batch-head">
+                  <Link to={`/batches/${batch.batchId}`}>
+                    <CropIdentityLabel cropId={batchDisplay.identityId} name={batchDisplay.name} scientificName={batchDisplay.scientificName} />
+                  </Link>
+                  <span className="crop-capability-badges" aria-label="Crop capabilities">
+                    {getCropCapabilityLabels({
+                      isUserDefined: userDefinedCropIds[batchDisplay.capabilityCropId],
+                      hasTaskRules: cropHasTaskRules[batchDisplay.capabilityCropId],
+                    }).map((label) => (
+                      <span key={`${batch.batchId}-${label}`} className="crop-capability-badge">
+                        {label}
                       </span>
-                    </div>
-                  );
-                })()}
+                    ))}
+                  </span>
                   <span className="batch-stage-badge">{batch.stage}</span>
                   <button
                     type="button"
@@ -1158,7 +1154,8 @@ function BedDetailPage() {
                   </div>
                 ) : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
