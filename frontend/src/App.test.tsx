@@ -1414,7 +1414,7 @@ describe('App', () => {
 
     const cases = [
       {
-        cultivarLabel: 'Romaine · Lettuce · Lactuca sativa · No rules yet',
+        cultivarLabel: 'Romaine',
         startedAt: '2026-03-06T18:30',
         selectedMethod: 'pre_sow_paper_towel',
         expectedMethod: 'pre_sow_paper_towel',
@@ -1422,7 +1422,7 @@ describe('App', () => {
         sourceBatchId: migratedLettuceBatch?.batchId,
       },
       {
-        cultivarLabel: 'Genoveser · Basil · Ocimum basilicum · No rules yet',
+        cultivarLabel: 'Genoveser',
         startedAt: '2026-03-05T12:00',
         selectedMethod: 'pre_sow_indoor',
         expectedMethod: 'pre_sow_indoor',
@@ -1430,7 +1430,7 @@ describe('App', () => {
         sourceBatchId: migratedBasilBatch?.batchId,
       },
       {
-        cultivarLabel: 'Romaine · Lettuce · Lactuca sativa · No rules yet',
+        cultivarLabel: 'Romaine',
         startedAt: '2026-03-08T08:15',
         selectedMethod: 'direct_sow',
         expectedMethod: 'direct_sow',
@@ -1438,7 +1438,7 @@ describe('App', () => {
         sourceBatchId: 'synthetic-direct-sow-coverage',
       },
       {
-        cultivarLabel: 'Genoveser · Basil · Ocimum basilicum · No rules yet',
+        cultivarLabel: 'Genoveser',
         startedAt: '2026-03-09T09:45',
         selectedMethod: 'sow_indoor',
         expectedMethod: 'sow_indoor',
