@@ -3270,7 +3270,7 @@ function BatchesPage({
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
           <Link to="/seed-inventory">Open cultivar admin</Link>
-          <Link to="/taxonomy/crop-types">Open crop type admin</Link>
+          <Link to="/taxonomy/crop-types">Open crop type taxonomy form</Link>
           <Link to="/taxonomy/species">Open species admin</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
@@ -3283,7 +3283,7 @@ function BatchesPage({
       </form>
       ) : null}
 
-      {taxonomyOnly && taxonomySection !== 'species' ? (
+      {(!taxonomyOnly || taxonomySection !== 'species') ? (
         <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
           <h3>Edit crop type metadata</h3>
           <div className="batch-form-grid">
