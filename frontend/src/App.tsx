@@ -3283,7 +3283,7 @@ function BatchesPage({
       </form>
       ) : null}
 
-      {taxonomyOnly && taxonomySection !== 'species' ? (
+      {(!taxonomyOnly || taxonomySection === 'crop-types') ? (
         <form id="edit-crop" className="batch-form" onSubmit={(event) => void handleCropEditSubmit(event)}>
           <h3>Edit crop type metadata</h3>
           <div className="batch-form-grid">
