@@ -1,4 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+declare global {
+  interface ImportMeta {
+    glob: (
+      pattern: string,
+      options?: { eager?: boolean; import?: string },
+    ) => Record<string, unknown>;
+  }
+}
+
+const realBatchFixtures = import.meta.glob('../../fixtures/real/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, { batches?: Array<Record<string, unknown>> }>;
+
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -44,6 +59,83 @@ vi.mock('./data', () => ({
     }
   },
 }));
+
+const buildBatchCreationState = () => ({
+  schemaVersion: 1,
+  beds: [],
+  species: [
+    {
+      id: 'species_lettuce',
+      commonName: 'Lettuce',
+      scientificName: 'Lactuca sativa',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 'species_basil',
+      commonName: 'Basil',
+      scientificName: 'Ocimum basilicum',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+  ],
+  crops: [
+    {
+      cropId: 'crop_lettuce_romaine',
+      name: 'Lettuce',
+      cultivar: 'Lettuce',
+      speciesId: 'species_lettuce',
+      species: {
+        id: 'species_lettuce',
+        commonName: 'Lettuce',
+        scientificName: 'Lactuca sativa',
+      },
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+    {
+      cropId: 'crop_basil_genoveser',
+      name: 'Basil',
+      cultivar: 'Basil',
+      speciesId: 'species_basil',
+      species: {
+        id: 'species_basil',
+        commonName: 'Basil',
+        scientificName: 'Ocimum basilicum',
+      },
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+  ],
+  cropPlans: [],
+  cultivars: [
+    {
+      cultivarId: 'cultivar_lettuce_romaine',
+      cropTypeId: 'crop_lettuce_romaine',
+      name: 'Romaine',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+    {
+      cultivarId: 'cultivar_basil_genoveser',
+      cropTypeId: 'crop_basil_genoveser',
+      name: 'Genoveser',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+  ],
+  batches: [],
+  tasks: [],
+  seedInventoryItems: [],
+  settings: {
+    settingsId: 'settings-1',
+    locale: 'en-US',
+    timezone: 'UTC',
+    units: { temperature: 'celsius', yield: 'metric' },
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+});
 
 describe('App', () => {
   beforeEach(() => {
@@ -1293,6 +1385,95 @@ describe('App', () => {
     expect(within(createBatchForm).getByLabelText(/^Species/)).toHaveValue('');
     expect(screen.getByText('Select an existing cultivar record. Crop type and species are derived automatically.')).toBeInTheDocument();
     expect(screen.queryByText('Cultivar / variety label (legacy temporary field)')).not.toBeInTheDocument();
+  });
+
+  it('submits supported sowing start methods with the expected stored stage-event method', async () => {
+    const realFixture = realBatchFixtures['../../fixtures/real/actual-batches-vnext-2026-03-07.json'];
+    const migratedBasilBatch = realFixture?.batches?.find((batch) => batch.batchId === 'batch-basil-genoveser-2026-01');
+    const migratedLettuceBatch = realFixture?.batches?.find((batch) => batch.batchId === 'batch-lettuce-2026-03-06-01');
+
+    expect(migratedBasilBatch).toBeDefined();
+    expect(migratedLettuceBatch).toBeDefined();
+
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue(buildBatchCreationState() as never);
+
+    render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
+    });
+
+    const createBatchForm = screen.getByRole('heading', { name: 'Create batch' }).closest('form') as HTMLFormElement;
+    const cultivarInput = within(createBatchForm).getByPlaceholderText('Cultivar · Crop Type · Species');
+    const startedAtInput = within(createBatchForm).getByLabelText('Started at');
+    const startMethodSelect = within(createBatchForm).getByLabelText('Start method/state');
+
+    const cases = [
+      {
+        cultivarLabel: 'Romaine · Lettuce · Lactuca sativa',
+        startedAt: '2026-03-06T18:30',
+        selectedMethod: 'pre_sow_paper_towel',
+        expectedMethod: 'pre_sow_paper_towel',
+        expectedStartMethod: 'pre_sow_paper_towel',
+        sourceBatchId: migratedLettuceBatch?.batchId,
+      },
+      {
+        cultivarLabel: 'Genoveser · Basil · Ocimum basilicum',
+        startedAt: '2026-03-05T12:00',
+        selectedMethod: 'pre_sow_indoor',
+        expectedMethod: 'pre_sow_indoor',
+        expectedStartMethod: 'pre_sow_indoor',
+        sourceBatchId: migratedBasilBatch?.batchId,
+      },
+      {
+        cultivarLabel: 'Romaine · Lettuce · Lactuca sativa',
+        startedAt: '2026-03-08T08:15',
+        selectedMethod: 'direct_sow',
+        expectedMethod: 'direct_sow',
+        expectedStartMethod: 'direct_sow',
+        sourceBatchId: 'synthetic-direct-sow-coverage',
+      },
+      {
+        cultivarLabel: 'Genoveser · Basil · Ocimum basilicum',
+        startedAt: '2026-03-09T09:45',
+        selectedMethod: 'sow_indoor',
+        expectedMethod: 'sow_indoor',
+        expectedStartMethod: 'sow_indoor',
+        sourceBatchId: 'synthetic-sow-indoor-coverage',
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      fireEvent.change(cultivarInput, { target: { value: testCase.cultivarLabel } });
+      fireEvent.change(startedAtInput, { target: { value: testCase.startedAt } });
+      fireEvent.change(startMethodSelect, { target: { value: testCase.selectedMethod } });
+      fireEvent.click(within(createBatchForm).getByRole('button', { name: 'Create batch' }));
+
+      await waitFor(() => {
+        expect(saveAppStateToIndexedDb).toHaveBeenCalledTimes(index + 1);
+      });
+
+      const savedState = vi.mocked(saveAppStateToIndexedDb).mock.calls.at(-1)?.[0] as { batches: Array<Record<string, unknown>> };
+      const savedBatch = savedState.batches.at(-1);
+
+      expect(savedBatch).toMatchObject({
+        startMethod: testCase.expectedStartMethod,
+        stage: 'sowing',
+        stageEvents: [
+          {
+            stage: 'sowing',
+            method: testCase.expectedMethod,
+          },
+        ],
+      });
+      expect(savedBatch?.startedAt).toBe(new Date(testCase.startedAt).toISOString());
+      expect(screen.getByText('Batch created.')).toBeInTheDocument();
+      expect(testCase.sourceBatchId).toBeTruthy();
+    }
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
