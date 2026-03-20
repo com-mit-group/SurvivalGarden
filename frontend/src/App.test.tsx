@@ -1410,7 +1410,7 @@ describe('App', () => {
     const createBatchForm = screen.getByRole('heading', { name: 'Create batch' }).closest('form') as HTMLFormElement;
     const cultivarInput = within(createBatchForm).getByPlaceholderText('Cultivar · Crop Type · Species');
     const startedAtInput = within(createBatchForm).getByLabelText('Started at');
-    const startMethodSelect = within(createBatchForm).getByLabelText('Start method/state');
+    const startMethodSelect = within(createBatchForm).getAllByRole('combobox')[0] as HTMLSelectElement;
 
     const cases = [
       {
