@@ -3077,7 +3077,7 @@ function BatchesPage({
           </nav>
           {taxonomySection === 'overview' ? (
             <p className="batch-form-note">
-              Start with species, then define crop types, then manage cultivars in inventory. Batch workflows should only select an existing cultivar.
+              Start with species, then define crop types, then manage cultivars in inventory. Batch workflows currently select an existing crop type while cultivar naming stays temporary free text.
             </p>
           ) : null}
         </>
@@ -3085,7 +3085,7 @@ function BatchesPage({
         <>
           <div className="batch-filters">
             <label>
-              Cultivar
+              Crop Type
               <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
                 <option value="">All</option>
                 {cropOptions.map((crop) => (
@@ -3145,12 +3145,12 @@ function BatchesPage({
         <h3>{editingBatchId ? 'Edit batch' : 'Create batch'}</h3>
         <div className="batch-form-grid">
           <label>
-            Cultivar
+            Crop Type
             <input
               list="batch-crop-options"
               value={formValues.cropInput}
               onChange={(event) => setFormValues((current) => ({ ...current, cropInput: event.target.value }))}
-              placeholder="Cultivar (Species)"
+              placeholder="Crop Type (Species)"
             />
             <datalist id="batch-crop-options">
               {cropInputOptions.map((crop) => (
@@ -3160,16 +3160,18 @@ function BatchesPage({
                 />
               ))}
             </datalist>
+            <span className="batch-form-note">Select the crop type record for this batch. This does not choose a cultivar yet.</span>
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
           </label>
 
           <label>
-            Cultivar label (optional)
+            Cultivar / variety label (legacy temporary field)
             <input
               type="text"
               value={formValues.variety}
               onChange={(event) => setFormValues((current) => ({ ...current, variety: event.target.value }))}
             />
+            <span className="batch-form-note">Optional free text only. This is not linked to a reusable cultivar record.</span>
             {formErrors.variety ? <span className="form-error">{formErrors.variety}</span> : null}
           </label>
 
@@ -3265,7 +3267,7 @@ function BatchesPage({
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation only links to an existing cultivar record. If you need a new species, crop type, or cultivar, create it first in the dedicated admin views, then come back and select that saved cultivar here. Non-sowing start transitions are still planning-only.
+          Batch creation currently links to an existing crop type record. Use the temporary cultivar / variety label only for free text, and manage reusable cultivars separately in the dedicated admin views until linked cultivar selection exists. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
