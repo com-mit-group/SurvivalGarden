@@ -1287,7 +1287,7 @@ describe('App', () => {
       expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText(/^Cultivar/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Cultivar · Crop Type · Species')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Crop Type/)).toHaveValue('');
     expect(screen.getByLabelText(/^Species/)).toHaveValue('');
     expect(screen.getByText('Select an existing cultivar record. Crop type and species are derived automatically.')).toBeInTheDocument();
