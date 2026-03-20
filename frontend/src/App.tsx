@@ -3735,6 +3735,8 @@ function BatchesPage({
       return;
     }
 
+    const validatedInitialMethodConfig = initialMethodConfig as (typeof INITIAL_BATCH_METHODS)[keyof typeof INITIAL_BATCH_METHODS];
+
     try {
       const appState = await loadAppStateFromIndexedDb();
 
@@ -3771,19 +3773,19 @@ function BatchesPage({
         cropTypeId: resolvedCultivar.cropTypeId,
         ...(existingBatch?.variety ? { variety: existingBatch.variety } : {}),
         startedAt,
-        stage: existingBatch?.stage ?? initialMethodConfig.stage,
+        stage: existingBatch?.stage ?? validatedInitialMethodConfig.stage,
         stageEvents:
           existingBatch?.stageEvents ?? [
             {
-              stage: initialMethodConfig.stage,
+              stage: validatedInitialMethodConfig.stage,
               occurredAt: startedAt,
-              ...(initialMethodConfig.startMethod ? { method: initialMethodConfig.startMethod } : {}),
+              ...(validatedInitialMethodConfig.startMethod ? { method: validatedInitialMethodConfig.startMethod } : {}),
             },
           ],
         ...(existingBatch?.startMethod
           ? { startMethod: existingBatch.startMethod }
-          : initialMethodConfig.startMethod
-            ? { startMethod: initialMethodConfig.startMethod }
+          : validatedInitialMethodConfig.startMethod
+            ? { startMethod: validatedInitialMethodConfig.startMethod }
             : {}),
         assignments: existingBatch?.assignments ?? [],
         ...(seedCountPlanned !== null ? { seedCountPlanned } : {}),
