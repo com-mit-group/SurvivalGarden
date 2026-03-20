@@ -2322,10 +2322,11 @@ const getCultivarsFromAppState = (appState: AppState): CultivarRecord[] => {
   return Array.isArray(cultivars) ? cultivars : [];
 };
 
-const withCultivarsInAppState = (appState: AppState, cultivars: CultivarRecord[]): AppState => ({
-  ...(appState as AppStateWithCultivars),
-  cultivars,
-});
+const withCultivarsInAppState = (appState: AppState, cultivars: CultivarRecord[]): AppState =>
+  ({
+    ...(appState as AppStateWithCultivars),
+    cultivars,
+  }) as AppState;
 
 const createUniqueCultivarId = (name: string, cropTypeId: string, existingCultivarIds: string[]): string => {
   const base = normalizeCropIdPart(`${cropTypeId}-${name}`) || `cultivar-${Date.now()}`;
@@ -2356,11 +2357,18 @@ const withCultivarArchiveState = (cultivar: CultivarRecord, archived: boolean, n
   const notes = stripCultivarArchiveMarker(cultivar.notes);
 
   if (!archived) {
-    return {
+    const nextCultivar: CultivarRecord = {
       ...cultivar,
-      notes: notes || undefined,
       updatedAt: nowIso,
     };
+
+    if (notes) {
+      nextCultivar.notes = notes;
+    } else {
+      delete nextCultivar.notes;
+    }
+
+    return nextCultivar;
   }
 
   return {
