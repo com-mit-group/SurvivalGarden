@@ -179,6 +179,17 @@ summary:focus-visible {
   text-align: left;
 }
 
+.inline-link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .calendar-page {
   width: min(900px, 100%);
   margin: 0 auto;

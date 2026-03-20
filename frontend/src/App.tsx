@@ -58,6 +58,20 @@ type BatchPhoto = {
 
 type BatchWithPhotos = Batch & { photos?: BatchPhoto[] };
 
+type BatchDraftState = {
+  editingBatchId: string | null;
+  formValues: {
+    cropInput: string;
+    startedAt: string;
+    seedCountPlanned: string;
+    seedCountGerminated: string;
+    seedCountGerminatedConfidence: string;
+    plantCountAlive: string;
+    plantCountAliveConfidence: string;
+    initialMethod: string;
+  };
+};
+
 type CropIdentityLabelProps = {
   cropId: string;
   name?: string | undefined;
@@ -1588,6 +1602,8 @@ function CalendarPage() {
 const UNLINKED_CROP_ID = 'unlinked-seed-inventory-crop';
 
 function CultivarAdminPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [cultivars, setCultivars] = useState<CultivarRecord[]>([]);
   const [cropTypeOptions, setCropTypeOptions] = useState<Array<{ cropTypeId: string; label: string }>>([]);
   const [usageByCultivarId, setUsageByCultivarId] = useState<Record<string, { batchCount: number }>>({});
@@ -1607,6 +1623,10 @@ function CultivarAdminPage() {
     year: '',
     notes: '',
   });
+  const returnTo = searchParams.get('returnTo') ?? '';
+  const sourceFlow = searchParams.get('from') ?? '';
+  const prefilledCropTypeId = searchParams.get('cropTypeId') ?? '';
+  const isBatchQuickCreate = sourceFlow === 'batch' && Boolean(returnTo);
 
   const loadCultivars = useCallback(async () => {
     const appState = await loadAppStateFromIndexedDb();
@@ -1690,6 +1710,18 @@ function CultivarAdminPage() {
       setFormValues((current) => ({ ...current, cropTypeId: current.cropTypeId || filterCropTypeId }));
     }
   }, [editingCultivarId, filterCropTypeId]);
+
+  useEffect(() => {
+    if (!prefilledCropTypeId) {
+      return;
+    }
+
+    setFilterCropTypeId(prefilledCropTypeId);
+    setFormValues((current) => ({
+      ...current,
+      cropTypeId: editingCultivarId ? current.cropTypeId : current.cropTypeId || prefilledCropTypeId,
+    }));
+  }, [editingCultivarId, prefilledCropTypeId]);
 
   const filteredCultivars = useMemo(() => {
     const normalizedSearchTerm = searchTerm.trim().toLowerCase();
@@ -1785,6 +1817,12 @@ function CultivarAdminPage() {
 
       await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
       await loadCultivars();
+
+      if (!existingCultivar && isBatchQuickCreate) {
+        navigate(buildReturnHrefWithCultivarId(returnTo, nextCultivar.cultivarId));
+        return;
+      }
+
       resetForm();
       setSaveMessage(existingCultivar ? 'Cultivar updated.' : 'Cultivar created.');
     } finally {
@@ -1827,6 +1865,7 @@ function CultivarAdminPage() {
         <Link to="/taxonomy/crop-types">Crop types</Link>
         <Link to="/batches#create-batch">Batch form</Link>
         <Link to="/seed-inventory">Seed inventory</Link>
+        {isBatchQuickCreate ? <Link to={returnTo}>Back to batch draft</Link> : null}
       </nav>
 
       <form id="create-cultivar" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
@@ -2222,6 +2261,60 @@ function SeedInventoryPage() {
 
 const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(batch, new Date().toISOString())?.bedId ?? null;
 
+const BATCH_DRAFT_STORAGE_KEY = 'survival-garden.batch-draft';
+
+const saveBatchDraftState = (draft: BatchDraftState) => {
+  try {
+    globalThis.sessionStorage?.setItem(BATCH_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Ignore draft persistence failures in unsupported environments.
+  }
+};
+
+const loadBatchDraftState = (): BatchDraftState | null => {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(BATCH_DRAFT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<BatchDraftState>;
+    if (!parsed || typeof parsed !== 'object' || !parsed.formValues || typeof parsed.formValues !== 'object') {
+      return null;
+    }
+
+    return {
+      editingBatchId: typeof parsed.editingBatchId === 'string' ? parsed.editingBatchId : null,
+      formValues: {
+        cropInput: typeof parsed.formValues.cropInput === 'string' ? parsed.formValues.cropInput : '',
+        startedAt: typeof parsed.formValues.startedAt === 'string' ? parsed.formValues.startedAt : getLocalDateTimeDefault(),
+        seedCountPlanned: typeof parsed.formValues.seedCountPlanned === 'string' ? parsed.formValues.seedCountPlanned : '',
+        seedCountGerminated: typeof parsed.formValues.seedCountGerminated === 'string' ? parsed.formValues.seedCountGerminated : '',
+        seedCountGerminatedConfidence: typeof parsed.formValues.seedCountGerminatedConfidence === 'string' ? parsed.formValues.seedCountGerminatedConfidence : '',
+        plantCountAlive: typeof parsed.formValues.plantCountAlive === 'string' ? parsed.formValues.plantCountAlive : '',
+        plantCountAliveConfidence: typeof parsed.formValues.plantCountAliveConfidence === 'string' ? parsed.formValues.plantCountAliveConfidence : '',
+        initialMethod: typeof parsed.formValues.initialMethod === 'string' ? parsed.formValues.initialMethod : 'sowing',
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
+const clearBatchDraftState = () => {
+  try {
+    globalThis.sessionStorage?.removeItem(BATCH_DRAFT_STORAGE_KEY);
+  } catch {
+    // Ignore draft cleanup failures in unsupported environments.
+  }
+};
+
+const buildReturnHrefWithCultivarId = (returnTo: string, cultivarId: string): string => {
+  const url = new URL(returnTo, 'https://survival-garden.local');
+  url.searchParams.set('quickCreateCultivarId', cultivarId);
+  return `${url.pathname}${url.search}${url.hash}`;
+};
+
 const getLocalDateTimeDefault = () => {
   const date = new Date();
   const localOffsetMs = date.getTimezoneOffset() * 60_000;
@@ -2440,6 +2533,7 @@ function BatchesPage({
   showAdminDataSurgery?: boolean;
   taxonomySection?: 'overview' | 'species' | 'crop-types';
 }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [cropIds, setCropIds] = useState<string[]>([]);
@@ -2509,6 +2603,8 @@ function BatchesPage({
   const [speciesEditErrors, setSpeciesEditErrors] = useState<Record<string, string>>({});
   const [speciesEditMessage, setSpeciesEditMessage] = useState<string | null>(null);
   const [repairSpeciesId, setRepairSpeciesId] = useState<string>('');
+  const restoredBatchDraftRef = useRef(false);
+  const handledQuickCreateReturnRef = useRef(false);
   const [cropRepairPreview, setCropRepairPreview] = useState<{
     currentSpeciesLabel: string;
     replacementSpeciesLabel: string;
@@ -2745,7 +2841,17 @@ function BatchesPage({
     selectedCultivar && cropHasTaskRules[selectedCultivar.cropTypeId] === false
       ? 'Warning: this crop has no task rules. You can still create and edit batches.'
       : null;
+  const quickCreateCultivarHref = useMemo(() => {
+    const next = new URLSearchParams();
+    next.set('from', 'batch');
+    next.set('returnTo', '/batches#create-batch');
 
+    if (selectedCultivar?.cropTypeId) {
+      next.set('cropTypeId', selectedCultivar.cropTypeId);
+    }
+
+    return `/taxonomy/cultivars?${next.toString()}#create-cultivar`;
+  }, [selectedCultivar?.cropTypeId]);
 
   const selectableCrops = useMemo(
     () =>
@@ -3309,6 +3415,51 @@ function BatchesPage({
     }
   };
 
+  useEffect(() => {
+    if (taxonomyOnly || isLoading) {
+      return;
+    }
+
+    if (!restoredBatchDraftRef.current) {
+      const savedDraft = loadBatchDraftState();
+      if (savedDraft) {
+        setEditingBatchId(savedDraft.editingBatchId);
+        setFormValues(savedDraft.formValues);
+      }
+      restoredBatchDraftRef.current = true;
+    }
+
+    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
+    if (!quickCreateCultivarId || handledQuickCreateReturnRef.current) {
+      return;
+    }
+
+    const nextCultivar = cultivars.find((cultivar) => cultivar.cultivarId === quickCreateCultivarId);
+    if (nextCultivar) {
+      const nextInput = [
+        nextCultivar.name,
+        cropNames[nextCultivar.cropTypeId] ?? nextCultivar.cropTypeId,
+        cropScientificNames[nextCultivar.cropTypeId],
+      ].filter(Boolean).join(' · ');
+      setFormValues((current) => ({ ...current, cropInput: nextInput }));
+      setSaveMessage('Cultivar created. Finish your batch draft below.');
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('quickCreateCultivarId');
+    setSearchParams(nextParams, { replace: true });
+    clearBatchDraftState();
+    handledQuickCreateReturnRef.current = true;
+  }, [cropNames, cropScientificNames, cultivars, isLoading, searchParams, setSearchParams, taxonomyOnly]);
+
+  const handleOpenCultivarCreate = () => {
+    saveBatchDraftState({
+      editingBatchId,
+      formValues,
+    });
+    navigate(quickCreateCultivarHref);
+  };
+
   const startEdit = (batch: Batch) => {
     setEditingBatchId(batch.batchId);
     const startedAt = toLocalDateTimeInput(batch.startedAt) || getLocalDateTimeDefault();
@@ -3336,6 +3487,7 @@ function BatchesPage({
   };
 
   const resetForm = () => {
+    clearBatchDraftState();
     setEditingBatchId(null);
     setFormValues({
       cropInput: '',
@@ -3729,6 +3881,7 @@ function BatchesPage({
               ))}
             </datalist>
             <span className="batch-form-note">Select an existing cultivar record. Crop type and species are derived automatically.</span>
+            <span className="batch-form-note">Missing one? <button type="button" className="inline-link-button" onClick={handleOpenCultivarCreate}>Create cultivar</button> and come right back to this draft.</span>
             {formErrors.cropInput ? <span className="form-error">{formErrors.cropInput}</span> : null}
           </label>
 
@@ -3840,7 +3993,8 @@ function BatchesPage({
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/taxonomy/cultivars#create-cultivar">Open cultivar admin</Link>
+          <button type="button" onClick={handleOpenCultivarCreate}>Create cultivar</button>
+          <Link to={quickCreateCultivarHref}>Open cultivar admin</Link>
           <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
           <Link to="/taxonomy/species">Open species admin</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
