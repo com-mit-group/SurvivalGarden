@@ -1457,8 +1457,10 @@ describe('App', () => {
         expect(saveAppStateToIndexedDb).toHaveBeenCalledTimes(index + 1);
       });
 
-      const savedState = vi.mocked(saveAppStateToIndexedDb).mock.calls.at(-1)?.[0] as { batches: Array<Record<string, unknown>> };
-      const savedBatch = savedState.batches.at(-1);
+      const saveCalls = vi.mocked(saveAppStateToIndexedDb).mock.calls;
+      const savedState = saveCalls[saveCalls.length - 1]?.[0] as { batches: Array<Record<string, unknown>> };
+      const savedBatches = savedState.batches;
+      const savedBatch = savedBatches[savedBatches.length - 1];
 
       expect(savedBatch).toMatchObject({
         startMethod: testCase.expectedStartMethod,
