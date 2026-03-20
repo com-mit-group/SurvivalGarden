@@ -1287,9 +1287,9 @@ describe('App', () => {
       expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText('Cultivar')).toBeInTheDocument();
-    expect(screen.getByLabelText('Crop Type')).toHaveValue('');
-    expect(screen.getByLabelText('Species')).toHaveValue('');
+    expect(screen.getByLabelText(/^Cultivar/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Crop Type/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Species/)).toHaveValue('');
     expect(screen.getByText('Select an existing cultivar record. Crop type and species are derived automatically.')).toBeInTheDocument();
     expect(screen.queryByText('Cultivar / variety label (legacy temporary field)')).not.toBeInTheDocument();
   });
