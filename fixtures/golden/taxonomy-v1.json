@@ -7,7 +7,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_beetroot",
       "name": "Beetroot",
-      "notes": "Canonical crop type example under Beta vulgaris for edible roots.",
       "speciesId": "species_beta_vulgaris",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -15,7 +14,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_broccoli",
       "name": "Broccoli",
-      "notes": "Canonical crop type example under Brassica oleracea for headed florets.",
       "speciesId": "species_brassica_oleracea",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -23,7 +21,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_cabbage",
       "name": "Cabbage",
-      "notes": "Canonical crop type example under Brassica oleracea for heading forms.",
       "speciesId": "species_brassica_oleracea",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -31,7 +28,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_chard",
       "name": "Chard",
-      "notes": "Canonical crop type example under Beta vulgaris for leafy forms.",
       "speciesId": "species_beta_vulgaris",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -39,7 +35,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_kale",
       "name": "Kale",
-      "notes": "Canonical crop type example under Brassica oleracea for loose-leaf forms.",
       "speciesId": "species_brassica_oleracea",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -47,7 +42,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_kohlrabi",
       "name": "Kohlrabi",
-      "notes": "Canonical crop type example under Brassica oleracea for swollen stem forms.",
       "speciesId": "species_brassica_oleracea",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -55,7 +49,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_pea_shelling",
       "name": "Shelling Pea",
-      "notes": "Canonical crop type example under Pisum sativum for dry or fresh shelled peas.",
       "speciesId": "species_pisum_sativum",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -63,7 +56,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_pea_snow",
       "name": "Snow Pea",
-      "notes": "Canonical crop type example under Pisum sativum for edible flat pods.",
       "speciesId": "species_pisum_sativum",
       "updatedAt": "2026-03-20T00:00:00Z"
     },
@@ -71,7 +63,6 @@
       "createdAt": "2026-03-20T00:00:00Z",
       "cropId": "crop_type_potato",
       "name": "Potato",
-      "notes": "Canonical crop type example under Solanum tuberosum for tuber crops.",
       "speciesId": "species_solanum_tuberosum",
       "updatedAt": "2026-03-20T00:00:00Z"
     }
