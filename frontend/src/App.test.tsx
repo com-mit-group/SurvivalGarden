@@ -475,7 +475,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText(/Batch import ready: 1 valid batch\(es\) from 2 payload batch\(es\), invalid 1\./)).toBeInTheDocument();
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
-      expect(screen.getByText('Batch: Unknown variety (Unknown crop)')).toBeInTheDocument();
+      expect(screen.getByText('Batch: Unknown cultivar (Unknown crop type)')).toBeInTheDocument();
       expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
       expect(screen.getByText('Events: 0')).toBeInTheDocument();
       expect(screen.getByLabelText('Auto-rename on ID conflict (presentation preview)')).toBeInTheDocument();
@@ -1226,7 +1226,7 @@ describe('App', () => {
   });
 
 
-  it('labels the batch form crop selector as crop type and keeps cultivar naming as free text', async () => {
+  it('labels the batch form selector as cultivar and shows derived taxonomy context', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
       beds: [],
@@ -1255,6 +1255,15 @@ describe('App', () => {
         },
       ],
       cropPlans: [],
+      cultivars: [
+        {
+          cultivarId: 'cultivar_kohlrabi_delikatess_weiss',
+          cropTypeId: 'crop_kohlrabi',
+          name: 'Delikatess Weiß',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
       batches: [],
       tasks: [],
       seedInventoryItems: [],
@@ -1278,11 +1287,12 @@ describe('App', () => {
       expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText('Crop Type')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Cultivar$/)).not.toBeInTheDocument();
-    expect(screen.getByText('Select the crop type record for this batch. This does not choose a cultivar yet.')).toBeInTheDocument();
-    expect(screen.getByText('Cultivar / variety label (legacy temporary field)')).toBeInTheDocument();
-    expect(screen.getByText('Optional free text only. This is not linked to a reusable cultivar record.')).toBeInTheDocument();
+    const createBatchForm = screen.getByRole('heading', { name: 'Create batch' }).closest('form') as HTMLFormElement;
+    expect(within(createBatchForm).getByPlaceholderText('Cultivar · Crop Type · Species')).toBeInTheDocument();
+    expect(within(createBatchForm).getByLabelText(/^Crop Type/)).toHaveValue('');
+    expect(within(createBatchForm).getByLabelText(/^Species/)).toHaveValue('');
+    expect(screen.getByText('Select an existing cultivar record. Crop type and species are derived automatically.')).toBeInTheDocument();
+    expect(screen.queryByText('Cultivar / variety label (legacy temporary field)')).not.toBeInTheDocument();
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
