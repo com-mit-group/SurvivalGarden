@@ -2280,6 +2280,40 @@ const SELECTABLE_INITIAL_BATCH_METHODS = (Object.entries(INITIAL_BATCH_METHODS) 
   (typeof INITIAL_BATCH_METHODS)[InitialBatchMethodKey],
 ]>).filter(([, config]) => canTransition(config.stage, 'transplant') || canTransition(config.stage, 'harvest'));
 const INITIAL_BATCH_METHOD_ERROR = `This batch can only be created from lifecycle-supported start methods: ${SELECTABLE_INITIAL_BATCH_METHODS.map(([, config]) => config.label).join(', ')}.`;
+const INITIAL_BATCH_LIFECYCLE_ERROR = 'The cultivar link is valid. Choose a start method/state that matches the allowed lifecycle transition for this batch.';
+
+const getInitialBatchLifecycleError = (reason?: string): string | null => {
+  if (reason === 'invalid_stage_transition' || reason === 'stage_event_stage_mismatch') {
+    return INITIAL_BATCH_LIFECYCLE_ERROR;
+  }
+
+  return null;
+};
+
+const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string }>): Record<string, string> => {
+  const issueErrors: Record<string, string> = {};
+
+  for (const issue of issues) {
+    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+      issueErrors.cropInput = 'Choose a valid cultivar record.';
+    }
+
+    if (issue.path.includes('/startedAt')) {
+      issueErrors.startedAt = 'Enter a valid date and time.';
+    }
+
+    if (
+      issue.path.includes('/stage')
+      || issue.path.includes('/startMethod')
+      || issue.path.includes('/stageEvents')
+      || issue.path.includes('/method')
+    ) {
+      issueErrors.initialMethod = INITIAL_BATCH_LIFECYCLE_ERROR;
+    }
+  }
+
+  return issueErrors;
+};
 
 const resolveInitialBatchMethod = (value: string): InitialBatchMethodKey | null => {
   if (value in INITIAL_BATCH_METHODS) {
@@ -3827,18 +3861,14 @@ function BatchesPage({
       resetForm();
     } catch (error) {
       if (error instanceof SchemaValidationError && error.issues.length > 0) {
-        const issueErrors: Record<string, string> = {};
+        setFormErrors(mapBatchValidationIssuesToFormErrors(error.issues));
+        setSaveMessage('Please fix the highlighted fields.');
+        return;
+      }
 
-        for (const issue of error.issues) {
-          if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
-            issueErrors.cropInput = 'Choose a valid cultivar record.';
-          }
-          if (issue.path.includes('/startedAt')) {
-            issueErrors.startedAt = 'Enter a valid date and time.';
-          }
-        }
-
-        setFormErrors(issueErrors);
+      const lifecycleError = getInitialBatchLifecycleError(error instanceof Error ? error.message : undefined);
+      if (lifecycleError) {
+        setFormErrors((current) => ({ ...current, initialMethod: lifecycleError }));
         setSaveMessage('Please fix the highlighted fields.');
         return;
       }
