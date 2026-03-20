@@ -2263,33 +2263,43 @@ const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(
 
 const BATCH_DRAFT_STORAGE_KEY = 'survival-garden.batch-draft';
 const INITIAL_BATCH_METHODS = {
-  sowing: { stage: 'sowing', startMethod: undefined },
-  pre_sow_paper_towel: { stage: 'pre_sown', startMethod: 'pre_sow_paper_towel' },
-  pre_sow_indoor: { stage: 'pre_sown', startMethod: 'pre_sow_indoor' },
-  direct_sow: { stage: 'sowing', startMethod: 'direct_sow' },
-  sow_indoor: { stage: 'sowing', startMethod: 'sow_indoor' },
+  sowing: { label: 'Sow', stage: 'sowing', startMethod: undefined },
+  pre_sow_paper_towel: { label: 'Pre-sow (wet paper)', stage: 'pre_sown', startMethod: 'pre_sow_paper_towel' },
+  pre_sow_indoor: { label: 'Pre-sow tray / indoor', stage: 'pre_sown', startMethod: 'pre_sow_indoor' },
+  direct_sow: { label: 'Direct sow', stage: 'sowing', startMethod: 'direct_sow' },
+  sow_indoor: { label: 'Sow indoor', stage: 'sowing', startMethod: 'sow_indoor' },
 } as const;
-const LEGACY_INITIAL_BATCH_METHOD_ALIASES: Record<string, keyof typeof INITIAL_BATCH_METHODS> = {
+type InitialBatchMethodKey = keyof typeof INITIAL_BATCH_METHODS;
+const LEGACY_INITIAL_BATCH_METHOD_ALIASES: Record<string, InitialBatchMethodKey> = {
   'pre-sow': 'pre_sow_paper_towel',
   'sow-in-pot': 'sow_indoor',
   'sow-in-ground': 'direct_sow',
 };
-const INITIAL_BATCH_METHOD_ERROR =
-  'This batch can only be created from a supported sowing-stage start method: Sow, Pre-sow (wet paper), Pre-sow tray / indoor, Direct sow, or Sow indoor.';
+const SELECTABLE_INITIAL_BATCH_METHODS = (Object.entries(INITIAL_BATCH_METHODS) as Array<[
+  InitialBatchMethodKey,
+  (typeof INITIAL_BATCH_METHODS)[InitialBatchMethodKey],
+]>).filter(([, config]) => canTransition(config.stage, 'transplant') || canTransition(config.stage, 'harvest'));
+const INITIAL_BATCH_METHOD_ERROR = `This batch can only be created from lifecycle-supported start methods: ${SELECTABLE_INITIAL_BATCH_METHODS.map(([, config]) => config.label).join(', ')}.`;
 
-const resolveInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS | null => {
+const resolveInitialBatchMethod = (value: string): InitialBatchMethodKey | null => {
   if (value in INITIAL_BATCH_METHODS) {
-    return value as keyof typeof INITIAL_BATCH_METHODS;
+    return value as InitialBatchMethodKey;
   }
 
   return LEGACY_INITIAL_BATCH_METHOD_ALIASES[value] ?? null;
 };
 
-const normalizeInitialBatchMethod = (value: string): keyof typeof INITIAL_BATCH_METHODS => resolveInitialBatchMethod(value) ?? 'sowing';
+const isSelectableInitialBatchMethod = (value: InitialBatchMethodKey | null): value is InitialBatchMethodKey =>
+  value !== null && SELECTABLE_INITIAL_BATCH_METHODS.some(([method]) => method === value);
 
-const getInitialBatchMethodForBatch = (batch: Batch): keyof typeof INITIAL_BATCH_METHODS => {
+const normalizeInitialBatchMethod = (value: string): InitialBatchMethodKey => {
+  const method = resolveInitialBatchMethod(value);
+  return isSelectableInitialBatchMethod(method) ? method : 'sowing';
+};
+
+const getInitialBatchMethodForBatch = (batch: Batch): InitialBatchMethodKey => {
   if (typeof batch.startMethod === 'string' && batch.startMethod.length > 0) {
-    return normalizeInitialBatchMethod(batch.startMethod);
+    return resolveInitialBatchMethod(batch.startMethod) ?? 'sowing';
   }
 
   if (batch.stage === 'pre_sown') {
@@ -3724,7 +3734,7 @@ function BatchesPage({
     );
 
     const initialMethod = resolveInitialBatchMethod(formValues.initialMethod);
-    const initialMethodConfig = initialMethod ? INITIAL_BATCH_METHODS[initialMethod] : null;
+    const initialMethodConfig = isSelectableInitialBatchMethod(initialMethod) ? INITIAL_BATCH_METHODS[initialMethod] : null;
 
     if (!initialMethodConfig) {
       errors.initialMethod = INITIAL_BATCH_METHOD_ERROR;
@@ -3964,13 +3974,24 @@ function BatchesPage({
               onChange={(event) => setFormValues((current) => ({ ...current, initialMethod: event.target.value }))}
               disabled={Boolean(editingBatchId)}
             >
-              <option value="sowing">Sow</option>
-              <option value="pre_sow_paper_towel">Pre-sow (wet paper)</option>
-              <option value="pre_sow_indoor">Pre-sow tray / indoor</option>
-              <option value="direct_sow">Direct sow</option>
-              <option value="sow_indoor">Sow indoor</option>
+              {SELECTABLE_INITIAL_BATCH_METHODS.map(([method, config]) => (
+                <option key={method} value={method}>{config.label}</option>
+              ))}
+              {(() => {
+                const legacyMethod = resolveInitialBatchMethod(formValues.initialMethod);
+
+                if (!legacyMethod || isSelectableInitialBatchMethod(legacyMethod)) {
+                  return null;
+                }
+
+                return (
+                  <option value={legacyMethod} disabled>
+                    {INITIAL_BATCH_METHODS[legacyMethod].label} (legacy unsupported)
+                  </option>
+                );
+              })()}
             </select>
-            <span className="batch-form-note">Choose a supported sowing-stage start method. Pre-sow options save as pre-sown lifecycle entries, and start stage/method become read-only after save.</span>
+            <span className="batch-form-note">Only lifecycle-supported start methods are selectable for new batches. Existing unsupported legacy methods remain read-only after save.</span>
             {formErrors.initialMethod ? <span className="form-error">{formErrors.initialMethod}</span> : null}
           </label>
 
