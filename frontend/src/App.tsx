@@ -3979,14 +3979,15 @@ function BatchesPage({
               ))}
               {(() => {
                 const legacyMethod = resolveInitialBatchMethod(formValues.initialMethod);
+                const legacyMethodConfig = legacyMethod ? INITIAL_BATCH_METHODS[legacyMethod] : null;
 
-                if (!legacyMethod || isSelectableInitialBatchMethod(legacyMethod)) {
+                if (!legacyMethod || !legacyMethodConfig || isSelectableInitialBatchMethod(legacyMethod)) {
                   return null;
                 }
 
                 return (
                   <option value={legacyMethod} disabled>
-                    {INITIAL_BATCH_METHODS[legacyMethod].label} (legacy unsupported)
+                    {legacyMethodConfig.label} (legacy unsupported)
                   </option>
                 );
               })()}
