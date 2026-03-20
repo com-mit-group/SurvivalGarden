@@ -1226,7 +1226,7 @@ describe('App', () => {
   });
 
 
-  it('labels the batch form crop selector as crop type and keeps cultivar naming as free text', async () => {
+  it('labels the batch form selector as cultivar and shows derived taxonomy context', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
       beds: [],
@@ -1255,6 +1255,15 @@ describe('App', () => {
         },
       ],
       cropPlans: [],
+      cultivars: [
+        {
+          cultivarId: 'cultivar_kohlrabi_delikatess_weiss',
+          cropTypeId: 'crop_kohlrabi',
+          name: 'Delikatess Weiß',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
       batches: [],
       tasks: [],
       seedInventoryItems: [],
@@ -1278,11 +1287,11 @@ describe('App', () => {
       expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText('Crop Type')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Cultivar$/)).not.toBeInTheDocument();
-    expect(screen.getByText('Select the crop type record for this batch. This does not choose a cultivar yet.')).toBeInTheDocument();
-    expect(screen.getByText('Cultivar / variety label (legacy temporary field)')).toBeInTheDocument();
-    expect(screen.getByText('Optional free text only. This is not linked to a reusable cultivar record.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cultivar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Crop Type')).toHaveValue('');
+    expect(screen.getByLabelText('Species')).toHaveValue('');
+    expect(screen.getByText('Select an existing cultivar record. Crop type and species are derived automatically.')).toBeInTheDocument();
+    expect(screen.queryByText('Cultivar / variety label (legacy temporary field)')).not.toBeInTheDocument();
   });
 
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
