@@ -1225,6 +1225,66 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'Edit crop type metadata' })).not.toBeInTheDocument();
   });
 
+
+  it('labels the batch form crop selector as crop type and keeps cultivar naming as free text', async () => {
+    vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
+      schemaVersion: 1,
+      beds: [],
+      species: [
+        {
+          id: 'species_kohlrabi',
+          commonName: 'Kohlrabi',
+          scientificName: 'Brassica oleracea',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      crops: [
+        {
+          cropId: 'crop_kohlrabi',
+          name: 'Kohlrabi',
+          cultivar: 'Kohlrabi',
+          speciesId: 'species_kohlrabi',
+          species: {
+            id: 'species_kohlrabi',
+            commonName: 'Kohlrabi',
+            scientificName: 'Brassica oleracea',
+          },
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      cropPlans: [],
+      batches: [],
+      tasks: [],
+      seedInventoryItems: [],
+      settings: {
+        settingsId: 'settings-1',
+        locale: 'en-US',
+        timezone: 'UTC',
+        units: { temperature: 'celsius', yield: 'metric' },
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/batches']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create batch' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Crop Type')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Cultivar$/)).not.toBeInTheDocument();
+    expect(screen.getByText('Select the crop type record for this batch. This does not choose a cultivar yet.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cultivar / variety label (legacy temporary field)')).toBeInTheDocument();
+    expect(screen.getByText('Optional free text only. This is not linked to a reusable cultivar record.')).toBeInTheDocument();
+  });
+
   it('renders deterministic vegan nutrition flags with non-prescriptive language', async () => {
     vi.mocked(loadAppStateFromIndexedDb).mockResolvedValue({
       schemaVersion: 1,
