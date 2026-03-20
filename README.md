@@ -29,6 +29,7 @@ Canonical sample payloads live in `docs/contracts/samples/`:
 ## Golden dataset conventions
 
 `fixtures/golden/trier-v1.json` is the stable AppState reference fixture for workflow/idempotence checks.
+`fixtures/golden/taxonomy-v1.json` is the canonical species → crop type → cultivar reference dataset for taxonomy modeling, imports, and fixture-backed validation.
 
 Deterministic IDs in golden fixtures use fixed prefixes with zero-padded sequence numbers:
 - Beds: `bed_001`, `bed_002`, ...

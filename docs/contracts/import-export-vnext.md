@@ -19,6 +19,7 @@ Canonical samples:
 - `docs/contracts/samples/task.canonical.json`
 - `docs/contracts/samples/app-state.canonical.json`
 - `docs/contracts/samples/import-events.request.canonical.json`
+- `fixtures/golden/taxonomy-v1.json` (canonical taxonomy reference dataset for Species → Crop Type → Cultivar examples)
 
 ## Canonical vs accepted legacy input
 
@@ -239,4 +240,4 @@ If any event references a missing batch, reject the request and report the faili
 
 ## Minimal canonical payload set
 
-See the sample JSON files in `docs/contracts/samples/` for implementation-ready payloads.
+See the sample JSON files in `docs/contracts/samples/` for implementation-ready payloads. Use `fixtures/golden/taxonomy-v1.json` as the canonical modeled taxonomy example when validating Species → Crop Type → Cultivar relationships for imports, demos, and documentation.
