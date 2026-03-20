@@ -2263,7 +2263,7 @@ const getDerivedBedId = (batch: Batch): string | null => getActiveBedAssignment(
 
 const BATCH_DRAFT_STORAGE_KEY = 'survival-garden.batch-draft';
 const INITIAL_BATCH_METHODS = {
-  sowing: { stage: 'sowing' },
+  sowing: { stage: 'sowing', startMethod: undefined },
   pre_sow_paper_towel: { stage: 'pre_sown', startMethod: 'pre_sow_paper_towel' },
   pre_sow_indoor: { stage: 'pre_sown', startMethod: 'pre_sow_indoor' },
   direct_sow: { stage: 'sowing', startMethod: 'direct_sow' },
