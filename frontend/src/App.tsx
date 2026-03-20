@@ -3134,7 +3134,7 @@ function BatchesPage({
           <nav className="batch-form-actions" aria-label="Batch and admin flows">
             <Link to="/batches#create-batch">Batch form</Link>
             <Link to="/seed-inventory">Cultivar admin</Link>
-            <Link to="/taxonomy/crop-types">Crop type admin</Link>
+            <Link to="/batches#edit-crop">Edit crop type metadata</Link>
             <Link to="/taxonomy/species">Species admin</Link>
           </nav>
         </>
@@ -3270,7 +3270,7 @@ function BatchesPage({
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
           <Link to="/seed-inventory">Open cultivar admin</Link>
-          <Link to="/taxonomy/crop-types">Open crop type taxonomy form</Link>
+          <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
           <Link to="/taxonomy/species">Open species admin</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
           {editingBatchId ? (
