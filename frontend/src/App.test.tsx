@@ -1281,7 +1281,7 @@ describe('App', () => {
     expect(screen.getByLabelText('Crop Type')).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Cultivar$/)).not.toBeInTheDocument();
     expect(screen.getByText('Select the crop type record for this batch. This does not choose a cultivar yet.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cultivar / variety label (legacy temporary field)')).toBeInTheDocument();
+    expect(screen.getByText('Cultivar / variety label (legacy temporary field)')).toBeInTheDocument();
     expect(screen.getByText('Optional free text only. This is not linked to a reusable cultivar record.')).toBeInTheDocument();
   });
 
