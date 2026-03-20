@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
+import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
+
 import {
   generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
@@ -31,6 +32,20 @@ import {
   assertValid,
 } from './data';
 import { applyStageEvent, canTransition } from './domain';
+
+type CultivarRecord = {
+  cultivarId: string;
+  cropTypeId: string;
+  name: string;
+  supplier?: string;
+  source?: string;
+  year?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type AppStateWithCultivars = AppState & { cultivars?: CultivarRecord[] };
 
 type BatchPhoto = {
   id: string;
@@ -1554,6 +1569,419 @@ function CalendarPage() {
 
 const UNLINKED_CROP_ID = 'unlinked-seed-inventory-crop';
 
+function CultivarAdminPage() {
+  const [cultivars, setCultivars] = useState<CultivarRecord[]>([]);
+  const [cropTypeOptions, setCropTypeOptions] = useState<Array<{ cropTypeId: string; label: string }>>([]);
+  const [usageByCultivarId, setUsageByCultivarId] = useState<Record<string, { batchCount: number }>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [editingCultivarId, setEditingCultivarId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [filterCropTypeId, setFilterCropTypeId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Partial<Record<'name' | 'cropTypeId' | 'year', string>>>({});
+  const [formValues, setFormValues] = useState({
+    name: '',
+    cropTypeId: '',
+    supplier: '',
+    source: '',
+    year: '',
+    notes: '',
+  });
+
+  const loadCultivars = useCallback(async () => {
+    const appState = await loadAppStateFromIndexedDb();
+
+    if (!appState) {
+      setCultivars([]);
+      setCropTypeOptions([]);
+      setUsageByCultivarId({});
+      setIsLoading(false);
+      return;
+    }
+
+    const speciesById = Object.fromEntries((appState.species ?? []).map((species) => [species.id, species]));
+    const nextCropTypeOptions = [...appState.crops]
+      .sort((left, right) => (left.name ?? left.cropId).localeCompare(right.name ?? right.cropId))
+      .map((crop) => {
+        const species = crop.speciesId ? speciesById[crop.speciesId] : undefined;
+        const labelParts = [crop.name ?? crop.cropId];
+
+        if (species?.commonName) {
+          labelParts.push(species.commonName);
+        }
+
+        if (species?.scientificName) {
+          labelParts.push(species.scientificName);
+        }
+
+        return {
+          cropTypeId: crop.cropId,
+          label: labelParts.join(' · '),
+        };
+      });
+
+    const nextUsageByCultivarId = appState.batches.reduce<Record<string, { batchCount: number }>>((counts, batch) => {
+      const cultivarId = batch.cultivarId;
+      if (!cultivarId) {
+        return counts;
+      }
+
+      counts[cultivarId] = {
+        batchCount: (counts[cultivarId]?.batchCount ?? 0) + 1,
+      };
+      return counts;
+    }, {});
+
+    setCultivars(
+      [...getCultivarsFromAppState(appState)].sort((left, right) => {
+        const cropTypeCompare = left.cropTypeId.localeCompare(right.cropTypeId);
+        if (cropTypeCompare !== 0) {
+          return cropTypeCompare;
+        }
+
+        return left.name.localeCompare(right.name);
+      }),
+    );
+    setCropTypeOptions(nextCropTypeOptions);
+    setUsageByCultivarId(nextUsageByCultivarId);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadCultivars();
+  }, [loadCultivars]);
+
+  const resetForm = () => {
+    setEditingCultivarId(null);
+    setFormValues({
+      name: '',
+      cropTypeId: filterCropTypeId,
+      supplier: '',
+      source: '',
+      year: '',
+      notes: '',
+    });
+    setFormErrors({});
+    setSaveMessage(null);
+  };
+
+  useEffect(() => {
+    if (!editingCultivarId && filterCropTypeId) {
+      setFormValues((current) => ({ ...current, cropTypeId: current.cropTypeId || filterCropTypeId }));
+    }
+  }, [editingCultivarId, filterCropTypeId]);
+
+  const filteredCultivars = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+    return cultivars.filter((cultivar) => {
+      const archived = isCultivarArchived(cultivar);
+      if (!showArchived && archived) {
+        return false;
+      }
+
+      if (filterCropTypeId && cultivar.cropTypeId !== filterCropTypeId) {
+        return false;
+      }
+
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      const searchHaystack = [
+        cultivar.name,
+        cultivar.cultivarId,
+        cropTypeOptions.find((option) => option.cropTypeId === cultivar.cropTypeId)?.label ?? cultivar.cropTypeId,
+        cultivar.supplier ?? '',
+        cultivar.source ?? '',
+        stripCultivarArchiveMarker(cultivar.notes),
+      ].join(' ').toLowerCase();
+
+      return searchHaystack.includes(normalizedSearchTerm);
+    });
+  }, [cultivars, cropTypeOptions, filterCropTypeId, searchTerm, showArchived]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const nextErrors: Partial<Record<'name' | 'cropTypeId' | 'year', string>> = {};
+    const trimmedName = formValues.name.trim();
+    const trimmedCropTypeId = formValues.cropTypeId.trim();
+    const trimmedSupplier = formValues.supplier.trim();
+    const trimmedSource = formValues.source.trim();
+    const trimmedNotes = formValues.notes.trim();
+    const parsedYear = formValues.year.trim() ? Number(formValues.year) : undefined;
+
+    if (!trimmedName) {
+      nextErrors.name = 'Cultivar name is required.';
+    } else if (trimmedName.length > 120) {
+      nextErrors.name = 'Cultivar name must be 120 characters or fewer.';
+    }
+
+    if (!trimmedCropTypeId) {
+      nextErrors.cropTypeId = 'Crop type is required.';
+    }
+
+    if (parsedYear !== undefined && (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100)) {
+      nextErrors.year = 'Year must be a whole number between 1900 and 2100.';
+    }
+
+    const duplicateCultivar = cultivars.find((cultivar) => cultivar.cultivarId !== editingCultivarId && cultivar.cropTypeId === trimmedCropTypeId && cultivar.name.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (duplicateCultivar) {
+      nextErrors.name = 'A cultivar with this crop type and name already exists.';
+    }
+
+    setFormErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setSavingId(editingCultivarId ?? 'new');
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const existingCultivars = getCultivarsFromAppState(appState);
+      const existingCultivar = editingCultivarId ? existingCultivars.find((cultivar) => cultivar.cultivarId === editingCultivarId) : undefined;
+      const nextCultivar: CultivarRecord = {
+        cultivarId: existingCultivar?.cultivarId ?? createUniqueCultivarId(trimmedName, trimmedCropTypeId, existingCultivars.map((cultivar) => cultivar.cultivarId)),
+        cropTypeId: trimmedCropTypeId,
+        name: trimmedName,
+        ...(trimmedSupplier ? { supplier: trimmedSupplier } : {}),
+        ...(trimmedSource ? { source: trimmedSource } : {}),
+        ...(parsedYear !== undefined ? { year: parsedYear } : {}),
+        ...(trimmedNotes ? { notes: trimmedNotes } : {}),
+        createdAt: existingCultivar?.createdAt ?? nowIso,
+        updatedAt: nowIso,
+      };
+
+      const nextCultivars = existingCultivars.some((cultivar) => cultivar.cultivarId === nextCultivar.cultivarId)
+        ? existingCultivars.map((cultivar) => (cultivar.cultivarId === nextCultivar.cultivarId ? nextCultivar : cultivar))
+        : [...existingCultivars, nextCultivar];
+
+      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      await loadCultivars();
+      resetForm();
+      setSaveMessage(existingCultivar ? 'Cultivar updated.' : 'Cultivar created.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleArchiveToggle = async (cultivarId: string, archived: boolean) => {
+    setSavingId(cultivarId);
+    setSaveMessage(null);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const nextCultivars = getCultivarsFromAppState(appState).map((cultivar) => (
+        cultivar.cultivarId === cultivarId ? withCultivarArchiveState(cultivar, archived, nowIso) : cultivar
+      ));
+
+      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      await loadCultivars();
+      if (editingCultivarId === cultivarId && archived) {
+        resetForm();
+      }
+      setSaveMessage(archived ? 'Cultivar archived.' : 'Cultivar restored.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <section className="batches-page">
+      <h2>Cultivar Admin</h2>
+      <p className="batch-form-note">Manage reusable cultivar records independently from batches. Each cultivar must belong to a crop type so batch and inventory workflows can link back to the same named variety.</p>
+      <nav className="batch-form-actions" aria-label="Cultivar admin entry points">
+        <Link to="/taxonomy">Hierarchy overview</Link>
+        <Link to="/taxonomy/crop-types">Crop types</Link>
+        <Link to="/batches#create-batch">Batch form</Link>
+        <Link to="/seed-inventory">Seed inventory</Link>
+      </nav>
+
+      <form id="create-cultivar" className="batch-form" onSubmit={(event) => void handleSubmit(event)}>
+        <h3>{editingCultivarId ? 'Edit cultivar' : 'Create cultivar'}</h3>
+        <div className="batch-form-grid">
+          <label>
+            Crop type
+            <select
+              value={formValues.cropTypeId}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropTypeId: event.target.value }))}
+            >
+              <option value="">Select crop type</option>
+              {cropTypeOptions.map((option) => (
+                <option key={option.cropTypeId} value={option.cropTypeId}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="batch-form-note">Required parent record. Cultivars stay scoped to one crop type.</span>
+            {formErrors.cropTypeId ? <span className="form-error">{formErrors.cropTypeId}</span> : null}
+          </label>
+
+          <label>
+            Cultivar name
+            <input
+              type="text"
+              value={formValues.name}
+              onChange={(event) => setFormValues((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Detroit Dark Red"
+            />
+            {formErrors.name ? <span className="form-error">{formErrors.name}</span> : null}
+          </label>
+
+          <label>
+            Supplier (optional)
+            <input
+              type="text"
+              value={formValues.supplier}
+              onChange={(event) => setFormValues((current) => ({ ...current, supplier: event.target.value }))}
+              placeholder="Optional"
+            />
+          </label>
+
+          <label>
+            Source (optional)
+            <input
+              type="text"
+              value={formValues.source}
+              onChange={(event) => setFormValues((current) => ({ ...current, source: event.target.value }))}
+              placeholder="Seed library, saved seed, vendor, or import note"
+            />
+          </label>
+
+          <label>
+            Year (optional)
+            <input
+              type="number"
+              min="1900"
+              max="2100"
+              step="1"
+              value={formValues.year}
+              onChange={(event) => setFormValues((current) => ({ ...current, year: event.target.value }))}
+              placeholder="2026"
+            />
+            {formErrors.year ? <span className="form-error">{formErrors.year}</span> : null}
+          </label>
+
+          <label>
+            Notes (optional)
+            <textarea
+              value={formValues.notes}
+              onChange={(event) => setFormValues((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+            />
+          </label>
+        </div>
+        <p className="batch-form-note">Archive uses a lightweight note marker for now so the UI can hide retired cultivars without changing the persisted schema.</p>
+        <div className="batch-form-actions">
+          <button type="submit" disabled={savingId !== null}>{editingCultivarId ? 'Save cultivar' : 'Create cultivar'}</button>
+          {editingCultivarId ? (
+            <button type="button" onClick={resetForm} disabled={savingId !== null}>
+              Cancel edit
+            </button>
+          ) : null}
+          {saveMessage ? <p className="batch-form-message">{saveMessage}</p> : null}
+        </div>
+      </form>
+
+      <section className="batch-form">
+        <h3>Browse cultivars</h3>
+        <div className="batch-form-grid">
+          <label>
+            Search
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Name, crop type, source, or ID" />
+          </label>
+
+          <label>
+            Crop type filter
+            <select value={filterCropTypeId} onChange={(event) => setFilterCropTypeId(event.target.value)}>
+              <option value="">All crop types</option>
+              {cropTypeOptions.map((option) => (
+                <option key={option.cropTypeId} value={option.cropTypeId}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Archived cultivars
+            <select value={showArchived ? 'all' : 'active'} onChange={(event) => setShowArchived(event.target.value === 'all')}>
+              <option value="active">Active only</option>
+              <option value="all">Include archived</option>
+            </select>
+          </label>
+        </div>
+
+        {isLoading ? <p className="batch-empty-state">Loading cultivars…</p> : null}
+        {!isLoading && filteredCultivars.length === 0 ? <p className="batch-empty-state">No cultivars match the current filters. Create a cultivar or widen the crop type / archive filters.</p> : null}
+        {!isLoading && filteredCultivars.length > 0 ? (
+          <ul className="seed-inventory-list">
+            {filteredCultivars.map((cultivar) => {
+              const archived = isCultivarArchived(cultivar);
+              const usage = usageByCultivarId[cultivar.cultivarId] ?? { batchCount: 0 };
+              const cropTypeLabel = cropTypeOptions.find((option) => option.cropTypeId === cultivar.cropTypeId)?.label ?? cultivar.cropTypeId;
+              const notes = stripCultivarArchiveMarker(cultivar.notes);
+
+              return (
+                <li key={cultivar.cultivarId} className="seed-inventory-row">
+                  <div>
+                    <p className="seed-inventory-primary">{cultivar.name}{archived ? ' · Archived' : ''}</p>
+                    <p className="seed-inventory-meta">Crop type: {cropTypeLabel}</p>
+                    <p className="seed-inventory-meta">Cultivar ID: {cultivar.cultivarId}</p>
+                    <p className="seed-inventory-meta">Batch links: {usage.batchCount}</p>
+                    {cultivar.supplier ? <p className="seed-inventory-meta">Supplier: {cultivar.supplier}</p> : null}
+                    {cultivar.source ? <p className="seed-inventory-meta">Source: {cultivar.source}</p> : null}
+                    {cultivar.year ? <p className="seed-inventory-meta">Year: {cultivar.year}</p> : null}
+                    {notes ? <p className="seed-inventory-meta">{notes}</p> : null}
+                  </div>
+                  <div className="seed-inventory-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCultivarId(cultivar.cultivarId);
+                        setFormValues({
+                          name: cultivar.name,
+                          cropTypeId: cultivar.cropTypeId,
+                          supplier: cultivar.supplier ?? '',
+                          source: cultivar.source ?? '',
+                          year: cultivar.year ? String(cultivar.year) : '',
+                          notes,
+                        });
+                        setFormErrors({});
+                        setSaveMessage(null);
+                      }}
+                      disabled={savingId !== null}
+                    >
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => void handleArchiveToggle(cultivar.cultivarId, !archived)} disabled={savingId !== null}>
+                      {archived ? 'Restore' : 'Archive'}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
+    </section>
+  );
+}
+
 function SeedInventoryPage() {
   const [items, setItems] = useState<SeedInventoryItem[]>([]);
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
@@ -1671,8 +2099,12 @@ function SeedInventoryPage() {
 
   return (
     <section className="seed-inventory-page">
-      <h2>Cultivar Admin</h2>
-      <p className="batch-form-note">Cultivars are managed independently from batches here: record the named variety once, keep it inventory-aware, and link it back to an existing crop type for reuse in batch workflows.</p>
+      <h2>Seed Inventory</h2>
+      <p className="batch-form-note">Track physical seed stock here. Use Cultivar Admin for reusable cultivar records, then record packets or saved seed lots separately in inventory.</p>
+      <nav className="batch-form-actions" aria-label="Seed inventory entry points">
+        <Link to="/taxonomy/cultivars#create-cultivar">Open cultivar admin</Link>
+        <Link to="/taxonomy/crop-types">Crop types</Link>
+      </nav>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
         <input
           type="text"
@@ -1765,7 +2197,7 @@ function SeedInventoryPage() {
           ))}
         </ul>
       ) : null}
-      {!isLoading && items.length === 0 ? <p>No cultivars in inventory yet. Create species first, then crop types, then add cultivars here for batch selection.</p> : null}
+      {!isLoading && items.length === 0 ? <p>No seed inventory items yet. Create cultivar records in Admin first, then track packets or saved seed here.</p> : null}
     </section>
   );
 }
@@ -1881,6 +2313,69 @@ const createUniqueSpeciesId = (name: string, existingSpeciesIds: string[]): stri
   }
 
   return candidate;
+};
+
+const CULTIVAR_ARCHIVE_PREFIX = '[Archived ';
+
+const getCultivarsFromAppState = (appState: AppState): CultivarRecord[] => {
+  const cultivars = (appState as AppStateWithCultivars).cultivars;
+  return Array.isArray(cultivars) ? cultivars : [];
+};
+
+const withCultivarsInAppState = (appState: AppState, cultivars: CultivarRecord[]): AppState =>
+  ({
+    ...(appState as AppStateWithCultivars),
+    cultivars,
+  }) as AppState;
+
+const createUniqueCultivarId = (name: string, cropTypeId: string, existingCultivarIds: string[]): string => {
+  const base = normalizeCropIdPart(`${cropTypeId}-${name}`) || `cultivar-${Date.now()}`;
+  const existing = new Set(existingCultivarIds);
+  let candidate = `cultivar_${base}`;
+  let suffix = 2;
+
+  while (existing.has(candidate)) {
+    candidate = `cultivar_${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+};
+
+const isCultivarArchived = (cultivar: CultivarRecord): boolean => typeof cultivar.notes === 'string' && cultivar.notes.startsWith(CULTIVAR_ARCHIVE_PREFIX);
+
+const stripCultivarArchiveMarker = (notes: string | undefined): string => {
+  if (!notes?.startsWith(CULTIVAR_ARCHIVE_PREFIX)) {
+    return notes ?? '';
+  }
+
+  const [, ...remainingLines] = notes.split('\n');
+  return remainingLines.join('\n').trim();
+};
+
+const withCultivarArchiveState = (cultivar: CultivarRecord, archived: boolean, nowIso: string): CultivarRecord => {
+  const notes = stripCultivarArchiveMarker(cultivar.notes);
+
+  if (!archived) {
+    const nextCultivar: CultivarRecord = {
+      ...cultivar,
+      updatedAt: nowIso,
+    };
+
+    if (notes) {
+      nextCultivar.notes = notes;
+    } else {
+      delete nextCultivar.notes;
+    }
+
+    return nextCultivar;
+  }
+
+  return {
+    ...cultivar,
+    notes: `${CULTIVAR_ARCHIVE_PREFIX}${nowIso}]${notes ? `\n${notes}` : ''}`,
+    updatedAt: nowIso,
+  };
 };
 
 function BatchesPage({
@@ -3067,7 +3562,7 @@ function BatchesPage({
       {taxonomyOnly ? (
         <>
           <p className="batch-form-note">
-            Manage reusable taxonomy records here. Species define the biological taxon, crop types define the garden form under that species, and cultivars stay in seed inventory as explicit named records that batches consume.
+            Manage reusable taxonomy records here. Species define the biological taxon, crop types define the garden form under that species, and cultivars are maintained in their own admin view before inventory or batches link to them.
           </p>
           <nav className="batch-form-actions" aria-label="Taxonomy admin views">
             <Link to="/taxonomy">Hierarchy overview</Link>
@@ -3077,7 +3572,7 @@ function BatchesPage({
           </nav>
           {taxonomySection === 'overview' ? (
             <p className="batch-form-note">
-              Start with species, then define crop types, then manage cultivars in inventory. Batch workflows currently select an existing crop type while cultivar naming stays temporary free text.
+              Start with species, then define crop types, then create cultivar records in Cultivar Admin. Batch workflows still select an existing crop type while linked cultivar selection catches up.
             </p>
           ) : null}
         </>
@@ -3133,7 +3628,7 @@ function BatchesPage({
 
           <nav className="batch-form-actions" aria-label="Batch and admin flows">
             <Link to="/batches#create-batch">Batch form</Link>
-            <Link to="/seed-inventory">Cultivar admin</Link>
+            <Link to="/taxonomy/cultivars#create-cultivar">Cultivar admin</Link>
             <Link to="/batches#edit-crop">Edit crop type metadata</Link>
             <Link to="/taxonomy/species">Species admin</Link>
           </nav>
@@ -3267,11 +3762,11 @@ function BatchesPage({
           </label>
         </div>
         <p className="batch-form-note">
-          Batch creation currently links to an existing crop type record. Use the temporary cultivar / variety label only for free text, and manage reusable cultivars separately in the dedicated admin views until linked cultivar selection exists. Non-sowing start transitions are still planning-only.
+          Batch creation currently links to an existing crop type record. Use the temporary cultivar / variety label only for free text, and manage reusable cultivars separately in the dedicated Cultivar Admin until linked cultivar selection exists. Non-sowing start transitions are still planning-only.
         </p>
         {selectedCropRuleWarning ? <p className="batch-stage-warning">{selectedCropRuleWarning}</p> : null}
         <div className="batch-form-actions">
-          <Link to="/seed-inventory">Open cultivar admin</Link>
+          <Link to="/taxonomy/cultivars#create-cultivar">Open cultivar admin</Link>
           <Link to="/taxonomy#create-crop">Open crop type taxonomy form</Link>
           <Link to="/taxonomy/species">Open species admin</Link>
           <button type="submit">{editingBatchId ? 'Save changes' : 'Create batch'}</button>
@@ -6940,7 +7435,7 @@ function App() {
           <Route path="/taxonomy" element={<BatchesPage taxonomyOnly showAdminDataSurgery={isDevResetEnabled} />} />
           <Route path="/taxonomy/species" element={<BatchesPage taxonomyOnly taxonomySection="species" showAdminDataSurgery={isDevResetEnabled} />} />
           <Route path="/taxonomy/crop-types" element={<BatchesPage taxonomyOnly taxonomySection="crop-types" showAdminDataSurgery={isDevResetEnabled} />} />
-          <Route path="/taxonomy/cultivars" element={<SeedInventoryPage />} />
+          <Route path="/taxonomy/cultivars" element={<CultivarAdminPage />} />
           <Route path="/batches/:batchId" element={<BatchDetailPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
           <Route path="/seed-inventory" element={<SeedInventoryPage />} />
