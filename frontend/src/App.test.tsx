@@ -475,7 +475,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText(/Batch import ready: 1 valid batch\(es\) from 2 payload batch\(es\), invalid 1\./)).toBeInTheDocument();
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
-      expect(screen.getByText('Batch: Unknown variety (Unknown crop)')).toBeInTheDocument();
+      expect(screen.getByText('Batch: Unknown cultivar (Unknown crop type)')).toBeInTheDocument();
       expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
       expect(screen.getByText('Events: 0')).toBeInTheDocument();
       expect(screen.getByLabelText('Auto-rename on ID conflict (presentation preview)')).toBeInTheDocument();
