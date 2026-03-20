@@ -2411,10 +2411,10 @@ const getBatchCultivarDisplay = ({
 }): {
   identityId: string;
   capabilityCropId: string;
-  name?: string;
-  scientificName?: string;
-  cropTypeId?: string;
-  cropTypeName?: string;
+  name?: string | undefined;
+  scientificName?: string | undefined;
+  cropTypeId?: string | undefined;
+  cropTypeName?: string | undefined;
 } => {
   const lookupId = getBatchCultivarLookupId(batch) ?? batch.batchId;
   const cultivar = cultivarsById[lookupId];
@@ -2591,6 +2591,11 @@ function BatchesPage({
     [searchParams],
   );
 
+  const cultivarsById = useMemo(
+    () => Object.fromEntries(cultivars.map((cultivar) => [cultivar.cultivarId, cultivar])),
+    [cultivars],
+  );
+
   const cropOptions = useMemo(
     () =>
       Array.from(
@@ -2735,10 +2740,6 @@ function BatchesPage({
   const selectedCultivar = useMemo(
     () => cultivars.find((cultivar) => cultivar.cultivarId === selectedCultivarId) ?? null,
     [cultivars, selectedCultivarId],
-  );
-  const cultivarsById = useMemo(
-    () => Object.fromEntries(cultivars.map((cultivar) => [cultivar.cultivarId, cultivar])),
-    [cultivars],
   );
   const selectedCropRuleWarning =
     selectedCultivar && cropHasTaskRules[selectedCultivar.cropTypeId] === false
