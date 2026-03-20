@@ -714,8 +714,8 @@ const sortBatchesForHierarchy = (batches: AppState['batches']): AppState['batche
       const comparisons: Array<[string | null, string | null]> = [
         [asNonEmptyString(left.cropTypeId) ?? asNonEmptyString(left.cropId), asNonEmptyString(right.cropTypeId) ?? asNonEmptyString(right.cropId)],
         [asNonEmptyString(left.cultivarId) ?? asNonEmptyString(left.cropId), asNonEmptyString(right.cultivarId) ?? asNonEmptyString(right.cropId)],
-        [left.batchId, right.batchId],
         [left.startedAt, right.startedAt],
+        [left.batchId, right.batchId],
       ];
 
       for (const [leftValue, rightValue] of comparisons) {
