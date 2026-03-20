@@ -12,10 +12,22 @@ export const buildTaskSourceKey = (
 
 const BATCH_STAGE_TRANSITIONS: Record<string, readonly string[]> = {
   sowing: ['transplant', 'harvest', 'failed'],
+  started: ['transplant', 'harvest', 'failed'],
   transplant: ['harvest', 'failed'],
   harvest: ['ended', 'failed'],
   failed: ['ended'],
   ended: ['failed'],
+};
+
+const LEGACY_STAGE_ALIASES: Record<string, string> = {
+  pre_sown: 'sowing',
+};
+
+const LEGACY_START_METHOD_ALIASES: Record<string, string> = {
+  paper_towel: 'pre_sow_paper_towel',
+  tray: 'pre_sow_indoor',
+  indoor: 'sow_indoor',
+  direct: 'direct_sow',
 };
 
 export type BatchTransitionReason = 'invalid_stage_transition' | 'stage_event_stage_mismatch';
@@ -32,20 +44,36 @@ type BatchTransitionFailure = {
 
 export type BatchTransitionResult = BatchTransitionSuccess | BatchTransitionFailure;
 
+export const normalizeBatchStage = (stage: string): string => LEGACY_STAGE_ALIASES[stage] ?? stage;
+
+export const normalizeBatchStartMethod = (method: string | undefined): string | undefined =>
+  method ? LEGACY_START_METHOD_ALIASES[method] ?? method : undefined;
+
+export const inferBatchStartMethod = (
+  stage: string | undefined,
+  method?: string,
+): string | undefined => normalizeBatchStartMethod(method) ?? (stage === 'pre_sown' ? 'pre_sow_paper_towel' : undefined);
+
 export const canTransition = (currentStage: string, nextStage: string): boolean => {
-  if (nextStage === 'failed') {
+  const normalizedCurrentStage = normalizeBatchStage(currentStage);
+  const normalizedNextStage = normalizeBatchStage(nextStage);
+  if (normalizedNextStage === 'failed') {
     return true;
   }
 
-  if (nextStage === 'ended') {
-    return currentStage === 'harvest' || currentStage === 'failed';
+  if (normalizedNextStage === 'ended') {
+    return normalizedCurrentStage === 'harvest' || normalizedCurrentStage === 'failed';
   }
 
-  return BATCH_STAGE_TRANSITIONS[currentStage]?.includes(nextStage) ?? false;
+  return BATCH_STAGE_TRANSITIONS[normalizedCurrentStage]?.includes(normalizedNextStage) ?? false;
 };
 
 export const applyStageEvent = (batch: Batch, event: BatchStageEvent): BatchTransitionResult => {
-  if (event.stage !== batch.stage && !canTransition(batch.stage, event.stage)) {
+  const normalizedBatchStage = normalizeBatchStage(batch.stage);
+  const normalizedEventStage = normalizeBatchStage(event.stage);
+  const normalizedEventMethod = normalizeBatchStartMethod(event.method);
+
+  if (normalizedEventStage !== normalizedBatchStage && !canTransition(normalizedBatchStage, normalizedEventStage)) {
     return { ok: false, reason: 'invalid_stage_transition' };
   }
 
@@ -53,8 +81,16 @@ export const applyStageEvent = (batch: Batch, event: BatchStageEvent): BatchTran
     ok: true,
     batch: {
       ...batch,
-      stage: event.stage,
-      stageEvents: [...batch.stageEvents, event],
+      stage: normalizedEventStage,
+      currentStage: normalizedEventStage,
+      stageEvents: [
+        ...batch.stageEvents,
+        {
+          ...event,
+          stage: normalizedEventStage,
+          ...(normalizedEventMethod ? { method: normalizedEventMethod } : {}),
+        },
+      ],
     },
   };
 };

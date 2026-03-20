@@ -1,5 +1,5 @@
 import type { AppState, Batch } from '../../contracts';
-import { applyStageEvent } from '../../domain';
+import { applyStageEvent, inferBatchStartMethod, normalizeBatchStage } from '../../domain';
 import { assertValid, validateSchema } from '../validation';
 import type { BatchListFilter, ListQuery } from './interfaces';
 
@@ -57,6 +57,32 @@ const asUtcIso = (value: unknown): string | undefined => {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 };
 
+const normalizeStageEvent = (
+  event: Record<string, unknown>,
+  fallbackStage?: string,
+): Record<string, unknown> => {
+  const rawStage = 'stage' in event
+    ? (typeof event.stage === 'string' ? event.stage : undefined)
+    : 'type' in event
+      ? (typeof event.type === 'string' ? event.type : undefined)
+      : fallbackStage;
+  const normalizedStage = rawStage ? normalizeBatchStage(rawStage) : undefined;
+  const normalizedMethod = inferBatchStartMethod(rawStage, asString(event.method));
+  const nextMeta = asRecord(event.meta);
+
+  return {
+    ...event,
+    ...(normalizedStage ? { stage: normalizedStage } : {}),
+    occurredAt: asUtcIso(event.occurredAt) ?? asUtcIso(event.date),
+    ...(normalizedMethod ? { method: normalizedMethod } : {}),
+    ...(rawStage && normalizedStage && rawStage !== normalizedStage
+      ? { meta: { ...nextMeta, legacyStage: rawStage } }
+      : Object.keys(nextMeta).length > 0
+        ? { meta: nextMeta }
+        : {}),
+  };
+};
+
 const detectPropagationType = (candidate: Record<string, unknown>): Batch['propagationType'] | undefined => {
   const direct = asString(candidate.propagationType);
 
@@ -111,7 +137,8 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
     warnings.push({ batchId, code: 'legacy_start_mapped', message: 'Mapped legacy start.* fields into startedAt.' });
   }
 
-  const stage = asString(candidate.currentStage) ?? asString(candidate.stage) ?? asString(status.state) ?? 'unknown';
+  const rawStage = asString(candidate.currentStage) ?? asString(candidate.stage) ?? asString(status.state) ?? 'unknown';
+  const stage = normalizeBatchStage(rawStage);
   if (status.state || status.isActive !== undefined) {
     warnings.push({ batchId, code: 'legacy_status_ignored', message: 'Legacy status.* fields observed; canonical stage/currentStage applied.' });
   }
@@ -119,16 +146,9 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
   const stageEventsInput = Array.isArray(candidate.stageEvents) ? candidate.stageEvents : [];
   const stageEvents =
     stageEventsInput.length > 0
-      ? stageEventsInput.map((event) => {
-          const record = asRecord(event);
-          return {
-            ...record,
-            stage: asString(record.stage) ?? asString(record.type),
-            occurredAt: asUtcIso(record.occurredAt) ?? asUtcIso(record.date),
-          };
-        })
+      ? stageEventsInput.map((event) => normalizeStageEvent(asRecord(event), rawStage))
       : startedAt
-        ? [{ stage, occurredAt: startedAt }]
+        ? [normalizeStageEvent({ stage: rawStage, occurredAt: startedAt }, rawStage)]
         : [];
   if (stageEventsInput.length === 0 && startedAt) {
     warnings.push({ batchId, code: 'stage_events_synthesized', message: 'Synthesized first stage event from start timestamp.' });
@@ -165,7 +185,7 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
   }
 
   if (candidate.currentStage !== undefined || forMigrationReport) {
-    normalized.currentStage = asString(candidate.currentStage) ?? stage;
+    normalized.currentStage = normalizeBatchStage(asString(candidate.currentStage) ?? stage);
   }
 
   if (candidate.bedAssignments !== undefined) {
@@ -185,8 +205,13 @@ const normalizeBatchCandidate = (value: unknown, options?: { forMigrationReport?
     normalized.propagationType = candidate.propagationType;
   }
 
-  if (candidate.startMethod !== undefined) {
-    normalized.startMethod = candidate.startMethod;
+  const firstStageEvent = stageEvents[0] as Record<string, unknown> | undefined;
+  const normalizedStartMethod = inferBatchStartMethod(
+    rawStage,
+    asString(candidate.startMethod) ?? asString(firstStageEvent?.method),
+  );
+  if (normalizedStartMethod !== undefined) {
+    normalized.startMethod = normalizedStartMethod;
   }
 
   if (candidate.startLocation !== undefined) {
