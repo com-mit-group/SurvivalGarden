@@ -494,17 +494,6 @@ const normalizeImportedSpeciesRecords = (payload: unknown): unknown => {
   };
 };
 
-export const parseImportedAppState = (rawPayload: string): AppState => {
-  const parsed: unknown = normalizeImportedSpeciesRecords(JSON.parse(rawPayload));
-  const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
-
-  if (migrationResult.report.warnings.length > 0) {
-    console.warn('AppState migration warnings', migrationResult.report.warnings);
-  }
-
-  return assertValid('appState', migrationResult.payload);
-};
-
 const compareByString = (left: string, right: string): number => left.localeCompare(right);
 
 const getStringValue = (record: unknown, key: string): string | null => {
@@ -530,23 +519,224 @@ const sortCollectionByKey = <T>(collection: T[], keys: string[]): T[] =>
     return compareByString(JSON.stringify(left), JSON.stringify(right));
   });
 
-const canonicalizeForExport = (appState: AppState): AppState => {
-  const canonicalBatches = sortCollectionByKey(
-    appState.batches.map((batch) => ({
+
+type HierarchyAppState = AppState & { cultivars?: unknown[] };
+
+type HierarchyValidationResult = {
+  warnings: string[];
+  errors: string[];
+};
+
+const asObjectRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
+const asNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeHierarchyLabel = (value: string): string => value.trim().toLowerCase();
+
+const getCultivarsFromState = (appState: AppState): unknown[] => {
+  const cultivars = (appState as HierarchyAppState).cultivars;
+  return Array.isArray(cultivars) ? cultivars : [];
+};
+
+const withCultivars = (appState: AppState, cultivars: unknown[]): AppState => {
+  const hasCultivarsProperty = Object.prototype.hasOwnProperty.call(appState, 'cultivars');
+
+  if (!hasCultivarsProperty && cultivars.length === 0) {
+    return appState;
+  }
+
+  return {
+    ...(appState as HierarchyAppState),
+    cultivars,
+  } as AppState;
+};
+
+const collectDuplicateIds = (records: unknown[], idKey: string, label: string): string[] => {
+  const recordIndexes = new Map<string, number[]>();
+
+  records.forEach((record, index) => {
+    const id = asNonEmptyString(asObjectRecord(record)?.[idKey]);
+    if (!id) {
+      return;
+    }
+
+    const indexes = recordIndexes.get(id) ?? [];
+    indexes.push(index);
+    recordIndexes.set(id, indexes);
+  });
+
+  return [...recordIndexes.entries()]
+    .filter(([, indexes]) => indexes.length > 1)
+    .map(([id, indexes]) => `${label}:${id} is duplicated at indexes ${indexes.join(', ')}.`);
+};
+
+const collectAmbiguousNameWarnings = (
+  records: unknown[],
+  parentKey: string,
+  nameKeys: string[],
+  idKey: string,
+  label: string,
+): string[] => {
+  const recordsByParentAndName = new Map<string, string[]>();
+
+  records.forEach((record) => {
+    const entry = asObjectRecord(record);
+    if (!entry) {
+      return;
+    }
+
+    const parentId = asNonEmptyString(entry[parentKey]) ?? 'unscoped';
+    const name = nameKeys.map((key) => asNonEmptyString(entry[key])).find((value) => value !== null);
+    const id = asNonEmptyString(entry[idKey]);
+
+    if (!name || !id) {
+      return;
+    }
+
+    const bucketKey = `${parentId}::${normalizeHierarchyLabel(name)}`;
+    const ids = recordsByParentAndName.get(bucketKey) ?? [];
+    ids.push(id);
+    recordsByParentAndName.set(bucketKey, ids);
+  });
+
+  return [...recordsByParentAndName.entries()]
+    .filter(([, ids]) => new Set(ids).size > 1)
+    .map(([key, ids]) => {
+      const [parentId, name] = key.split('::');
+      return `${label}:${parentId}:${name} maps to multiple records (${[...new Set(ids)].join(', ')}).`;
+    });
+};
+
+const validateHierarchyForImport = (appState: AppState): HierarchyValidationResult => {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  const species = Array.isArray(appState.species) ? appState.species : [];
+  const crops = Array.isArray(appState.crops) ? appState.crops : [];
+  const cultivars = getCultivarsFromState(appState);
+  const batches = Array.isArray(appState.batches) ? appState.batches : [];
+
+  errors.push(...collectDuplicateIds(species, 'id', 'species'));
+  errors.push(...collectDuplicateIds(crops, 'cropId', 'cropType'));
+  errors.push(...collectDuplicateIds(cultivars, 'cultivarId', 'cultivar'));
+  errors.push(...collectDuplicateIds(batches, 'batchId', 'batch'));
+
+  warnings.push(...collectAmbiguousNameWarnings(crops, 'speciesId', ['name', 'cultivar'], 'cropId', 'cropType'));
+  warnings.push(...collectAmbiguousNameWarnings(cultivars, 'cropTypeId', ['name'], 'cultivarId', 'cultivar'));
+
+  const speciesIds = new Set(species.map((entry) => entry.id));
+  const cropIds = new Set(crops.map((entry) => entry.cropId));
+  const cultivarParentById = new Map<string, string>();
+
+  crops.forEach((crop, index) => {
+    if (crop.speciesId && !speciesIds.has(crop.speciesId)) {
+      errors.push(`cropType:${crop.cropId} references missing species:${crop.speciesId} at index ${index}.`);
+    }
+
+    if (!crop.speciesId) {
+      warnings.push(`cropType:${crop.cropId} is missing speciesId; importer cannot guarantee parent-first taxonomy resolution.`);
+    }
+  });
+
+  cultivars.forEach((record, index) => {
+    const cultivar = asObjectRecord(record);
+    if (!cultivar) {
+      return;
+    }
+
+    const cultivarId = asNonEmptyString(cultivar.cultivarId);
+    const cropTypeId = asNonEmptyString(cultivar.cropTypeId);
+
+    if (!cultivarId || !cropTypeId) {
+      errors.push(`cultivar index ${index} is missing cultivarId or cropTypeId.`);
+      return;
+    }
+
+    cultivarParentById.set(cultivarId, cropTypeId);
+    if (!cropIds.has(cropTypeId)) {
+      errors.push(`cultivar:${cultivarId} references missing cropType:${cropTypeId} at index ${index}.`);
+    }
+  });
+
+  batches.forEach((batch, index) => {
+    const cultivarId = asNonEmptyString(batch.cultivarId);
+    const legacyCropId = asNonEmptyString(batch.cropId);
+    const cropTypeId = asNonEmptyString(batch.cropTypeId);
+    const resolvedLegacyParent = legacyCropId && cropIds.has(legacyCropId);
+    const resolvedCultivarParent = cultivarId && (cultivarParentById.has(cultivarId) || cropIds.has(cultivarId));
+
+    if (!cultivarId && !legacyCropId) {
+      errors.push(`batch:${batch.batchId} is missing cultivarId/cropId and cannot be resolved.`);
+      return;
+    }
+
+    if (cultivarId && !resolvedCultivarParent) {
+      errors.push(`batch:${batch.batchId} references missing cultivar:${cultivarId}.`);
+    }
+
+    if (!cultivarId && legacyCropId && !resolvedLegacyParent) {
+      errors.push(`batch:${batch.batchId} references missing legacy cropType:${legacyCropId}.`);
+    }
+
+    if (cropTypeId && !cropIds.has(cropTypeId)) {
+      errors.push(`batch:${batch.batchId} references missing cropType:${cropTypeId} at index ${index}.`);
+    }
+
+    if (cultivarId && cropTypeId) {
+      const expectedCropTypeId = cultivarParentById.get(cultivarId);
+      if (expectedCropTypeId && expectedCropTypeId !== cropTypeId) {
+        warnings.push(`batch:${batch.batchId} declares cropType:${cropTypeId} but cultivar:${cultivarId} belongs to ${expectedCropTypeId}.`);
+      }
+    }
+  });
+
+  return { warnings, errors };
+};
+
+const sortBatchesForHierarchy = (batches: AppState['batches']): AppState['batches'] =>
+  [...batches]
+    .map((batch) => ({
       ...batch,
+      stageEvents: sortCollectionByKey(batch.stageEvents, ['occurredAt', 'stage', 'type']),
+      assignments: sortCollectionByKey(batch.assignments, ['bedId', 'assignedAt', 'fromDate']),
       photos: Array.isArray((batch as Batch & { photos?: unknown[] }).photos)
         ? sortCollectionByKey((batch as Batch & { photos?: unknown[] }).photos ?? [], ['id', 'storageRef', 'capturedAt', 'filename'])
         : (batch as Batch & { photos?: unknown[] }).photos,
-    })),
-    ['batchId', 'cropId', 'startedAt'],
-  );
+    }))
+    .sort((left, right) => {
+      const comparisons: Array<[string | null, string | null]> = [
+        [asNonEmptyString(left.cropTypeId) ?? asNonEmptyString(left.cropId), asNonEmptyString(right.cropTypeId) ?? asNonEmptyString(right.cropId)],
+        [asNonEmptyString(left.cultivarId) ?? asNonEmptyString(left.cropId), asNonEmptyString(right.cultivarId) ?? asNonEmptyString(right.cropId)],
+        [left.batchId, right.batchId],
+        [left.startedAt, right.startedAt],
+      ];
 
-  return {
+      for (const [leftValue, rightValue] of comparisons) {
+        if (leftValue && rightValue && leftValue !== rightValue) {
+          return compareByString(leftValue, rightValue);
+        }
+      }
+
+      return compareByString(JSON.stringify(left), JSON.stringify(right));
+    });
+
+const canonicalizeForExport = (appState: AppState): AppState => {
+  const cultivars = sortCollectionByKey(getCultivarsFromState(appState), ['cropTypeId', 'cultivarId', 'name']);
+
+  return withCultivars({
     ...appState,
     beds: sortCollectionByKey(appState.beds, ['bedId', 'gardenId', 'name']),
-    crops: sortCollectionByKey(appState.crops, ['cropId', 'name']),
-    cropPlans: sortCollectionByKey(appState.cropPlans, ['planId', 'cropId']),
-    batches: canonicalBatches,
+    species: appState.species ? sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) : appState.species,
+    crops: sortCollectionByKey(appState.crops, ['speciesId', 'cropId', 'name', 'cultivar']),
+    cropPlans: sortCollectionByKey(appState.cropPlans, ['cropId', 'planId']),
+    batches: sortBatchesForHierarchy(appState.batches),
     seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
     tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
     ...(appState.segments
@@ -561,7 +751,29 @@ const canonicalizeForExport = (appState: AppState): AppState => {
           ),
         }
       : {}),
-  };
+  }, cultivars);
+};
+
+export const parseImportedAppState = (rawPayload: string): AppState => {
+  const parsed: unknown = normalizeImportedSpeciesRecords(JSON.parse(rawPayload));
+  const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
+
+  if (migrationResult.report.warnings.length > 0) {
+    console.warn('AppState migration warnings', migrationResult.report.warnings);
+  }
+
+  const validatedState = canonicalizeForExport(assertValid('appState', migrationResult.payload));
+  const hierarchyValidation = validateHierarchyForImport(validatedState);
+
+  if (hierarchyValidation.warnings.length > 0) {
+    console.warn('AppState import hierarchy warnings', hierarchyValidation.warnings);
+  }
+
+  if (hierarchyValidation.errors.length > 0) {
+    throw new AppStateStorageError(`Import hierarchy validation failed: ${hierarchyValidation.errors.join(' ')}`);
+  }
+
+  return validatedState;
 };
 
 export const serializeAppStateForExport = (appState: unknown): string => {
@@ -721,10 +933,49 @@ const mergeTasksForImport = (currentTasks: AppState['tasks'], incomingTasks: App
   return [...mergedBySourceKey.values()];
 };
 
+
+const mergeUnknownCollectionById = (
+  currentCollection: unknown[],
+  incomingCollection: unknown[],
+  idKey: string,
+  report: MergeReport,
+  entityLabel: string,
+): unknown[] => {
+  const mergedById = new Map<string, Record<string, unknown>>();
+
+  currentCollection.forEach((record, index) => {
+    const entry = asObjectRecord(record);
+    const id = asNonEmptyString(entry?.[idKey]) ?? `${entityLabel}-current-${index}`;
+    if (entry) {
+      mergedById.set(id, entry);
+    }
+  });
+
+  incomingCollection.forEach((record, index) => {
+    const entry = asObjectRecord(record);
+    const id = asNonEmptyString(entry?.[idKey]) ?? `${entityLabel}-incoming-${index}`;
+
+    if (!entry) {
+      return;
+    }
+
+    const currentRecord = mergedById.get(id);
+    if (!currentRecord) {
+      mergedById.set(id, entry);
+      return;
+    }
+
+    const preference = compareWithUpdatedAt(entityLabel, id, currentRecord, entry, report);
+    mergedById.set(id, preference >= 0 ? entry : currentRecord);
+  });
+
+  return [...mergedById.values()];
+};
+
 const mergeAppStates = (currentState: AppState, incomingState: AppState): { state: AppState; report: MergeReport } => {
   const report = createEmptyMergeReport();
 
-  const mergedState: AppState = {
+  const mergedState: AppState = withCultivars({
     ...currentState,
     schemaVersion: incomingState.schemaVersion,
     settings: incomingState.settings,
@@ -735,9 +986,9 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
     tasks: mergeTasksForImport(currentState.tasks, incomingState.tasks, report),
     seedInventoryItems: mergeCollectionById('seedInventoryItems', currentState.seedInventoryItems, incomingState.seedInventoryItems, report),
-  };
+  }, mergeUnknownCollectionById(getCultivarsFromState(currentState), getCultivarsFromState(incomingState), 'cultivarId', report, 'cultivars'));
 
-  return { state: mergedState, report };
+  return { state: canonicalizeForExport(mergedState), report };
 };
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -970,16 +1221,19 @@ export const saveAppStateToIndexedDb = async (
       'readwrite',
     );
 
-    let stateToPersist = validState;
+    let stateToPersist = canonicalizeForExport(validState);
 
     if (!isReplaceMode) {
       const existingRaw = await requestToPromise(transaction.objectStore(APP_STATE_STORE).get(APP_STATE_RECORD_KEY));
 
       if (existingRaw !== undefined) {
         const existingState = assertValid('appState', existingRaw);
-        const merged = mergeAppStates(existingState, validState);
-        stateToPersist = assertValid('appState', merged.state);
+        const merged = mergeAppStates(existingState, stateToPersist);
+        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
         report = merged.report;
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        report.warnings.push(...hierarchyValidation.warnings);
+        report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }
     }
 
