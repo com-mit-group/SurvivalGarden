@@ -3529,16 +3529,22 @@ function BatchesPage({
       return;
     }
 
+    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
+
     if (!restoredBatchDraftRef.current) {
-      const savedDraft = loadBatchDraftState();
-      if (savedDraft) {
-        setEditingBatchId(savedDraft.editingBatchId);
-        setFormValues(savedDraft.formValues);
+      if (quickCreateCultivarId) {
+        const savedDraft = loadBatchDraftState();
+        if (savedDraft) {
+          setEditingBatchId(savedDraft.editingBatchId);
+          setFormValues(savedDraft.formValues);
+        }
+      } else {
+        clearBatchDraftState();
       }
+
       restoredBatchDraftRef.current = true;
     }
 
-    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
     if (!quickCreateCultivarId || handledQuickCreateReturnRef.current) {
       return;
     }
