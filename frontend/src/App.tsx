@@ -142,14 +142,37 @@ function BedsPage() {
     setSegments(appState.segments ?? []);
   }, []);
 
+  const reloadPersistedLayoutState = useCallback(async () => {
+    const persistedState = await loadAppStateFromIndexedDb();
+    syncLocalLayoutState(persistedState);
+    return persistedState;
+  }, [syncLocalLayoutState]);
+
+  const persistLayoutState = useCallback(async (nextState: AppState, successMessage: string) => {
+    await saveAppStateToIndexedDb(nextState);
+    const persistedState = await reloadPersistedLayoutState();
+
+    if (!persistedState) {
+      throw new Error('Layout changes could not be reloaded after saving.');
+    }
+
+    setActionMessage(successMessage);
+    return persistedState;
+  }, [reloadPersistedLayoutState]);
+
   useEffect(() => {
     const load = async () => {
-      syncLocalLayoutState(await loadAppStateFromIndexedDb());
-      setIsLoading(false);
+      try {
+        await reloadPersistedLayoutState();
+      } catch (error) {
+        setActionMessage(error instanceof Error ? error.message : 'Failed to load saved layout data.');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     void load();
-  }, [syncLocalLayoutState]);
+  }, [reloadPersistedLayoutState]);
 
   const activeBatchCountByBedId = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -417,9 +440,7 @@ function BedsPage() {
         segments: nextSegments,
       });
 
-      await saveAppStateToIndexedDb(nextState);
-      syncLocalLayoutState(nextState);
-      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
+      await persistLayoutState(nextState, `${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
     } catch (error) {
       if (error instanceof SchemaValidationError) {
@@ -431,7 +452,7 @@ function BedsPage() {
     } finally {
       setSavingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, savingEntityKey, syncLocalLayoutState]);
+  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, persistLayoutState, savingEntityKey]);
 
   const getReferenceCounts = useCallback((appState: AppState, bedId: string) => {
     const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
@@ -546,24 +567,23 @@ function BedsPage() {
         segments: nextSegments,
       });
 
-      await saveAppStateToIndexedDb(nextState);
-      syncLocalLayoutState(nextState);
-      if (activeFormKey === entityKey || activeFormKey?.startsWith(`${kind}:${segmentId}:${entityId}`) || activeFormKey === `segment:${segmentId}`) {
-        closeForm();
-      }
-      setActionMessage(
+      await persistLayoutState(
+        nextState,
         kind === 'path'
           ? `Deleted path ${entityId}.`
           : kind === 'bed'
-            ? `Bed deleted.`
+            ? 'Bed deleted.'
             : 'Segment deleted.',
       );
+      if (activeFormKey === entityKey || activeFormKey?.startsWith(`${kind}:${segmentId}:${entityId}`) || activeFormKey === `segment:${segmentId}`) {
+        closeForm();
+      }
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : 'Failed to delete entity.');
     } finally {
       setDeletingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, syncLocalLayoutState]);
+  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, persistLayoutState]);
 
   const hasAnyLayoutRecords = segments.length > 0 || totalSegmentBedCount > 0 || totalPathCount > 0;
 
