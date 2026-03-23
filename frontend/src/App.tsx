@@ -2461,7 +2461,14 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
   return crop.name ?? crop.scientificName ?? crop.cropId;
 };
 
-const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
+const normalizeCropSearchValue = (value: string): string =>
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[·•]/g, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
 
 const parseCsvUnique = (value: string): string[] =>
   Array.from(
@@ -2825,23 +2832,33 @@ function BatchesPage({
     () =>
       cultivars
         .filter((cultivar) => !isCultivarArchived(cultivar))
-        .map((cultivar) => ({
-          cultivarId: cultivar.cultivarId,
-          cropTypeId: cultivar.cropTypeId,
-          label: [
+        .map((cultivar) => {
+          const label = [
             cultivar.name,
             cropNames[cultivar.cropTypeId] ?? cultivar.cropTypeId,
             cropScientificNames[cultivar.cropTypeId],
           ]
             .filter(Boolean)
-            .join(' · '),
-          name: cultivar.name,
-          cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
-          scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
-          aliases: cropAliases[cultivar.cropTypeId] ?? [],
-        }))
+            .join(' · ');
+          const suffix = cropHasTaskRules[cultivar.cropTypeId] === false
+            ? ' · No rules yet'
+            : userDefinedCropIds[cultivar.cropTypeId]
+              ? ' · Custom crop type'
+              : '';
+
+          return {
+            cultivarId: cultivar.cultivarId,
+            cropTypeId: cultivar.cropTypeId,
+            label,
+            inputValue: `${label}${suffix}`,
+            name: cultivar.name,
+            cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
+            scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
+            aliases: cropAliases[cultivar.cropTypeId] ?? [],
+          };
+        })
         .sort((left, right) => left.label.localeCompare(right.label)),
-    [cultivars, cropAliases, cropNames, cropScientificNames],
+    [cultivars, cropAliases, cropHasTaskRules, cropNames, cropScientificNames, userDefinedCropIds],
   );
 
   const filteredBatches = useMemo(
@@ -2898,6 +2915,7 @@ function BatchesPage({
       const aliases = option.aliases.map((alias) => normalizeCropSearchValue(alias));
       return (
         normalizeCropSearchValue(option.cultivarId) === normalizedInput ||
+        normalizeCropSearchValue(option.inputValue) === normalizedInput ||
         normalizeCropSearchValue(option.label) === normalizedInput ||
         normalizeCropSearchValue(option.name) === normalizedInput ||
         normalizeCropSearchValue(option.cropTypeName) === normalizedInput ||
@@ -2911,10 +2929,10 @@ function BatchesPage({
     }
 
     const containsMatch = cultivarInputOptions.find((option) => {
-      const searchFields = [option.cultivarId, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
+      const searchFields = [option.cultivarId, option.inputValue, option.label, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
         .map((value) => normalizeCropSearchValue(value))
         .filter(Boolean);
-      return searchFields.some((field) => field.includes(normalizedInput));
+      return searchFields.some((field) => field.includes(normalizedInput) || normalizedInput.includes(field));
     });
 
     return containsMatch?.cultivarId ?? null;
@@ -3974,7 +3992,7 @@ function BatchesPage({
               {cultivarInputOptions.map((cultivar) => (
                 <option
                   key={cultivar.cultivarId}
-                  value={`${cultivar.label}${cropHasTaskRules[cultivar.cropTypeId] === false ? ' · No rules yet' : userDefinedCropIds[cultivar.cropTypeId] ? ' · Custom crop type' : ''}`}
+                  value={cultivar.inputValue}
                 />
               ))}
             </datalist>
