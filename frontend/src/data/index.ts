@@ -134,6 +134,10 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
 
 const toFiniteNumber = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
+const getWidthMeters = (value: Record<string, unknown>): number | null => toFiniteNumber(value.widthM) ?? toFiniteNumber(value.width);
+
+const getLengthMeters = (value: Record<string, unknown>): number | null => toFiniteNumber(value.lengthM) ?? toFiniteNumber(value.height);
+
 const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report: LayoutMigrationReport } => {
   const report: LayoutMigrationReport = { migrated: false, warnings: [] };
 
@@ -259,8 +263,8 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
 
         const x = toFiniteNumber(typedBed.x);
         const y = toFiniteNumber(typedBed.y);
-        const width = toFiniteNumber(typedBed.width);
-        const height = toFiniteNumber(typedBed.height);
+        const width = getWidthMeters(typedBed);
+        const height = getLengthMeters(typedBed);
 
         bedToSegment.set(typedBed.bedId, {
           segmentId,
@@ -354,8 +358,8 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     return (
       toFiniteNumber(typedBed.x) !== null &&
       toFiniteNumber(typedBed.y) !== null &&
-      toFiniteNumber(typedBed.width) !== null &&
-      toFiniteNumber(typedBed.height) !== null
+      getWidthMeters(typedBed) !== null &&
+      getLengthMeters(typedBed) !== null
     );
   });
 
@@ -367,15 +371,18 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     const { x, y, width, height, ...rest } = bed;
     return {
       ...rest,
+      segmentId: 'segment_migrated_main',
       x,
       y,
+      widthM: width,
+      lengthM: height,
       width,
       height,
     };
   });
 
-  const maxX = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.x) ?? 0) + (toFiniteNumber(bed.width) ?? 0)), 0);
-  const maxY = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.y) ?? 0) + (toFiniteNumber(bed.height) ?? 0)), 0);
+  const maxX = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.x) ?? 0) + (getWidthMeters(bed) ?? 0)), 0);
+  const maxY = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.y) ?? 0) + (getLengthMeters(bed) ?? 0)), 0);
 
   const legacyPaths = Array.isArray((state as { paths?: unknown[] }).paths)
     ? ((state as { paths?: unknown[] }).paths ?? []).filter((path) => {
@@ -388,9 +395,18 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
           typeof typedPath.name === 'string' &&
           toFiniteNumber(typedPath.x) !== null &&
           toFiniteNumber(typedPath.y) !== null &&
-          toFiniteNumber(typedPath.width) !== null &&
-          toFiniteNumber(typedPath.height) !== null
+          getWidthMeters(typedPath) !== null &&
+          getLengthMeters(typedPath) !== null
         );
+      })
+      .map((path) => {
+        const typedPath = path as Record<string, unknown>;
+        return {
+          ...typedPath,
+          segmentId: 'segment_migrated_main',
+          widthM: getWidthMeters(typedPath),
+          lengthM: getLengthMeters(typedPath),
+        };
       })
     : [];
 
@@ -420,6 +436,8 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
       {
         segmentId: 'segment_migrated_main',
         name: 'Migrated Segment',
+        widthM: Math.max(maxX, 1),
+        lengthM: Math.max(maxY, 1),
         width: Math.max(maxX, 1),
         height: Math.max(maxY, 1),
         originReference: 'legacy_migration_auto',
@@ -440,7 +458,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   return { payload: withSegments(nextState, true), report };
 };
 
-const GOLDEN_DATASET = assertValid('appState', migrateLegacyBedTypes(goldenDatasetFixture));
+const GOLDEN_DATASET = assertValid('appState', migrateLegacyLayoutModel(migrateLegacyBedTypes(goldenDatasetFixture)).payload);
 
 export type {
   AppStateRepository,

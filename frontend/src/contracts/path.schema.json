@@ -9,12 +9,13 @@
     "pathId",
     "name",
     "x",
-    "y",
-    "width",
-    "height"
+    "y"
   ],
   "properties": {
     "pathId": {
+      "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+    },
+    "segmentId": {
       "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
     },
     "name": {
@@ -31,6 +32,21 @@
       "type": "number",
       "description": "Meters south from parent segment NW corner.",
       "minimum": 0
+    },
+    "widthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "lengthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "rotationDeg": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
     },
     "width": {
       "type": "number",

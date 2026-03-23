@@ -85,9 +85,15 @@ export type BedType = 'ecology_strip' | 'vegetable_bed' | 'perennial_bed';
 
 export interface Bed {
   bedId: string;
+  segmentId?: string;
   gardenId: string;
   name: string;
   type: BedType;
+  widthM?: number;
+  lengthM?: number;
+  x?: number;
+  y?: number;
+  rotationDeg?: number;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -95,27 +101,40 @@ export interface Bed {
 
 export interface Path {
   pathId: string;
+  segmentId: string;
   name: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  widthM: number;
+  lengthM: number;
+  rotationDeg?: number;
+  notes?: string;
+  width?: number;
+  height?: number;
   surface?: string;
 }
 
 export interface SegmentBed extends Bed {
+  segmentId: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  widthM: number;
+  lengthM: number;
+  rotationDeg?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface Segment {
   segmentId: string;
   name: string;
-  width: number;
-  height: number;
-  originReference: string;
+  kind?: string;
+  notes?: string;
+  widthM: number;
+  lengthM: number;
+  width?: number;
+  height?: number;
+  originReference?: string;
   beds: SegmentBed[];
   paths: Path[];
 }
