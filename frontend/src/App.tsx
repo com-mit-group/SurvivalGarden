@@ -2280,6 +2280,40 @@ const SELECTABLE_INITIAL_BATCH_METHODS = (Object.entries(INITIAL_BATCH_METHODS) 
   (typeof INITIAL_BATCH_METHODS)[InitialBatchMethodKey],
 ]>).filter(([, config]) => canTransition(config.stage, 'transplant') || canTransition(config.stage, 'harvest'));
 const INITIAL_BATCH_METHOD_ERROR = `This batch can only be created from lifecycle-supported start methods: ${SELECTABLE_INITIAL_BATCH_METHODS.map(([, config]) => config.label).join(', ')}.`;
+const INITIAL_BATCH_LIFECYCLE_ERROR = 'The cultivar link is valid. Choose a start method/state that matches the allowed lifecycle transition for this batch.';
+
+const getInitialBatchLifecycleError = (reason?: string): string | null => {
+  if (reason === 'invalid_stage_transition' || reason === 'stage_event_stage_mismatch') {
+    return INITIAL_BATCH_LIFECYCLE_ERROR;
+  }
+
+  return null;
+};
+
+const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string }>): Record<string, string> => {
+  const issueErrors: Record<string, string> = {};
+
+  for (const issue of issues) {
+    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+      issueErrors.cropInput = 'Choose a valid cultivar record.';
+    }
+
+    if (issue.path.includes('/startedAt')) {
+      issueErrors.startedAt = 'Enter a valid date and time.';
+    }
+
+    if (
+      issue.path.includes('/stage')
+      || issue.path.includes('/startMethod')
+      || issue.path.includes('/stageEvents')
+      || issue.path.includes('/method')
+    ) {
+      issueErrors.initialMethod = INITIAL_BATCH_LIFECYCLE_ERROR;
+    }
+  }
+
+  return issueErrors;
+};
 
 const resolveInitialBatchMethod = (value: string): InitialBatchMethodKey | null => {
   if (value in INITIAL_BATCH_METHODS) {
@@ -2427,7 +2461,14 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
   return crop.name ?? crop.scientificName ?? crop.cropId;
 };
 
-const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
+const normalizeCropSearchValue = (value: string): string =>
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[·•]/g, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
 
 const parseCsvUnique = (value: string): string[] =>
   Array.from(
@@ -2791,23 +2832,33 @@ function BatchesPage({
     () =>
       cultivars
         .filter((cultivar) => !isCultivarArchived(cultivar))
-        .map((cultivar) => ({
-          cultivarId: cultivar.cultivarId,
-          cropTypeId: cultivar.cropTypeId,
-          label: [
+        .map((cultivar) => {
+          const label = [
             cultivar.name,
             cropNames[cultivar.cropTypeId] ?? cultivar.cropTypeId,
             cropScientificNames[cultivar.cropTypeId],
           ]
             .filter(Boolean)
-            .join(' · '),
-          name: cultivar.name,
-          cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
-          scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
-          aliases: cropAliases[cultivar.cropTypeId] ?? [],
-        }))
+            .join(' · ');
+          const suffix = cropHasTaskRules[cultivar.cropTypeId] === false
+            ? ' · No rules yet'
+            : userDefinedCropIds[cultivar.cropTypeId]
+              ? ' · Custom crop type'
+              : '';
+
+          return {
+            cultivarId: cultivar.cultivarId,
+            cropTypeId: cultivar.cropTypeId,
+            label,
+            inputValue: `${label}${suffix}`,
+            name: cultivar.name,
+            cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
+            scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
+            aliases: cropAliases[cultivar.cropTypeId] ?? [],
+          };
+        })
         .sort((left, right) => left.label.localeCompare(right.label)),
-    [cultivars, cropAliases, cropNames, cropScientificNames],
+    [cultivars, cropAliases, cropHasTaskRules, cropNames, cropScientificNames, userDefinedCropIds],
   );
 
   const filteredBatches = useMemo(
@@ -2864,6 +2915,7 @@ function BatchesPage({
       const aliases = option.aliases.map((alias) => normalizeCropSearchValue(alias));
       return (
         normalizeCropSearchValue(option.cultivarId) === normalizedInput ||
+        normalizeCropSearchValue(option.inputValue) === normalizedInput ||
         normalizeCropSearchValue(option.label) === normalizedInput ||
         normalizeCropSearchValue(option.name) === normalizedInput ||
         normalizeCropSearchValue(option.cropTypeName) === normalizedInput ||
@@ -2877,10 +2929,10 @@ function BatchesPage({
     }
 
     const containsMatch = cultivarInputOptions.find((option) => {
-      const searchFields = [option.cultivarId, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
+      const searchFields = [option.cultivarId, option.inputValue, option.label, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
         .map((value) => normalizeCropSearchValue(value))
         .filter(Boolean);
-      return searchFields.some((field) => field.includes(normalizedInput));
+      return searchFields.some((field) => field.includes(normalizedInput) || normalizedInput.includes(field));
     });
 
     return containsMatch?.cultivarId ?? null;
@@ -3477,16 +3529,22 @@ function BatchesPage({
       return;
     }
 
+    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
+
     if (!restoredBatchDraftRef.current) {
-      const savedDraft = loadBatchDraftState();
-      if (savedDraft) {
-        setEditingBatchId(savedDraft.editingBatchId);
-        setFormValues(savedDraft.formValues);
+      if (quickCreateCultivarId) {
+        const savedDraft = loadBatchDraftState();
+        if (savedDraft) {
+          setEditingBatchId(savedDraft.editingBatchId);
+          setFormValues(savedDraft.formValues);
+        }
+      } else {
+        clearBatchDraftState();
       }
+
       restoredBatchDraftRef.current = true;
     }
 
-    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
     if (!quickCreateCultivarId || handledQuickCreateReturnRef.current) {
       return;
     }
@@ -3827,18 +3885,14 @@ function BatchesPage({
       resetForm();
     } catch (error) {
       if (error instanceof SchemaValidationError && error.issues.length > 0) {
-        const issueErrors: Record<string, string> = {};
+        setFormErrors(mapBatchValidationIssuesToFormErrors(error.issues));
+        setSaveMessage('Please fix the highlighted fields.');
+        return;
+      }
 
-        for (const issue of error.issues) {
-          if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
-            issueErrors.cropInput = 'Choose a valid cultivar record.';
-          }
-          if (issue.path.includes('/startedAt')) {
-            issueErrors.startedAt = 'Enter a valid date and time.';
-          }
-        }
-
-        setFormErrors(issueErrors);
+      const lifecycleError = getInitialBatchLifecycleError(error instanceof Error ? error.message : undefined);
+      if (lifecycleError) {
+        setFormErrors((current) => ({ ...current, initialMethod: lifecycleError }));
         setSaveMessage('Please fix the highlighted fields.');
         return;
       }
@@ -3944,7 +3998,7 @@ function BatchesPage({
               {cultivarInputOptions.map((cultivar) => (
                 <option
                   key={cultivar.cultivarId}
-                  value={`${cultivar.label}${cropHasTaskRules[cultivar.cropTypeId] === false ? ' · No rules yet' : userDefinedCropIds[cultivar.cropTypeId] ? ' · Custom crop type' : ''}`}
+                  value={cultivar.inputValue}
                 />
               ))}
             </datalist>
@@ -4557,12 +4611,17 @@ function BatchDetailPage() {
   const [cultivarIdLabel, setCultivarIdLabel] = useState<string | null>(null);
   const [cropHasTaskRules, setCropHasTaskRules] = useState<boolean | undefined>(undefined);
   const [cropIsUserDefined, setCropIsUserDefined] = useState<boolean | undefined>(undefined);
+  const [beds, setBeds] = useState<Bed[]>([]);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [timelineEdits, setTimelineEdits] = useState<
     Record<string, TimelineEditState>
   >({});
   const [timelineMessage, setTimelineMessage] = useState<string | null>(null);
+  const [assignToBedId, setAssignToBedId] = useState('');
+  const [assignToBedDate, setAssignToBedDate] = useState(getLocalDateTimeDefault());
+  const [assignToBedMessage, setAssignToBedMessage] = useState<string | null>(null);
+  const [isSavingAssignToBed, setIsSavingAssignToBed] = useState(false);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
   const [removeFromBedMessage, setRemoveFromBedMessage] = useState<string | null>(null);
   const [isSavingRemoveFromBed, setIsSavingRemoveFromBed] = useState(false);
@@ -4582,6 +4641,7 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
@@ -4597,6 +4657,7 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
@@ -4611,9 +4672,12 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
+
+      const availableBeds = listBedsFromAppState(appState).sort((left, right) => left.bedId.localeCompare(right.bedId));
 
       const cultivarsById = Object.fromEntries(getCultivarsFromAppState(appState).map((cultivar) => [cultivar.cultivarId, cultivar]));
       const batchDisplay = getBatchCultivarDisplay({
@@ -4632,6 +4696,7 @@ function BatchDetailPage() {
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
       setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
       setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
+      setBeds(availableBeds);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
         transplant: dateDefault,
@@ -4642,6 +4707,9 @@ function BatchDetailPage() {
       setStageActionMessage(null);
       setTimelineEdits({});
       setTimelineMessage(null);
+      setAssignToBedId(getDerivedBedId(nextBatch) ?? availableBeds[0]?.bedId ?? '');
+      setAssignToBedDate(dateDefault);
+      setAssignToBedMessage(null);
       setRemoveFromBedDate(dateDefault);
       setRemoveFromBedMessage(null);
       setPhotoActionMessage(null);
@@ -4651,6 +4719,8 @@ function BatchDetailPage() {
 
     void load();
   }, [batchId]);
+
+  const currentBedId = useMemo(() => (batch ? getDerivedBedId(batch) : null), [batch]);
 
   const orderedStageEvents = useMemo(() => {
     if (!batch) {
@@ -4881,8 +4951,67 @@ function BatchDetailPage() {
     }
   };
 
+  const handleAssignToBed = async () => {
+    if (!batch || !batchId) {
+      return;
+    }
+
+    if (!assignToBedId) {
+      setAssignToBedMessage('Select a bed before assigning this batch.');
+      return;
+    }
+
+    if (!assignToBedDate) {
+      setAssignToBedMessage('Enter a valid date and time before assigning to bed.');
+      return;
+    }
+
+    const assignedAt = fromLocalDateTimeInput(assignToBedDate);
+    if (!assignedAt) {
+      setAssignToBedMessage('Enter a valid date and time before assigning to bed.');
+      return;
+    }
+
+    setIsSavingAssignToBed(true);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setAssignToBedMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingBatch = appState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      if (!existingBatch) {
+        setAssignToBedMessage('Batch was not found.');
+        return;
+      }
+
+      const nextBatch = assignBatchToBed(existingBatch, assignToBedId, assignedAt);
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(refreshedBatch);
+      setAssignToBedMessage(`Batch assigned to ${assignToBedId}.`);
+      setRemoveFromBedMessage(null);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'batch_assignment_overlap') {
+        setAssignToBedMessage('Unable to assign batch: it already has an overlapping bed assignment for that date.');
+      } else {
+        setAssignToBedMessage(error instanceof Error ? error.message : 'Failed to assign batch to bed.');
+      }
+    } finally {
+      setIsSavingAssignToBed(false);
+    }
+  };
+
   const handleRemoveFromBed = async () => {
     if (!batch || !batchId) {
+      return;
+    }
+
+    if (!currentBedId) {
+      setRemoveFromBedMessage('This batch is already unassigned.');
       return;
     }
 
@@ -5258,18 +5387,42 @@ function BatchDetailPage() {
 
       <article className="batch-detail-card">
         <h3>Bed assignments</h3>
-        <p className="batch-detail-current-bed">Current: {getDerivedBedId(batch) ?? 'Unassigned'}</p>
+        <p className="batch-detail-current-bed">Current: {currentBedId ?? 'Unassigned'}</p>
         <div className="batch-next-action-row">
-          <span className="batch-detail-pill">remove</span>
+          <span className="batch-detail-pill">assign</span>
+          <select value={assignToBedId} onChange={(event) => setAssignToBedId(event.target.value)}>
+            <option value="">Select bed</option>
+            {beds.map((bed) => (
+              <option key={bed.bedId} value={bed.bedId}>
+                {bed.name ? `${bed.name} (${bed.bedId})` : bed.bedId}
+              </option>
+            ))}
+          </select>
           <input
             type="datetime-local"
-            value={removeFromBedDate}
-            onChange={(event) => setRemoveFromBedDate(event.target.value)}
+            value={assignToBedDate}
+            onChange={(event) => setAssignToBedDate(event.target.value)}
           />
-          <button type="button" onClick={() => void handleRemoveFromBed()} disabled={isSavingRemoveFromBed}>
-            Remove from bed
+          <button type="button" onClick={() => void handleAssignToBed()} disabled={isSavingAssignToBed}>
+            Assign to bed
           </button>
         </div>
+        {assignToBedMessage ? <p className="batch-stage-warning">{assignToBedMessage}</p> : null}
+        {currentBedId ? (
+          <div className="batch-next-action-row">
+            <span className="batch-detail-pill">remove</span>
+            <input
+              type="datetime-local"
+              value={removeFromBedDate}
+              onChange={(event) => setRemoveFromBedDate(event.target.value)}
+            />
+            <button type="button" onClick={() => void handleRemoveFromBed()} disabled={isSavingRemoveFromBed}>
+              Remove from bed
+            </button>
+          </div>
+        ) : (
+          <p className="batch-detail-empty">This batch is not currently assigned to a bed.</p>
+        )}
         {removeFromBedMessage ? <p className="batch-stage-warning">{removeFromBedMessage}</p> : null}
         {assignmentHistory.length === 0 ? (
           <p className="batch-detail-empty">No bed assignment history.</p>
