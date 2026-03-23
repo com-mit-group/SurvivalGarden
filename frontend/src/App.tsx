@@ -319,7 +319,7 @@ function BedsPage() {
       }
 
       if (kind === 'bed') {
-        const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId;
+        const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
         nextSegments = nextSegments.map((segment) => {
           if (segment.segmentId !== formSegmentId) {
             if (!isCreate && segment.segmentId === entityIdOrMode) {
@@ -363,7 +363,7 @@ function BedsPage() {
       }
 
       if (kind === 'path') {
-        const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId;
+        const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
         nextSegments = nextSegments.map((segment) => {
           if (segment.segmentId !== formSegmentId) {
             if (!isCreate && segment.segmentId === entityIdOrMode) {
@@ -498,7 +498,7 @@ function BedsPage() {
       }
 
       if (kind === 'bed') {
-        const counts = getReferenceCounts(appState, entityId);
+        const counts = getReferenceCounts(appState, entityId!);
         const blockingReasons = [
           counts.relatedPlanCount > 0 ? `${counts.relatedPlanCount} crop plan${counts.relatedPlanCount === 1 ? '' : 's'}` : null,
           counts.relatedBatchCount > 0 ? `${counts.relatedBatchCount} batch assignment${counts.relatedBatchCount === 1 ? '' : 's'}` : null,
