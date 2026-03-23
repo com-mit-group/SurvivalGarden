@@ -4611,12 +4611,17 @@ function BatchDetailPage() {
   const [cultivarIdLabel, setCultivarIdLabel] = useState<string | null>(null);
   const [cropHasTaskRules, setCropHasTaskRules] = useState<boolean | undefined>(undefined);
   const [cropIsUserDefined, setCropIsUserDefined] = useState<boolean | undefined>(undefined);
+  const [beds, setBeds] = useState<Bed[]>([]);
   const [actionDates, setActionDates] = useState<Record<string, string>>({});
   const [stageActionMessage, setStageActionMessage] = useState<string | null>(null);
   const [timelineEdits, setTimelineEdits] = useState<
     Record<string, TimelineEditState>
   >({});
   const [timelineMessage, setTimelineMessage] = useState<string | null>(null);
+  const [assignToBedId, setAssignToBedId] = useState('');
+  const [assignToBedDate, setAssignToBedDate] = useState(getLocalDateTimeDefault());
+  const [assignToBedMessage, setAssignToBedMessage] = useState<string | null>(null);
+  const [isSavingAssignToBed, setIsSavingAssignToBed] = useState(false);
   const [removeFromBedDate, setRemoveFromBedDate] = useState(getLocalDateTimeDefault());
   const [removeFromBedMessage, setRemoveFromBedMessage] = useState<string | null>(null);
   const [isSavingRemoveFromBed, setIsSavingRemoveFromBed] = useState(false);
@@ -4636,6 +4641,7 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
@@ -4651,6 +4657,7 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
@@ -4665,9 +4672,12 @@ function BatchDetailPage() {
         setCultivarIdLabel(null);
         setCropHasTaskRules(undefined);
         setCropIsUserDefined(undefined);
+        setBeds([]);
         setIsLoading(false);
         return;
       }
+
+      const availableBeds = listBedsFromAppState(appState).sort((left, right) => left.bedId.localeCompare(right.bedId));
 
       const cultivarsById = Object.fromEntries(getCultivarsFromAppState(appState).map((cultivar) => [cultivar.cultivarId, cultivar]));
       const batchDisplay = getBatchCultivarDisplay({
@@ -4686,6 +4696,7 @@ function BatchDetailPage() {
       const taskRules = (crop as { taskRules?: unknown } | undefined)?.taskRules;
       setCropHasTaskRules(Array.isArray(taskRules) && taskRules.length > 0);
       setCropIsUserDefined((crop as { isUserDefined?: unknown } | undefined)?.isUserDefined === true);
+      setBeds(availableBeds);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
         transplant: dateDefault,
@@ -4696,6 +4707,9 @@ function BatchDetailPage() {
       setStageActionMessage(null);
       setTimelineEdits({});
       setTimelineMessage(null);
+      setAssignToBedId(getDerivedBedId(nextBatch) ?? availableBeds[0]?.bedId ?? '');
+      setAssignToBedDate(dateDefault);
+      setAssignToBedMessage(null);
       setRemoveFromBedDate(dateDefault);
       setRemoveFromBedMessage(null);
       setPhotoActionMessage(null);
@@ -4705,6 +4719,8 @@ function BatchDetailPage() {
 
     void load();
   }, [batchId]);
+
+  const currentBedId = useMemo(() => (batch ? getDerivedBedId(batch) : null), [batch]);
 
   const orderedStageEvents = useMemo(() => {
     if (!batch) {
@@ -4935,8 +4951,67 @@ function BatchDetailPage() {
     }
   };
 
+  const handleAssignToBed = async () => {
+    if (!batch || !batchId) {
+      return;
+    }
+
+    if (!assignToBedId) {
+      setAssignToBedMessage('Select a bed before assigning this batch.');
+      return;
+    }
+
+    if (!assignToBedDate) {
+      setAssignToBedMessage('Enter a valid date and time before assigning to bed.');
+      return;
+    }
+
+    const assignedAt = fromLocalDateTimeInput(assignToBedDate);
+    if (!assignedAt) {
+      setAssignToBedMessage('Enter a valid date and time before assigning to bed.');
+      return;
+    }
+
+    setIsSavingAssignToBed(true);
+
+    try {
+      const appState = await loadAppStateFromIndexedDb();
+      if (!appState) {
+        setAssignToBedMessage('Unable to save because local app state is unavailable.');
+        return;
+      }
+
+      const existingBatch = appState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      if (!existingBatch) {
+        setAssignToBedMessage('Batch was not found.');
+        return;
+      }
+
+      const nextBatch = assignBatchToBed(existingBatch, assignToBedId, assignedAt);
+      const nextState = upsertBatchInAppState(appState, nextBatch);
+      await saveAppStateToIndexedDb(nextState);
+      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      setBatch(refreshedBatch);
+      setAssignToBedMessage(`Batch assigned to ${assignToBedId}.`);
+      setRemoveFromBedMessage(null);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'batch_assignment_overlap') {
+        setAssignToBedMessage('Unable to assign batch: it already has an overlapping bed assignment for that date.');
+      } else {
+        setAssignToBedMessage(error instanceof Error ? error.message : 'Failed to assign batch to bed.');
+      }
+    } finally {
+      setIsSavingAssignToBed(false);
+    }
+  };
+
   const handleRemoveFromBed = async () => {
     if (!batch || !batchId) {
+      return;
+    }
+
+    if (!currentBedId) {
+      setRemoveFromBedMessage('This batch is already unassigned.');
       return;
     }
 
@@ -5312,18 +5387,42 @@ function BatchDetailPage() {
 
       <article className="batch-detail-card">
         <h3>Bed assignments</h3>
-        <p className="batch-detail-current-bed">Current: {getDerivedBedId(batch) ?? 'Unassigned'}</p>
+        <p className="batch-detail-current-bed">Current: {currentBedId ?? 'Unassigned'}</p>
         <div className="batch-next-action-row">
-          <span className="batch-detail-pill">remove</span>
+          <span className="batch-detail-pill">assign</span>
+          <select value={assignToBedId} onChange={(event) => setAssignToBedId(event.target.value)}>
+            <option value="">Select bed</option>
+            {beds.map((bed) => (
+              <option key={bed.bedId} value={bed.bedId}>
+                {bed.name ? `${bed.name} (${bed.bedId})` : bed.bedId}
+              </option>
+            ))}
+          </select>
           <input
             type="datetime-local"
-            value={removeFromBedDate}
-            onChange={(event) => setRemoveFromBedDate(event.target.value)}
+            value={assignToBedDate}
+            onChange={(event) => setAssignToBedDate(event.target.value)}
           />
-          <button type="button" onClick={() => void handleRemoveFromBed()} disabled={isSavingRemoveFromBed}>
-            Remove from bed
+          <button type="button" onClick={() => void handleAssignToBed()} disabled={isSavingAssignToBed}>
+            Assign to bed
           </button>
         </div>
+        {assignToBedMessage ? <p className="batch-stage-warning">{assignToBedMessage}</p> : null}
+        {currentBedId ? (
+          <div className="batch-next-action-row">
+            <span className="batch-detail-pill">remove</span>
+            <input
+              type="datetime-local"
+              value={removeFromBedDate}
+              onChange={(event) => setRemoveFromBedDate(event.target.value)}
+            />
+            <button type="button" onClick={() => void handleRemoveFromBed()} disabled={isSavingRemoveFromBed}>
+              Remove from bed
+            </button>
+          </div>
+        ) : (
+          <p className="batch-detail-empty">This batch is not currently assigned to a bed.</p>
+        )}
         {removeFromBedMessage ? <p className="batch-stage-warning">{removeFromBedMessage}</p> : null}
         {assignmentHistory.length === 0 ? (
           <p className="batch-detail-empty">No bed assignment history.</p>
