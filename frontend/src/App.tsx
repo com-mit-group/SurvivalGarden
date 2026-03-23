@@ -182,7 +182,7 @@ function BedsPage() {
   };
 
   const getDefaultGardenId = useCallback(
-    (appState: AppState) => appState.segments.flatMap((segment) => segment.beds)[0]?.gardenId ?? beds[0]?.gardenId ?? 'garden_001',
+    (appState: AppState) => (appState.segments ?? []).flatMap((segment) => segment.beds)[0]?.gardenId ?? beds[0]?.gardenId ?? 'garden_001',
     [beds],
   );
 
@@ -244,6 +244,11 @@ function BedsPage() {
     const now = new Date().toISOString();
     const [kind, entityIdOrMode, existingEntityId] = activeFormKey.split(':');
     const isCreate = entityIdOrMode === 'new';
+
+    if (!entityIdOrMode || ((kind === 'bed' || kind === 'path') && !isCreate && !existingEntityId)) {
+      setActionMessage('Unable to determine which layout record to save.');
+      return;
+    }
     const x = toNumberField(formX);
     const y = toNumberField(formY);
     const width = toNumberField(formWidth);
@@ -327,7 +332,7 @@ function BedsPage() {
             return segment;
           }
 
-          const nextBed = {
+          const nextBed: Segment['beds'][number] = {
             ...(isCreate ? {} : segment.beds.find((bed) => bed.bedId === existingEntityId)),
             bedId,
             segmentId: formSegmentId,
@@ -371,7 +376,7 @@ function BedsPage() {
             return segment;
           }
 
-          const nextPath = {
+          const nextPath: Segment['paths'][number] = {
             ...(() => {
               const existingPath = isCreate ? null : segment.paths.find((path) => path.pathId === existingEntityId);
               if (!existingPath) {
@@ -455,6 +460,11 @@ function BedsPage() {
       }
 
       const [kind, segmentId, entityId] = entityKey.split(':');
+      if (!segmentId || ((kind === 'bed' || kind === 'path') && !entityId)) {
+        setActionMessage('Unable to determine which layout record to delete.');
+        return;
+      }
+
       let nextSegments = appState.segments ?? [];
       let confirmMessage = '';
 
