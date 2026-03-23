@@ -2280,6 +2280,40 @@ const SELECTABLE_INITIAL_BATCH_METHODS = (Object.entries(INITIAL_BATCH_METHODS) 
   (typeof INITIAL_BATCH_METHODS)[InitialBatchMethodKey],
 ]>).filter(([, config]) => canTransition(config.stage, 'transplant') || canTransition(config.stage, 'harvest'));
 const INITIAL_BATCH_METHOD_ERROR = `This batch can only be created from lifecycle-supported start methods: ${SELECTABLE_INITIAL_BATCH_METHODS.map(([, config]) => config.label).join(', ')}.`;
+const INITIAL_BATCH_LIFECYCLE_ERROR = 'The cultivar link is valid. Choose a start method/state that matches the allowed lifecycle transition for this batch.';
+
+const getInitialBatchLifecycleError = (reason?: string): string | null => {
+  if (reason === 'invalid_stage_transition' || reason === 'stage_event_stage_mismatch') {
+    return INITIAL_BATCH_LIFECYCLE_ERROR;
+  }
+
+  return null;
+};
+
+const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string }>): Record<string, string> => {
+  const issueErrors: Record<string, string> = {};
+
+  for (const issue of issues) {
+    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+      issueErrors.cropInput = 'Choose a valid cultivar record.';
+    }
+
+    if (issue.path.includes('/startedAt')) {
+      issueErrors.startedAt = 'Enter a valid date and time.';
+    }
+
+    if (
+      issue.path.includes('/stage')
+      || issue.path.includes('/startMethod')
+      || issue.path.includes('/stageEvents')
+      || issue.path.includes('/method')
+    ) {
+      issueErrors.initialMethod = INITIAL_BATCH_LIFECYCLE_ERROR;
+    }
+  }
+
+  return issueErrors;
+};
 
 const resolveInitialBatchMethod = (value: string): InitialBatchMethodKey | null => {
   if (value in INITIAL_BATCH_METHODS) {
@@ -2427,7 +2461,14 @@ const formatCropOptionLabel = (crop: { cropId: string; name: string | undefined;
   return crop.name ?? crop.scientificName ?? crop.cropId;
 };
 
-const normalizeCropSearchValue = (value: string): string => value.trim().toLowerCase();
+const normalizeCropSearchValue = (value: string): string =>
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[·•]/g, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
 
 const parseCsvUnique = (value: string): string[] =>
   Array.from(
@@ -2791,23 +2832,33 @@ function BatchesPage({
     () =>
       cultivars
         .filter((cultivar) => !isCultivarArchived(cultivar))
-        .map((cultivar) => ({
-          cultivarId: cultivar.cultivarId,
-          cropTypeId: cultivar.cropTypeId,
-          label: [
+        .map((cultivar) => {
+          const label = [
             cultivar.name,
             cropNames[cultivar.cropTypeId] ?? cultivar.cropTypeId,
             cropScientificNames[cultivar.cropTypeId],
           ]
             .filter(Boolean)
-            .join(' · '),
-          name: cultivar.name,
-          cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
-          scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
-          aliases: cropAliases[cultivar.cropTypeId] ?? [],
-        }))
+            .join(' · ');
+          const suffix = cropHasTaskRules[cultivar.cropTypeId] === false
+            ? ' · No rules yet'
+            : userDefinedCropIds[cultivar.cropTypeId]
+              ? ' · Custom crop type'
+              : '';
+
+          return {
+            cultivarId: cultivar.cultivarId,
+            cropTypeId: cultivar.cropTypeId,
+            label,
+            inputValue: `${label}${suffix}`,
+            name: cultivar.name,
+            cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
+            scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
+            aliases: cropAliases[cultivar.cropTypeId] ?? [],
+          };
+        })
         .sort((left, right) => left.label.localeCompare(right.label)),
-    [cultivars, cropAliases, cropNames, cropScientificNames],
+    [cultivars, cropAliases, cropHasTaskRules, cropNames, cropScientificNames, userDefinedCropIds],
   );
 
   const filteredBatches = useMemo(
@@ -2864,6 +2915,7 @@ function BatchesPage({
       const aliases = option.aliases.map((alias) => normalizeCropSearchValue(alias));
       return (
         normalizeCropSearchValue(option.cultivarId) === normalizedInput ||
+        normalizeCropSearchValue(option.inputValue) === normalizedInput ||
         normalizeCropSearchValue(option.label) === normalizedInput ||
         normalizeCropSearchValue(option.name) === normalizedInput ||
         normalizeCropSearchValue(option.cropTypeName) === normalizedInput ||
@@ -2877,10 +2929,10 @@ function BatchesPage({
     }
 
     const containsMatch = cultivarInputOptions.find((option) => {
-      const searchFields = [option.cultivarId, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
+      const searchFields = [option.cultivarId, option.inputValue, option.label, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
         .map((value) => normalizeCropSearchValue(value))
         .filter(Boolean);
-      return searchFields.some((field) => field.includes(normalizedInput));
+      return searchFields.some((field) => field.includes(normalizedInput) || normalizedInput.includes(field));
     });
 
     return containsMatch?.cultivarId ?? null;
@@ -3477,16 +3529,22 @@ function BatchesPage({
       return;
     }
 
+    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
+
     if (!restoredBatchDraftRef.current) {
-      const savedDraft = loadBatchDraftState();
-      if (savedDraft) {
-        setEditingBatchId(savedDraft.editingBatchId);
-        setFormValues(savedDraft.formValues);
+      if (quickCreateCultivarId) {
+        const savedDraft = loadBatchDraftState();
+        if (savedDraft) {
+          setEditingBatchId(savedDraft.editingBatchId);
+          setFormValues(savedDraft.formValues);
+        }
+      } else {
+        clearBatchDraftState();
       }
+
       restoredBatchDraftRef.current = true;
     }
 
-    const quickCreateCultivarId = searchParams.get('quickCreateCultivarId');
     if (!quickCreateCultivarId || handledQuickCreateReturnRef.current) {
       return;
     }
@@ -3827,18 +3885,14 @@ function BatchesPage({
       resetForm();
     } catch (error) {
       if (error instanceof SchemaValidationError && error.issues.length > 0) {
-        const issueErrors: Record<string, string> = {};
+        setFormErrors(mapBatchValidationIssuesToFormErrors(error.issues));
+        setSaveMessage('Please fix the highlighted fields.');
+        return;
+      }
 
-        for (const issue of error.issues) {
-          if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
-            issueErrors.cropInput = 'Choose a valid cultivar record.';
-          }
-          if (issue.path.includes('/startedAt')) {
-            issueErrors.startedAt = 'Enter a valid date and time.';
-          }
-        }
-
-        setFormErrors(issueErrors);
+      const lifecycleError = getInitialBatchLifecycleError(error instanceof Error ? error.message : undefined);
+      if (lifecycleError) {
+        setFormErrors((current) => ({ ...current, initialMethod: lifecycleError }));
         setSaveMessage('Please fix the highlighted fields.');
         return;
       }
@@ -3944,7 +3998,7 @@ function BatchesPage({
               {cultivarInputOptions.map((cultivar) => (
                 <option
                   key={cultivar.cultivarId}
-                  value={`${cultivar.label}${cropHasTaskRules[cultivar.cropTypeId] === false ? ' · No rules yet' : userDefinedCropIds[cultivar.cropTypeId] ? ' · Custom crop type' : ''}`}
+                  value={cultivar.inputValue}
                 />
               ))}
             </datalist>
