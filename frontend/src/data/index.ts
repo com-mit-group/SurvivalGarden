@@ -342,60 +342,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   };
 
   if (Array.isArray(state.segments) && state.segments.length > 0) {
-    const normalizedSegments = state.segments.map((segment) => {
-      if (!segment || typeof segment !== 'object') {
-        return segment;
-      }
-
-      const typedSegment = segment as Record<string, unknown>;
-      const segmentId = typeof typedSegment.segmentId === 'string' ? typedSegment.segmentId : undefined;
-      const widthM = getWidthMeters(typedSegment);
-      const lengthM = getLengthMeters(typedSegment);
-
-      return {
-        ...typedSegment,
-        ...(widthM !== null ? { widthM } : {}),
-        ...(lengthM !== null ? { lengthM } : {}),
-        beds: Array.isArray(typedSegment.beds)
-          ? typedSegment.beds.map((bed) => {
-              if (!bed || typeof bed !== 'object') {
-                return bed;
-              }
-
-              const typedBed = bed as Record<string, unknown>;
-              const bedWidthM = getWidthMeters(typedBed);
-              const bedLengthM = getLengthMeters(typedBed);
-
-              return {
-                ...typedBed,
-                ...(segmentId ? { segmentId } : {}),
-                ...(bedWidthM !== null ? { widthM: bedWidthM } : {}),
-                ...(bedLengthM !== null ? { lengthM: bedLengthM } : {}),
-              };
-            })
-          : typedSegment.beds,
-        paths: Array.isArray(typedSegment.paths)
-          ? typedSegment.paths.map((path) => {
-              if (!path || typeof path !== 'object') {
-                return path;
-              }
-
-              const typedPath = path as Record<string, unknown>;
-              const pathWidthM = getWidthMeters(typedPath);
-              const pathLengthM = getLengthMeters(typedPath);
-
-              return {
-                ...typedPath,
-                ...(segmentId ? { segmentId } : {}),
-                ...(pathWidthM !== null ? { widthM: pathWidthM } : {}),
-                ...(pathLengthM !== null ? { lengthM: pathLengthM } : {}),
-              };
-            })
-          : typedSegment.paths,
-      };
-    });
-
-    return { payload: withSegments({ ...state, segments: normalizedSegments }, false), report };
+    return { payload: withSegments(state, false), report };
   }
 
   if (!Array.isArray(state.beds)) {
