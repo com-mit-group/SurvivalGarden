@@ -1006,6 +1006,7 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
     tasks: mergeTasksForImport(currentState.tasks, incomingState.tasks, report),
     seedInventoryItems: mergeCollectionById('seedInventoryItems', currentState.seedInventoryItems, incomingState.seedInventoryItems, report),
+    ...(incomingState.segments ? { segments: incomingState.segments } : {}),
   }, mergeUnknownCollectionById(getCultivarsFromState(currentState), getCultivarsFromState(incomingState), 'cultivarId', report, 'cultivars'));
 
   return { state: canonicalizeForExport(mergedState), report };

@@ -149,7 +149,7 @@ function BedsPage() {
   }, [syncLocalLayoutState]);
 
   const persistLayoutState = useCallback(async (nextState: AppState, successMessage: string) => {
-    await saveAppStateToIndexedDb(nextState, { mode: 'replace' });
+    await saveAppStateToIndexedDb(nextState);
     const persistedState = await reloadPersistedLayoutState();
 
     if (!persistedState) {
