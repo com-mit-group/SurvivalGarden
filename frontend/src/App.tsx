@@ -115,42 +115,41 @@ function BedsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [deletingPathKey, setDeletingPathKey] = useState<string | null>(null);
-  const [deletingBedKey, setDeletingBedKey] = useState<string | null>(null);
-  const [deletePathMessage, setDeletePathMessage] = useState<string | null>(null);
-  const [editingEntityKey, setEditingEntityKey] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editType, setEditType] = useState('vegetable_bed');
-  const [editX, setEditX] = useState('0');
-  const [editY, setEditY] = useState('0');
-  const [editWidth, setEditWidth] = useState('1');
-  const [editHeight, setEditHeight] = useState('1');
-  const [editSurface, setEditSurface] = useState('');
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [editMessage, setEditMessage] = useState<string | null>(null);
+  const [activeFormKey, setActiveFormKey] = useState<string | null>(null);
+  const [formSegmentId, setFormSegmentId] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formType, setFormType] = useState('vegetable_bed');
+  const [formX, setFormX] = useState('0');
+  const [formY, setFormY] = useState('0');
+  const [formWidth, setFormWidth] = useState('1');
+  const [formHeight, setFormHeight] = useState('1');
+  const [formSurface, setFormSurface] = useState('');
+  const [formKind, setFormKind] = useState('');
+  const [savingEntityKey, setSavingEntityKey] = useState<string | null>(null);
+  const [deletingEntityKey, setDeletingEntityKey] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
+  const syncLocalLayoutState = useCallback((appState: AppState | null) => {
+    if (!appState) {
+      setBeds([]);
+      setBatches([]);
+      setSegments([]);
+      return;
+    }
 
+    setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
+    setBatches(listBatchesFromAppState(appState));
+    setSegments(appState.segments ?? []);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
-      const appState = await loadAppStateFromIndexedDb();
-
-      if (!appState) {
-        setBeds([]);
-        setBatches([]);
-        setSegments([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
-      setBatches(listBatchesFromAppState(appState));
-      setSegments(appState.segments ?? []);
+      syncLocalLayoutState(await loadAppStateFromIndexedDb());
       setIsLoading(false);
     };
 
     void load();
-  }, []);
+  }, [syncLocalLayoutState]);
 
   const activeBatchCountByBedId = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -177,247 +176,346 @@ function BedsPage() {
     [segments],
   );
 
-  const startEditPath = useCallback((segmentId: string, path: Segment['paths'][number]) => {
-    setEditingEntityKey(`path:${segmentId}:${path.pathId}`);
-    setEditName(path.name);
-    setEditX(String(path.x));
-    setEditY(String(path.y));
-    setEditWidth(String(path.width));
-    setEditHeight(String(path.height));
-    setEditSurface(path.surface ?? '');
-    setEditMessage(null);
-  }, []);
-
-  const startEditBed = useCallback((segmentId: string, bed: Segment['beds'][number]) => {
-    setEditingEntityKey(`bed:${segmentId}:${bed.bedId}`);
-    setEditName(bed.name);
-    setEditType(bed.type);
-    setEditX(String(bed.x));
-    setEditY(String(bed.y));
-    setEditWidth(String(bed.width));
-    setEditHeight(String(bed.height));
-    setEditMessage(null);
-  }, []);
-
-  const clearEditState = useCallback(() => {
-    setEditingEntityKey(null);
-    setIsSavingEdit(false);
-  }, []);
-
   const toNumberField = (value: string): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingEntityKey || isSavingEdit) {
+  const getDefaultGardenId = useCallback(
+    (appState: AppState) => appState.segments.flatMap((segment) => segment.beds)[0]?.gardenId ?? beds[0]?.gardenId ?? 'garden_001',
+    [beds],
+  );
+
+  const openSegmentForm = useCallback((segment?: Segment) => {
+    setActionMessage(null);
+    setActiveFormKey(segment ? `segment:${segment.segmentId}` : 'segment:new');
+    setFormSegmentId(segment?.segmentId ?? '');
+    setFormName(segment?.name ?? '');
+    setFormKind(segment?.kind ?? '');
+    setFormWidth(String(segment?.width ?? segment?.widthM ?? 1));
+    setFormHeight(String(segment?.height ?? segment?.lengthM ?? 1));
+    setFormX('0');
+    setFormY('0');
+    setFormSurface('');
+    setFormType('vegetable_bed');
+  }, []);
+
+  const openBedForm = useCallback((segmentId?: string, bed?: Segment['beds'][number]) => {
+    const nextSegmentId = segmentId ?? bed?.segmentId ?? segments[0]?.segmentId ?? '';
+    setActionMessage(null);
+    setActiveFormKey(bed ? `bed:${nextSegmentId}:${bed.bedId}` : 'bed:new');
+    setFormSegmentId(nextSegmentId);
+    setFormName(bed?.name ?? '');
+    setFormType(bed?.type ?? 'vegetable_bed');
+    setFormX(String(bed?.x ?? 0));
+    setFormY(String(bed?.y ?? 0));
+    setFormWidth(String(bed?.width ?? bed?.widthM ?? 1));
+    setFormHeight(String(bed?.height ?? bed?.lengthM ?? 1));
+    setFormSurface('');
+    setFormKind('');
+  }, [segments]);
+
+  const openPathForm = useCallback((segmentId?: string, path?: Segment['paths'][number]) => {
+    const nextSegmentId = segmentId ?? path?.segmentId ?? segments[0]?.segmentId ?? '';
+    setActionMessage(null);
+    setActiveFormKey(path ? `path:${nextSegmentId}:${path.pathId}` : 'path:new');
+    setFormSegmentId(nextSegmentId);
+    setFormName(path?.name ?? '');
+    setFormX(String(path?.x ?? 0));
+    setFormY(String(path?.y ?? 0));
+    setFormWidth(String(path?.width ?? path?.widthM ?? 1));
+    setFormHeight(String(path?.height ?? path?.lengthM ?? 1));
+    setFormSurface(path?.surface ?? '');
+    setFormType('vegetable_bed');
+    setFormKind('');
+  }, [segments]);
+
+  const closeForm = useCallback(() => {
+    setActiveFormKey(null);
+    setSavingEntityKey(null);
+  }, []);
+
+  const handleSaveEntity = useCallback(async () => {
+    if (!activeFormKey || savingEntityKey) {
       return;
     }
 
-    const [kind, segmentId, entityId] = editingEntityKey.split(':');
-    const x = toNumberField(editX);
-    const y = toNumberField(editY);
-    const width = toNumberField(editWidth);
-    const height = toNumberField(editHeight);
+    const currentState = (await loadAppStateFromIndexedDb()) ?? createEmptyAppState(null);
+    const now = new Date().toISOString();
+    const [kind, entityIdOrMode, existingEntityId] = activeFormKey.split(':');
+    const isCreate = entityIdOrMode === 'new';
+    const x = toNumberField(formX);
+    const y = toNumberField(formY);
+    const width = toNumberField(formWidth);
+    const height = toNumberField(formHeight);
 
-    if (x === null || y === null || width === null || height === null) {
-      setEditMessage('Geometry values must be valid numbers.');
+    if (!formName.trim()) {
+      setActionMessage('Name is required.');
       return;
     }
 
-    setEditMessage(null);
-    setIsSavingEdit(true);
+    if (kind !== 'segment' && !formSegmentId) {
+      setActionMessage(`Select a parent segment before saving this ${kind}.`);
+      return;
+    }
 
-    try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setEditMessage('Unable to save edit because local app state is unavailable.');
+    if (kind === 'segment') {
+      if (width === null || height === null || width <= 0 || height <= 0) {
+        setActionMessage('Segment width and height must be positive numbers.');
         return;
       }
+    } else if (x === null || y === null || width === null || height === null || x < 0 || y < 0 || width <= 0 || height <= 0) {
+      setActionMessage('X, Y, width, and height must be valid numbers. Width and height must be greater than zero.');
+      return;
+    }
 
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        if (segment.segmentId !== segmentId) {
-          return segment;
+    setActionMessage(null);
+    setSavingEntityKey(activeFormKey);
+
+    try {
+      let nextSegments = currentState.segments ?? [];
+
+      if (kind === 'segment') {
+        if (isCreate) {
+          nextSegments = [
+            ...nextSegments,
+            {
+              segmentId: `segment-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+              name: formName.trim(),
+              ...(formKind.trim() ? { kind: formKind.trim() } : {}),
+              width,
+              widthM: width,
+              height,
+              lengthM: height,
+              beds: [],
+              paths: [],
+            },
+          ];
+        } else {
+          nextSegments = nextSegments.map((segment) =>
+            segment.segmentId === entityIdOrMode
+              ? (() => {
+                  const { kind: _unusedKind, ...segmentWithoutKind } = segment;
+
+                  return {
+                    ...segmentWithoutKind,
+                    name: formName.trim(),
+                    ...(formKind.trim() ? { kind: formKind.trim() } : {}),
+                    width,
+                    widthM: width,
+                    height,
+                    lengthM: height,
+                  };
+                })()
+              : segment,
+          );
         }
+      }
 
-        if (kind === 'path') {
+      if (kind === 'bed') {
+        const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId;
+        nextSegments = nextSegments.map((segment) => {
+          if (segment.segmentId !== formSegmentId) {
+            if (!isCreate && segment.segmentId === entityIdOrMode) {
+              return {
+                ...segment,
+                beds: segment.beds.filter((bed) => bed.bedId !== existingEntityId),
+              };
+            }
+
+            return segment;
+          }
+
+          const nextBed = {
+            ...(isCreate ? {} : segment.beds.find((bed) => bed.bedId === existingEntityId)),
+            bedId,
+            segmentId: formSegmentId,
+            gardenId: getDefaultGardenId(currentState),
+            name: formName.trim(),
+            type: formType as Segment['beds'][number]['type'],
+            x: x ?? 0,
+            y: y ?? 0,
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            createdAt: isCreate ? now : segment.beds.find((bed) => bed.bedId === existingEntityId)?.createdAt ?? now,
+            updatedAt: now,
+          };
+
+          const nextBeds = isCreate
+            ? [...segment.beds, nextBed]
+            : segment.beds.some((bed) => bed.bedId === existingEntityId)
+              ? segment.beds.map((bed) => (bed.bedId === existingEntityId ? nextBed : bed))
+              : [...segment.beds, nextBed];
+
           return {
             ...segment,
-            paths: segment.paths.map((path) =>
-              path.pathId === entityId
-                ? {
-                    ...path,
-                    name: editName,
-                    x,
-                    y,
-                    width,
-                    height,
-                    ...(editSurface.trim().length > 0 ? { surface: editSurface.trim() } : {}),
-                  }
-                : path,
-            ),
+            beds: nextBeds,
           };
-        }
+        });
+      }
 
-        return {
-          ...segment,
-          beds: segment.beds.map((bed) =>
-            bed.bedId === entityId
-              ? {
-                  ...bed,
-                  name: editName,
-                  type: editType as Segment['beds'][number]['type'],
-                  x,
-                  y,
-                  width,
-                  height,
-                }
-              : bed,
-          ),
-        };
-      });
+      if (kind === 'path') {
+        const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId;
+        nextSegments = nextSegments.map((segment) => {
+          if (segment.segmentId !== formSegmentId) {
+            if (!isCreate && segment.segmentId === entityIdOrMode) {
+              return {
+                ...segment,
+                paths: segment.paths.filter((path) => path.pathId !== existingEntityId),
+              };
+            }
 
-      const validatedState = assertValid('appState', {
-        ...appState,
+            return segment;
+          }
+
+          const nextPath = {
+            ...(() => {
+              const existingPath = isCreate ? null : segment.paths.find((path) => path.pathId === existingEntityId);
+              if (!existingPath) {
+                return {};
+              }
+
+              const { surface: _unusedSurface, ...pathWithoutSurface } = existingPath;
+              return pathWithoutSurface;
+            })(),
+            pathId,
+            segmentId: formSegmentId,
+            name: formName.trim(),
+            x: x ?? 0,
+            y: y ?? 0,
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            ...(formSurface.trim() ? { surface: formSurface.trim() } : {}),
+          };
+
+          const nextPaths = isCreate
+            ? [...segment.paths, nextPath]
+            : segment.paths.some((path) => path.pathId === existingEntityId)
+              ? segment.paths.map((path) => (path.pathId === existingEntityId ? nextPath : path))
+              : [...segment.paths, nextPath];
+
+          return {
+            ...segment,
+            paths: nextPaths,
+          };
+        });
+      }
+
+      const nextState = assertValid('appState', {
+        ...currentState,
         segments: nextSegments,
       });
 
-      await saveAppStateToIndexedDb(validatedState);
-      setSegments(nextSegments);
-      setEditMessage(`${kind === 'path' ? 'Path' : 'Bed'} ${entityId} updated.`);
-      clearEditState();
+      await saveAppStateToIndexedDb(nextState);
+      syncLocalLayoutState(nextState);
+      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
+      closeForm();
     } catch (error) {
       if (error instanceof SchemaValidationError) {
         const firstIssue = error.issues[0];
-        setEditMessage(firstIssue ? `Validation failed: ${firstIssue.message}` : 'Validation failed.');
+        setActionMessage(firstIssue ? `Validation failed: ${firstIssue.message}` : 'Validation failed.');
       } else {
-        setEditMessage(error instanceof Error ? error.message : 'Failed to save changes.');
+        setActionMessage(error instanceof Error ? error.message : 'Failed to save changes.');
       }
     } finally {
-      setIsSavingEdit(false);
+      setSavingEntityKey(null);
     }
-  }, [clearEditState, editHeight, editName, editSurface, editType, editWidth, editX, editY, editingEntityKey, isSavingEdit]);
+  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, savingEntityKey, syncLocalLayoutState]);
 
-  const handleDeletePath = useCallback(async (segmentId: string, pathId: string) => {
-    if (deletingPathKey) {
+  const getReferenceCounts = useCallback((appState: AppState, bedId: string) => {
+    const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
+    const relatedTaskCount = appState.tasks.filter((task) => task.bedId === bedId).length;
+    const relatedBatchCount = appState.batches.filter((batch) => {
+      const primaryAssignments = batch.assignments ?? [];
+      const legacyAssignments = batch.bedAssignments ?? [];
+      return [...primaryAssignments, ...legacyAssignments].some((assignment) => assignment.bedId === bedId);
+    }).length;
+
+    return { relatedPlanCount, relatedTaskCount, relatedBatchCount };
+  }, []);
+
+  const handleDeleteEntity = useCallback(async (entityKey: string) => {
+    if (deletingEntityKey) {
       return;
     }
 
-    setDeletePathMessage(null);
+    setActionMessage(null);
 
     try {
       const appState = await loadAppStateFromIndexedDb();
       if (!appState) {
-        setDeletePathMessage('Unable to delete path because local app state is unavailable.');
+        setActionMessage('Unable to delete because local app state is unavailable.');
         return;
       }
 
-      const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === pathId).length;
-      const relatedTaskCount = appState.tasks.filter((task) => task.bedId === pathId).length;
-      const relatedBatchCount = appState.batches.filter((batch) => {
-        const primaryAssignments = batch.assignments ?? [];
-        const legacyAssignments = batch.bedAssignments ?? [];
-        return [...primaryAssignments, ...legacyAssignments].some((assignment) => assignment.bedId === pathId);
-      }).length;
+      const [kind, segmentId, entityId] = entityKey.split(':');
+      let nextSegments = appState.segments ?? [];
+      let confirmMessage = '';
 
-      if (relatedPlanCount > 0 || relatedTaskCount > 0 || relatedBatchCount > 0) {
-        const blockingReasons: string[] = [];
-        if (relatedPlanCount > 0) {
-          blockingReasons.push(`${relatedPlanCount} crop plan${relatedPlanCount === 1 ? '' : 's'}`);
-        }
-        if (relatedBatchCount > 0) {
-          blockingReasons.push(`${relatedBatchCount} batch assignment${relatedBatchCount === 1 ? '' : 's'}`);
-        }
-        if (relatedTaskCount > 0) {
-          blockingReasons.push(`${relatedTaskCount} task${relatedTaskCount === 1 ? '' : 's'}`);
+      if (kind === 'segment') {
+        const targetSegment = nextSegments.find((segment) => segment.segmentId === segmentId);
+        if (!targetSegment) {
+          setActionMessage(`Segment ${segmentId} was not found.`);
+          return;
         }
 
-        setDeletePathMessage(`Cannot delete path ${pathId} because it is referenced by ${blockingReasons.join(', ')}.`);
+        const blockingReasons = targetSegment.beds.flatMap((bed) => {
+          const counts = getReferenceCounts(appState, bed.bedId);
+          return counts.relatedPlanCount > 0 || counts.relatedTaskCount > 0 || counts.relatedBatchCount > 0
+            ? [
+                `${bed.bedId} (${[
+                  counts.relatedPlanCount > 0 ? `${counts.relatedPlanCount} crop plan${counts.relatedPlanCount === 1 ? '' : 's'}` : null,
+                  counts.relatedBatchCount > 0 ? `${counts.relatedBatchCount} batch assignment${counts.relatedBatchCount === 1 ? '' : 's'}` : null,
+                  counts.relatedTaskCount > 0 ? `${counts.relatedTaskCount} task${counts.relatedTaskCount === 1 ? '' : 's'}` : null,
+                ].filter(Boolean).join(', ')})`,
+              ]
+            : [];
+        });
+
+        if (blockingReasons.length > 0) {
+          setActionMessage(`Cannot delete segment ${segmentId} because child beds are still referenced: ${blockingReasons.join('; ')}.`);
+          return;
+        }
+
+        confirmMessage = `Delete segment ${segmentId} and its ${targetSegment.beds.length} bed(s) plus ${targetSegment.paths.length} path(s)? This action cannot be undone.`;
+        nextSegments = nextSegments.filter((segment) => segment.segmentId !== segmentId);
+      }
+
+      if (kind === 'bed') {
+        const counts = getReferenceCounts(appState, entityId);
+        const blockingReasons = [
+          counts.relatedPlanCount > 0 ? `${counts.relatedPlanCount} crop plan${counts.relatedPlanCount === 1 ? '' : 's'}` : null,
+          counts.relatedBatchCount > 0 ? `${counts.relatedBatchCount} batch assignment${counts.relatedBatchCount === 1 ? '' : 's'}` : null,
+          counts.relatedTaskCount > 0 ? `${counts.relatedTaskCount} task${counts.relatedTaskCount === 1 ? '' : 's'}` : null,
+        ].filter(Boolean);
+
+        if (blockingReasons.length > 0) {
+          setActionMessage(`Cannot delete bed ${entityId} because it is referenced by ${blockingReasons.join(', ')}.`);
+          return;
+        }
+
+        confirmMessage = `Delete bed ${entityId} from segment ${segmentId}? This action cannot be undone.`;
+        nextSegments = nextSegments.map((segment) =>
+          segment.segmentId === segmentId ? { ...segment, beds: segment.beds.filter((bed) => bed.bedId !== entityId) } : segment,
+        );
+      }
+
+      if (kind === 'path') {
+        confirmMessage = `Delete path ${entityId} from segment ${segmentId}? This action cannot be undone.`;
+        nextSegments = nextSegments.map((segment) =>
+          segment.segmentId === segmentId ? { ...segment, paths: segment.paths.filter((path) => path.pathId !== entityId) } : segment,
+        );
+      }
+
+      if (!window.confirm(confirmMessage)) {
         return;
       }
 
-      if (!window.confirm(`Delete path ${pathId} from segment ${segmentId}? This action cannot be undone.`)) {
-        return;
-      }
-
-      setDeletingPathKey(`${segmentId}:${pathId}`);
-
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        if (segment.segmentId !== segmentId) {
-          return segment;
-        }
-
-        const nextPaths = segment.paths.filter((segmentPath) => segmentPath.pathId !== pathId);
-        return nextPaths.length === segment.paths.length ? segment : { ...segment, paths: nextPaths };
-      });
-
-      const nextState = {
-        ...appState,
-        segments: nextSegments,
-      };
-
-      await saveAppStateToIndexedDb(nextState);
-      setSegments(nextSegments);
-      setDeletePathMessage(`Deleted path ${pathId}.`);
-    } catch (error) {
-      setDeletePathMessage(error instanceof Error ? error.message : 'Failed to delete path.');
-    } finally {
-      setDeletingPathKey(null);
-    }
-  }, [deletingPathKey]);
-
-  const handleDeleteSegmentBed = useCallback(async (segmentId: string, bedId: string) => {
-    if (deletingBedKey) {
-      return;
-    }
-
-    setDeletePathMessage(null);
-
-    try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setDeletePathMessage('Unable to delete bed because local app state is unavailable.');
-        return;
-      }
-
-      const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
-      const relatedTaskCount = appState.tasks.filter((task) => task.bedId === bedId).length;
-      const relatedBatchCount = appState.batches.filter((batch) => {
-        const primaryAssignments = batch.assignments ?? [];
-        const legacyAssignments = batch.bedAssignments ?? [];
-        return [...primaryAssignments, ...legacyAssignments].some((assignment) => assignment.bedId === bedId);
-      }).length;
-
-      if (relatedPlanCount > 0 || relatedTaskCount > 0 || relatedBatchCount > 0) {
-        const blockingReasons: string[] = [];
-        if (relatedPlanCount > 0) {
-          blockingReasons.push(`${relatedPlanCount} crop plan${relatedPlanCount === 1 ? '' : 's'}`);
-        }
-        if (relatedBatchCount > 0) {
-          blockingReasons.push(`${relatedBatchCount} batch assignment${relatedBatchCount === 1 ? '' : 's'}`);
-        }
-        if (relatedTaskCount > 0) {
-          blockingReasons.push(`${relatedTaskCount} task${relatedTaskCount === 1 ? '' : 's'}`);
-        }
-
-        setDeletePathMessage(`Cannot delete bed ${bedId} because it is referenced by ${blockingReasons.join(', ')}.`);
-        return;
-      }
-
-      if (!window.confirm(`Delete bed ${bedId} from segment ${segmentId}? This action cannot be undone.`)) {
-        return;
-      }
-
-      setDeletingBedKey(`${segmentId}:${bedId}`);
-
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        if (segment.segmentId !== segmentId) {
-          return segment;
-        }
-
-        const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
-        return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
-      });
+      setDeletingEntityKey(entityKey);
 
       const nextState = assertValid('appState', {
         ...appState,
@@ -425,14 +523,19 @@ function BedsPage() {
       });
 
       await saveAppStateToIndexedDb(nextState);
-      setSegments(nextSegments);
-      setDeletePathMessage(`Deleted bed ${bedId}.`);
+      syncLocalLayoutState(nextState);
+      if (activeFormKey === entityKey || activeFormKey?.startsWith(`${kind}:${segmentId}:${entityId}`) || activeFormKey === `segment:${segmentId}`) {
+        closeForm();
+      }
+      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} deleted.`);
     } catch (error) {
-      setDeletePathMessage(error instanceof Error ? error.message : 'Failed to delete bed.');
+      setActionMessage(error instanceof Error ? error.message : 'Failed to delete entity.');
     } finally {
-      setDeletingBedKey(null);
+      setDeletingEntityKey(null);
     }
-  }, [deletingBedKey]);
+  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, syncLocalLayoutState]);
+
+  const hasAnyLayoutRecords = segments.length > 0 || totalSegmentBedCount > 0 || totalPathCount > 0;
 
   return (
     <section className="beds-page">
@@ -442,126 +545,167 @@ function BedsPage() {
           Segments: {segments.length} · Beds: {totalSegmentBedCount} · Paths: {totalPathCount}
         </p>
       ) : null}
-      {!isLoading && editMessage ? <p className="beds-empty-state">{editMessage}</p> : null}
-      {!isLoading && deletePathMessage ? <p className="beds-empty-state">{deletePathMessage}</p> : null}
+      {!isLoading ? (
+        <div>
+          <button type="button" onClick={() => openSegmentForm()} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+            Add segment
+          </button>{' '}
+          <button
+            type="button"
+            onClick={() => openBedForm(segments[0]?.segmentId)}
+            disabled={segments.length === 0 || Boolean(savingEntityKey) || Boolean(deletingEntityKey)}
+          >
+            Add bed
+          </button>{' '}
+          <button
+            type="button"
+            onClick={() => openPathForm(segments[0]?.segmentId)}
+            disabled={segments.length === 0 || Boolean(savingEntityKey) || Boolean(deletingEntityKey)}
+          >
+            Add path
+          </button>
+        </div>
+      ) : null}
+      {!isLoading && segments.length === 0 ? <p className="beds-empty-state">Add a segment to start planning beds and paths.</p> : null}
+      {!isLoading && actionMessage ? <p className="beds-empty-state">{actionMessage}</p> : null}
+      {!isLoading && activeFormKey ? (
+        <section>
+          <h3>
+            {activeFormKey.startsWith('segment:') ? (activeFormKey === 'segment:new' ? 'Add segment' : 'Edit segment') : null}
+            {activeFormKey.startsWith('bed:') ? (activeFormKey === 'bed:new' ? 'Add bed' : 'Edit bed') : null}
+            {activeFormKey.startsWith('path:') ? (activeFormKey === 'path:new' ? 'Add path' : 'Edit path') : null}
+          </h3>
+          {(activeFormKey.startsWith('bed:') || activeFormKey.startsWith('path:')) && segments.length > 0 ? (
+            <label>
+              Segment
+              <select value={formSegmentId} onChange={(event) => setFormSegmentId(event.target.value)} disabled={Boolean(savingEntityKey)}>
+                {segments.map((segment) => (
+                  <option key={segment.segmentId} value={segment.segmentId}>
+                    {segment.name} ({segment.segmentId})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}{' '}
+          <label>
+            Name
+            <input value={formName} onChange={(event) => setFormName(event.target.value)} disabled={Boolean(savingEntityKey)} />
+          </label>{' '}
+          {activeFormKey.startsWith('segment:') ? (
+            <>
+              <label>
+                Kind
+                <input value={formKind} onChange={(event) => setFormKind(event.target.value)} disabled={Boolean(savingEntityKey)} />
+              </label>{' '}
+            </>
+          ) : null}
+          {activeFormKey.startsWith('bed:') ? (
+            <>
+              <label>
+                Type
+                <select value={formType} onChange={(event) => setFormType(event.target.value)} disabled={Boolean(savingEntityKey)}>
+                  <option value="vegetable_bed">vegetable_bed</option>
+                  <option value="perennial_bed">perennial_bed</option>
+                  <option value="ecology_strip">ecology_strip</option>
+                </select>
+              </label>{' '}
+            </>
+          ) : null}
+          {!activeFormKey.startsWith('segment:') ? (
+            <>
+              <label>
+                X
+                <input value={formX} onChange={(event) => setFormX(event.target.value)} disabled={Boolean(savingEntityKey)} />
+              </label>{' '}
+              <label>
+                Y
+                <input value={formY} onChange={(event) => setFormY(event.target.value)} disabled={Boolean(savingEntityKey)} />
+              </label>{' '}
+            </>
+          ) : null}
+          <label>
+            Width
+            <input value={formWidth} onChange={(event) => setFormWidth(event.target.value)} disabled={Boolean(savingEntityKey)} />
+          </label>{' '}
+          <label>
+            Height
+            <input value={formHeight} onChange={(event) => setFormHeight(event.target.value)} disabled={Boolean(savingEntityKey)} />
+          </label>{' '}
+          {activeFormKey.startsWith('path:') ? (
+            <>
+              <label>
+                Surface
+                <input value={formSurface} onChange={(event) => setFormSurface(event.target.value)} disabled={Boolean(savingEntityKey)} />
+              </label>{' '}
+            </>
+          ) : null}
+          <button type="button" onClick={() => void handleSaveEntity()} disabled={Boolean(savingEntityKey)}>
+            {savingEntityKey ? 'Saving…' : 'Save'}
+          </button>{' '}
+          <button type="button" onClick={() => closeForm()} disabled={Boolean(savingEntityKey)}>Cancel</button>
+        </section>
+      ) : null}
       {!isLoading && segments.length > 0 ? (
         <section>
           <h3>Segment child entities</h3>
           {segments.map((segment) => (
             <article key={segment.segmentId}>
               <p>{segment.name} ({segment.segmentId})</p>
+              <p>{(segment.width ?? segment.widthM)}×{(segment.height ?? segment.lengthM)}{segment.kind ? ` · ${segment.kind}` : ''}</p>
+              <button type="button" onClick={() => openSegmentForm(segment)} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+                Edit segment
+              </button>{' '}
+              <button
+                type="button"
+                onClick={() => void handleDeleteEntity(`segment:${segment.segmentId}`)}
+                disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}
+              >
+                {deletingEntityKey === `segment:${segment.segmentId}` ? 'Deleting…' : 'Delete segment'}
+              </button>{' '}
+              <button type="button" onClick={() => openBedForm(segment.segmentId)} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+                Add bed
+              </button>{' '}
+              <button type="button" onClick={() => openPathForm(segment.segmentId)} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+                Add path
+              </button>
               <p>Beds</p>
               {segment.beds.length === 0 ? <p>No beds.</p> : (
                 <ul>
-                  {segment.beds.map((bed) => {
-                    const editKey = `bed:${segment.segmentId}:${bed.bedId}`;
-                    const deleteKey = `${segment.segmentId}:${bed.bedId}`;
-                    const isEditing = editingEntityKey === editKey;
-                    const isDeleting = deletingBedKey === deleteKey;
-
-                    return (
-                      <li key={bed.bedId}>
-                        <span>{bed.name} ({bed.bedId}) · {bed.type} · {bed.width}×{bed.height} @ {bed.x},{bed.y}</span>{' '}
-                        <button type="button" onClick={() => startEditBed(segment.segmentId, bed)} disabled={Boolean(deletingBedKey) || isSavingEdit}>
-                          Edit bed
-                        </button>{' '}
-                        <button type="button" onClick={() => void handleDeleteSegmentBed(segment.segmentId, bed.bedId)} disabled={Boolean(deletingBedKey) || isSavingEdit}>
-                          {isDeleting ? 'Deleting…' : 'Delete bed'}
-                        </button>
-                        {isEditing ? (
-                          <div>
-                            <label>
-                              Name
-                              <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Type
-                              <select value={editType} onChange={(event) => setEditType(event.target.value)}>
-                                <option value="vegetable_bed">vegetable_bed</option>
-                                <option value="perennial_bed">perennial_bed</option>
-                                <option value="ecology_strip">ecology_strip</option>
-                              </select>
-                            </label>{' '}
-                            <label>
-                              X
-                              <input value={editX} onChange={(event) => setEditX(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Y
-                              <input value={editY} onChange={(event) => setEditY(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Width
-                              <input value={editWidth} onChange={(event) => setEditWidth(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Height
-                              <input value={editHeight} onChange={(event) => setEditHeight(event.target.value)} />
-                            </label>{' '}
-                            <button type="button" onClick={() => void handleSaveEdit()} disabled={isSavingEdit}>
-                              {isSavingEdit ? 'Saving…' : 'Save'}
-                            </button>{' '}
-                            <button type="button" onClick={() => clearEditState()} disabled={isSavingEdit}>Cancel</button>
-                          </div>
-                        ) : null}
-                      </li>
-                    );
-                  })}
+                  {segment.beds.map((bed) => (
+                    <li key={bed.bedId}>
+                      <span>{bed.name} ({bed.bedId}) · {bed.type} · {bed.width}×{bed.height} @ {bed.x},{bed.y}</span>{' '}
+                      <button type="button" onClick={() => openBedForm(segment.segmentId, bed)} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+                        Edit bed
+                      </button>{' '}
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteEntity(`bed:${segment.segmentId}:${bed.bedId}`)}
+                        disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}
+                      >
+                        {deletingEntityKey === `bed:${segment.segmentId}:${bed.bedId}` ? 'Deleting…' : 'Delete bed'}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
               <p>Paths</p>
               {segment.paths.length === 0 ? <p>No paths.</p> : (
                 <ul>
-                  {segment.paths.map((path) => {
-                    const editKey = `path:${segment.segmentId}:${path.pathId}`;
-                    const deleteKey = `${segment.segmentId}:${path.pathId}`;
-                    const isEditing = editingEntityKey === editKey;
-                    const isDeleting = deletingPathKey === deleteKey;
-
-                    return (
-                      <li key={path.pathId}>
-                        <span>{path.name} ({path.pathId}) · {path.width}×{path.height} @ {path.x},{path.y}</span>{' '}
-                        <button type="button" onClick={() => startEditPath(segment.segmentId, path)} disabled={Boolean(deletingPathKey) || isSavingEdit}>
-                          Edit path
-                        </button>{' '}
-                        <button type="button" onClick={() => void handleDeletePath(segment.segmentId, path.pathId)} disabled={Boolean(deletingPathKey) || isSavingEdit}>
-                          {isDeleting ? 'Deleting…' : 'Delete path'}
-                        </button>
-                        {isEditing ? (
-                          <div>
-                            <label>
-                              Name
-                              <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Surface
-                              <input value={editSurface} onChange={(event) => setEditSurface(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              X
-                              <input value={editX} onChange={(event) => setEditX(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Y
-                              <input value={editY} onChange={(event) => setEditY(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Width
-                              <input value={editWidth} onChange={(event) => setEditWidth(event.target.value)} />
-                            </label>{' '}
-                            <label>
-                              Height
-                              <input value={editHeight} onChange={(event) => setEditHeight(event.target.value)} />
-                            </label>{' '}
-                            <button type="button" onClick={() => void handleSaveEdit()} disabled={isSavingEdit}>
-                              {isSavingEdit ? 'Saving…' : 'Save'}
-                            </button>{' '}
-                            <button type="button" onClick={() => clearEditState()} disabled={isSavingEdit}>Cancel</button>
-                          </div>
-                        ) : null}
-                      </li>
-                    );
-                  })}
+                  {segment.paths.map((path) => (
+                    <li key={path.pathId}>
+                      <span>{path.name} ({path.pathId}) · {path.width}×{path.height} @ {path.x},{path.y}</span>{' '}
+                      <button type="button" onClick={() => openPathForm(segment.segmentId, path)} disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}>
+                        Edit path
+                      </button>{' '}
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteEntity(`path:${segment.segmentId}:${path.pathId}`)}
+                        disabled={Boolean(savingEntityKey) || Boolean(deletingEntityKey)}
+                      >
+                        {deletingEntityKey === `path:${segment.segmentId}:${path.pathId}` ? 'Deleting…' : 'Delete path'}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </article>
@@ -583,7 +727,7 @@ function BedsPage() {
           ))}
         </div>
       ) : null}
-      {!isLoading && beds.length === 0 ? <p className="beds-empty-state">No beds found.</p> : null}
+      {!isLoading && !hasAnyLayoutRecords ? <p className="beds-empty-state">No beds found.</p> : null}
     </section>
   );
 }
