@@ -556,12 +556,6 @@ const collectLayoutParentIssues = (schemaName: SchemaName, payload: unknown): Va
         const itemId = typeof item[idKey] === 'string' ? item[idKey] : `${collectionKey.slice(0, -1)}#${itemIndex}`;
 
         if (typeof item.segmentId !== 'string' || item.segmentId.length === 0) {
-          issues.push({
-            schemaName,
-            path: `${itemPath}/segmentId`,
-            keyword: 'required',
-            message: `${collectionKey === 'beds' ? 'bed' : 'path'} '${itemId}' is missing required parent segmentId`,
-          });
           return;
         }
 

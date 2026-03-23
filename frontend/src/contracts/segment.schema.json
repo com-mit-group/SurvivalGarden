@@ -8,8 +8,6 @@
   "required": [
     "segmentId",
     "name",
-    "widthM",
-    "lengthM",
     "beds",
     "paths"
   ],
@@ -59,16 +57,13 @@
         "additionalProperties": false,
         "required": [
           "bedId",
-          "segmentId",
           "gardenId",
           "name",
           "type",
           "createdAt",
           "updatedAt",
           "x",
-          "y",
-          "widthM",
-          "lengthM"
+          "y"
         ],
         "properties": {
           "bedId": {

@@ -7,12 +7,9 @@
   "additionalProperties": false,
   "required": [
     "pathId",
-    "segmentId",
     "name",
     "x",
-    "y",
-    "widthM",
-    "lengthM"
+    "y"
   ],
   "properties": {
     "pathId": {
