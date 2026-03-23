@@ -517,6 +517,18 @@ function BedsPage() {
       }
 
       if (kind === 'path') {
+        const counts = getReferenceCounts(appState, entityId!);
+        const blockingReasons = [
+          counts.relatedPlanCount > 0 ? `${counts.relatedPlanCount} crop plan${counts.relatedPlanCount === 1 ? '' : 's'}` : null,
+          counts.relatedBatchCount > 0 ? `${counts.relatedBatchCount} batch assignment${counts.relatedBatchCount === 1 ? '' : 's'}` : null,
+          counts.relatedTaskCount > 0 ? `${counts.relatedTaskCount} task${counts.relatedTaskCount === 1 ? '' : 's'}` : null,
+        ].filter(Boolean);
+
+        if (blockingReasons.length > 0) {
+          setActionMessage(`Cannot delete path ${entityId} because it is referenced by ${blockingReasons.join(', ')}.`);
+          return;
+        }
+
         confirmMessage = `Delete path ${entityId} from segment ${segmentId}? This action cannot be undone.`;
         nextSegments = nextSegments.map((segment) =>
           segment.segmentId === segmentId ? { ...segment, paths: segment.paths.filter((path) => path.pathId !== entityId) } : segment,
@@ -539,7 +551,13 @@ function BedsPage() {
       if (activeFormKey === entityKey || activeFormKey?.startsWith(`${kind}:${segmentId}:${entityId}`) || activeFormKey === `segment:${segmentId}`) {
         closeForm();
       }
-      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} deleted.`);
+      setActionMessage(
+        kind === 'path'
+          ? `Deleted path ${entityId}.`
+          : kind === 'bed'
+            ? `Bed deleted.`
+            : 'Segment deleted.',
+      );
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : 'Failed to delete entity.');
     } finally {
