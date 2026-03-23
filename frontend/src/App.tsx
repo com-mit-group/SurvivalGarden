@@ -295,7 +295,8 @@ function BedsPage() {
           nextSegments = nextSegments.map((segment) =>
             segment.segmentId === entityIdOrMode
               ? (() => {
-                  const { kind: _unusedKind, ...segmentWithoutKind } = segment;
+                  const segmentWithoutKind = { ...segment };
+                  delete segmentWithoutKind.kind;
 
                   return {
                     ...segmentWithoutKind,
@@ -377,7 +378,8 @@ function BedsPage() {
                 return {};
               }
 
-              const { surface: _unusedSurface, ...pathWithoutSurface } = existingPath;
+              const pathWithoutSurface = { ...existingPath };
+              delete pathWithoutSurface.surface;
               return pathWithoutSurface;
             })(),
             pathId,
