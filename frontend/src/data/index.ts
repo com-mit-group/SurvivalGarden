@@ -66,6 +66,10 @@ const CROP_PLAN_INDEX_STORE = 'cropPlansById';
 const BATCH_INDEX_STORE = 'batchesById';
 const PHOTO_BLOB_STORE = 'photoBlobsById';
 const SCHEMA_VERSION_KEY = 'schemaVersion';
+const DEFAULT_SEGMENT_ID = 'segment_default_main';
+const DEFAULT_SEGMENT_NAME = 'Main Segment';
+const DEFAULT_SEGMENT_ORIGIN = 'default_bootstrap';
+type AppSegment = NonNullable<AppState['segments']>[number];
 
 const LEGACY_BED_TYPE = 'vegetable_bed';
 
@@ -137,6 +141,25 @@ const toFiniteNumber = (value: unknown): number | null => (typeof value === 'num
 const getWidthMeters = (value: Record<string, unknown>): number | null => toFiniteNumber(value.widthM) ?? toFiniteNumber(value.width);
 
 const getLengthMeters = (value: Record<string, unknown>): number | null => toFiniteNumber(value.lengthM) ?? toFiniteNumber(value.height);
+
+const createDefaultSegment = (
+  dimensions: { widthM?: number; lengthM?: number } = {},
+): AppSegment => {
+  const width = Math.max(dimensions.widthM ?? 1, 1);
+  const length = Math.max(dimensions.lengthM ?? 1, 1);
+
+  return {
+    segmentId: DEFAULT_SEGMENT_ID,
+    name: DEFAULT_SEGMENT_NAME,
+    originReference: DEFAULT_SEGMENT_ORIGIN,
+    widthM: width,
+    lengthM: length,
+    width,
+    height: length,
+    beds: [],
+    paths: [],
+  };
+};
 
 const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report: LayoutMigrationReport } => {
   const report: LayoutMigrationReport = { migrated: false, warnings: [] };
@@ -342,47 +365,56 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   };
 
   if (Array.isArray(state.segments) && state.segments.length > 0) {
-    return { payload: withSegments(state, false), report };
+    const normalizedSegments = state.segments.map((segment) => {
+      if (!segment || typeof segment !== 'object') {
+        return segment;
+      }
+
+      const typedSegment = segment as Record<string, unknown>;
+      return {
+        ...typedSegment,
+        beds: Array.isArray(typedSegment.beds) ? typedSegment.beds : [],
+        paths: Array.isArray(typedSegment.paths) ? typedSegment.paths : [],
+      };
+    });
+
+    return {
+      payload: withSegments(
+        {
+          ...state,
+          beds: Array.isArray(state.beds) ? state.beds : [],
+          segments: normalizedSegments,
+        },
+        false,
+      ),
+      report,
+    };
   }
 
-  if (!Array.isArray(state.beds)) {
-    return { payload, report };
-  }
+  const legacyBeds = Array.isArray(state.beds)
+    ? state.beds.filter((bed): bed is Record<string, unknown> => Boolean(bed && typeof bed === 'object'))
+    : [];
 
-  const legacyBeds = state.beds.filter((bed): bed is Record<string, unknown> => {
-    if (!bed || typeof bed !== 'object') {
-      return false;
-    }
-
-    const typedBed = bed as Record<string, unknown>;
-    return (
-      toFiniteNumber(typedBed.x) !== null &&
-      toFiniteNumber(typedBed.y) !== null &&
-      getWidthMeters(typedBed) !== null &&
-      getLengthMeters(typedBed) !== null
-    );
-  });
-
-  if (legacyBeds.length === 0) {
-    return { payload, report };
-  }
-
-  const migratedBeds = legacyBeds.map((bed) => {
-    const { x, y, width, height, ...rest } = bed;
+  const migratedBeds = legacyBeds.map((bed, index) => {
+    const x = toFiniteNumber(bed.x) ?? 0;
+    const y = toFiniteNumber(bed.y) ?? index;
+    const width = getWidthMeters(bed);
+    const height = getLengthMeters(bed);
+    const rest = { ...bed };
+    delete rest.widthM;
+    delete rest.lengthM;
     return {
       ...rest,
-      segmentId: 'segment_migrated_main',
+      segmentId: DEFAULT_SEGMENT_ID,
       x,
       y,
-      widthM: width,
-      lengthM: height,
-      width,
-      height,
+      ...(width !== null ? { widthM: width, width } : {}),
+      ...(height !== null ? { lengthM: height, height } : {}),
     };
   });
 
-  const maxX = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.x) ?? 0) + (getWidthMeters(bed) ?? 0)), 0);
-  const maxY = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.y) ?? 0) + (getLengthMeters(bed) ?? 0)), 0);
+  const maxX = legacyBeds.reduce((max, bed) => Math.max(max, (toFiniteNumber(bed.x) ?? 0) + (getWidthMeters(bed) ?? 1)), 0);
+  const maxY = legacyBeds.reduce((max, bed, index) => Math.max(max, (toFiniteNumber(bed.y) ?? index) + (getLengthMeters(bed) ?? 1)), 0);
 
   const legacyPaths = Array.isArray((state as { paths?: unknown[] }).paths)
     ? ((state as { paths?: unknown[] }).paths ?? []).filter((path) => {
@@ -403,7 +435,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
         const typedPath = path as Record<string, unknown>;
         return {
           ...typedPath,
-          segmentId: 'segment_migrated_main',
+          segmentId: DEFAULT_SEGMENT_ID,
           widthM: getWidthMeters(typedPath),
           lengthM: getLengthMeters(typedPath),
         };
@@ -415,31 +447,22 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
       code: 'legacy_layout_paths_dropped',
       message: 'Some legacy paths were dropped because required geometry fields were missing.',
       entityType: 'segment',
-      entityId: 'segment_migrated_main',
+      entityId: DEFAULT_SEGMENT_ID,
     });
   }
 
+  const defaultSegment = createDefaultSegment({
+    widthM: Math.max(maxX, 1),
+    lengthM: Math.max(maxY, 1),
+  });
+
   const nextState = {
     ...state,
-    beds: state.beds.map((bed) => {
-      if (!bed || typeof bed !== 'object') {
-        return bed;
-      }
-      const sanitizedBed = { ...(bed as Record<string, unknown>) };
-      delete sanitizedBed.x;
-      delete sanitizedBed.y;
-      delete sanitizedBed.width;
-      delete sanitizedBed.height;
-      return sanitizedBed;
-    }),
+    beds: Array.isArray(state.beds) ? state.beds : [],
+    paths: [],
     segments: [
       {
-        segmentId: 'segment_migrated_main',
-        name: 'Migrated Segment',
-        widthM: Math.max(maxX, 1),
-        lengthM: Math.max(maxY, 1),
-        width: Math.max(maxX, 1),
-        height: Math.max(maxY, 1),
+        ...defaultSegment,
         originReference: 'legacy_migration_auto',
         beds: migratedBeds,
         paths: legacyPaths,
@@ -450,9 +473,9 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   report.migrated = true;
   report.warnings.push({
     code: 'legacy_layout_segment_created',
-    message: 'Created a migrated segment from legacy bed coordinates.',
+    message: 'Created default segment and migrated legacy layout entities.',
     entityType: 'segment',
-    entityId: 'segment_migrated_main',
+    entityId: DEFAULT_SEGMENT_ID,
   });
 
   return { payload: withSegments(nextState, true), report };
@@ -747,6 +770,14 @@ const sortBatchesForHierarchy = (batches: AppState['batches']): AppState['batche
 
 const canonicalizeForExport = (appState: AppState): AppState => {
   const cultivars = sortCollectionByKey(getCultivarsFromState(appState), ['cropTypeId', 'cultivarId', 'name']);
+  const canonicalSegments = sortCollectionByKey(
+    (appState.segments && appState.segments.length > 0 ? appState.segments : [createDefaultSegment()]).map((segment) => ({
+      ...segment,
+      beds: sortCollectionByKey(segment.beds, ['bedId', 'gardenId', 'name']),
+      paths: sortCollectionByKey(segment.paths, ['pathId', 'name']),
+    })),
+    ['segmentId', 'name'],
+  );
 
   return withCultivars({
     ...appState,
@@ -759,18 +790,7 @@ const canonicalizeForExport = (appState: AppState): AppState => {
     batches: sortBatchesForHierarchy(appState.batches),
     seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
     tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
-    ...(appState.segments
-      ? {
-          segments: sortCollectionByKey(
-            appState.segments.map((segment) => ({
-              ...segment,
-              beds: sortCollectionByKey(segment.beds, ['bedId', 'gardenId', 'name']),
-              paths: sortCollectionByKey(segment.paths, ['pathId', 'name']),
-            })),
-            ['segmentId', 'name'],
-          ),
-        }
-      : {}),
+    segments: canonicalSegments,
   }, cultivars);
 };
 
@@ -999,14 +1019,14 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     ...currentState,
     schemaVersion: incomingState.schemaVersion,
     settings: incomingState.settings,
-    beds: mergeCollectionById('beds', currentState.beds, incomingState.beds, report),
+    beds: [],
     species: mergeCollectionById('species', currentState.species ?? [], incomingState.species ?? [], report),
     crops: mergeCollectionById('crops', currentState.crops, incomingState.crops, report),
     cropPlans: mergeCollectionById('cropPlans', currentState.cropPlans, incomingState.cropPlans, report),
     batches: mergeCollectionById('batches', currentState.batches, incomingState.batches, report),
     tasks: mergeTasksForImport(currentState.tasks, incomingState.tasks, report),
     seedInventoryItems: mergeCollectionById('seedInventoryItems', currentState.seedInventoryItems, incomingState.seedInventoryItems, report),
-    ...(incomingState.segments ? { segments: incomingState.segments } : {}),
+    segments: incomingState.segments ?? currentState.segments ?? [createDefaultSegment()],
   }, mergeUnknownCollectionById(getCultivarsFromState(currentState), getCultivarsFromState(incomingState), 'cultivarId', report, 'cultivars'));
 
   return { state: canonicalizeForExport(mergedState), report };
@@ -1171,7 +1191,7 @@ const seedAppStateIfEmpty = async (): Promise<void> => {
 
 export const createEmptyAppState = (currentState: AppState | null): AppState => ({
   schemaVersion: currentState?.schemaVersion ?? 1,
-  segments: [],
+  segments: [createDefaultSegment()],
   beds: [],
   species: [],
   crops: [],
@@ -1270,6 +1290,17 @@ export const saveAppStateToIndexedDb = async (
 
     for (const bed of stateToPersist.beds) {
       bedStore.put(assertValid('bed', bed ?? {}));
+    }
+
+    for (const segment of stateToPersist.segments ?? []) {
+      for (const bed of segment.beds ?? []) {
+        const normalizedBed = { ...(bed as unknown as Record<string, unknown>) };
+        delete normalizedBed.x;
+        delete normalizedBed.y;
+        delete normalizedBed.width;
+        delete normalizedBed.height;
+        bedStore.put(assertValid('bed', normalizedBed));
+      }
     }
 
     const cropStore = transaction.objectStore(CROP_INDEX_STORE);
