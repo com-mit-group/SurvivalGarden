@@ -549,6 +549,9 @@ const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
   }
 
   const state = payload as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(state, 'cultivars')) {
+    return payload;
+  }
   const seedInventoryItems = Array.isArray(state.seedInventoryItems) ? state.seedInventoryItems : [];
   const cropIds = new Set(
     (Array.isArray(state.crops) ? state.crops : [])
