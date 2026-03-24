@@ -1,10 +1,10 @@
 {
-  "cropId": "crop_tomato_san_marzano",
-  "name": "Tomato",
-  "cultivar": "San Marzano",
+  "cropId": "crop_type_tomato_plum",
+  "name": "Plum Tomato",
+  "cultivarGroup": "Paste",
   "speciesId": "species_tomato",
   "aliases": [
-    "Garden Tomato"
+    "Processing Tomato"
   ],
   "isUserDefined": true,
   "category": "fruiting",
