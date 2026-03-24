@@ -1231,7 +1231,17 @@ export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
       return null;
     }
 
-    return assertValid('appState', rawValue);
+    const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(rawValue));
+
+    if (migrationResult.report.warnings.length > 0) {
+      console.warn('AppState load migration warnings', migrationResult.report.warnings);
+    }
+
+    return canonicalizeForExport(assertValid('appState', migrationResult.payload));
+  } catch (error) {
+    throw new AppStateStorageError(
+      `Failed to load app state from local data storage: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     database.close();
   }
@@ -1286,10 +1296,6 @@ export const saveAppStateToIndexedDb = async (
 
     for (const key of existingBedKeys) {
       bedStore.delete(key);
-    }
-
-    for (const bed of stateToPersist.beds) {
-      bedStore.put(assertValid('bed', bed ?? {}));
     }
 
     for (const segment of stateToPersist.segments ?? []) {
