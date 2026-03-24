@@ -143,6 +143,45 @@
   ],
   "schemaVersion": 2,
   "seedInventoryItems": [],
+  "segments": [
+    {
+      "beds": [
+        {
+          "bedId": "bed_main_001",
+          "createdAt": "2026-03-20T00:00:00Z",
+          "gardenId": "garden_main",
+          "height": 4,
+          "name": "Main Bed 1",
+          "notes": "Reference bed embedded in default segment layout.",
+          "segmentId": "segment_main_garden",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-03-20T00:00:00Z",
+          "width": 1.2,
+          "x": 1,
+          "y": 1
+        }
+      ],
+      "height": 8,
+      "name": "Main Garden",
+      "notes": "Default starter segment demonstrating canonical segment-owned beds and paths.",
+      "originReference": "nw_corner",
+      "paths": [
+        {
+          "height": 0.8,
+          "name": "North path",
+          "notes": "Reference path embedded in default segment layout.",
+          "pathId": "path_main_north",
+          "segmentId": "segment_main_garden",
+          "surface": "woodchip",
+          "width": 11,
+          "x": 0.5,
+          "y": 0
+        }
+      ],
+      "segmentId": "segment_main_garden",
+      "width": 12
+    }
+  ],
   "settings": {
     "createdAt": "2026-03-20T00:00:00Z",
     "locale": "de-DE",
