@@ -907,12 +907,24 @@ const collectAppStateReferenceIssues = (schemaName: SchemaName, payload: unknown
     }
   });
 
+  const cultivars = Array.isArray(payload.cultivars) ? payload.cultivars : [];
+  const cultivarIds = new Set(
+    cultivars
+      .filter((entry): entry is Record<string, unknown> => isObjectRecord(entry))
+      .map((entry) => (typeof entry.cultivarId === 'string' ? entry.cultivarId : null))
+      .filter((entry): entry is string => entry !== null),
+  );
+
   seedInventoryItems.forEach((item, itemIndex) => {
-    if (!isObjectRecord(item) || typeof item.cropId !== 'string') {
+    if (!isObjectRecord(item)) {
       return;
     }
 
-    if (!cropIds.has(item.cropId)) {
+    if (typeof item.cultivarId === 'string' && !cultivarIds.has(item.cultivarId)) {
+      pushInvalidRef(`/seedInventoryItems/${itemIndex}/cultivarId`, `seedInventoryItem references unknown cultivarId '${item.cultivarId}'`);
+    }
+
+    if (typeof item.cropId === 'string' && !cropIds.has(item.cropId)) {
       pushInvalidRef(`/seedInventoryItems/${itemIndex}/cropId`, `seedInventoryItem references unknown cropId '${item.cropId}'`);
     }
   });

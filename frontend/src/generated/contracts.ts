@@ -316,8 +316,9 @@ export interface CropPlan {
 
 export interface SeedInventoryItem {
   seedInventoryItemId: string;
-  cropId: string;
-  variety: string;
+  cultivarId: string;
+  cropId?: string;
+  variety?: string;
   supplier?: string;
   lotNumber?: string;
   quantity: number;

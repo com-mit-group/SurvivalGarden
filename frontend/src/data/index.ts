@@ -535,6 +535,107 @@ const normalizeImportedSpeciesRecords = (payload: unknown): unknown => {
   };
 };
 
+const normalizeSeedInventoryCultivarIdPart = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  const state = payload as Record<string, unknown>;
+  const seedInventoryItems = Array.isArray(state.seedInventoryItems) ? state.seedInventoryItems : [];
+  const existingCultivars = Array.isArray(state.cultivars) ? [...state.cultivars] : [];
+  const usedCultivarIds = new Set(
+    existingCultivars
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+      .map((entry) => (typeof entry.cultivarId === 'string' ? entry.cultivarId : null))
+      .filter((entry): entry is string => entry !== null),
+  );
+  const nowIso = new Date().toISOString();
+
+  const getOrCreateCultivarId = (cropId: string, variety: string): string => {
+    const exactMatch = existingCultivars.find((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return false;
+      }
+
+      const cultivar = entry as Record<string, unknown>;
+      return cultivar.cropTypeId === cropId
+        && typeof cultivar.name === 'string'
+        && cultivar.name.trim().toLowerCase() === variety.trim().toLowerCase()
+        && typeof cultivar.cultivarId === 'string';
+    }) as Record<string, unknown> | undefined;
+
+    if (exactMatch && typeof exactMatch.cultivarId === 'string') {
+      return exactMatch.cultivarId;
+    }
+
+    const base = normalizeSeedInventoryCultivarIdPart(`${cropId}-${variety}`) || `seed-inventory-${Date.now()}`;
+    let candidate = `cultivar_${base}`;
+    let suffix = 1;
+    while (usedCultivarIds.has(candidate)) {
+      suffix += 1;
+      candidate = `cultivar_${base}-${suffix}`;
+    }
+
+    usedCultivarIds.add(candidate);
+    existingCultivars.push({
+      cultivarId: candidate,
+      cropTypeId: cropId,
+      name: variety,
+      notes: '[Migrated from legacy seed inventory item]',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+    return candidate;
+  };
+
+  const migratedSeedInventoryItems = seedInventoryItems.map((item) => {
+    if (!item || typeof item !== 'object') {
+      return item;
+    }
+
+    const typedItem = { ...(item as Record<string, unknown>) };
+    if (typeof typedItem.cultivarId === 'string' && typedItem.cultivarId.trim().length > 0) {
+      return typedItem;
+    }
+
+    if (typeof typedItem.cropId !== 'string' || typeof typedItem.variety !== 'string') {
+      return typedItem;
+    }
+
+    const cropId = typedItem.cropId.trim();
+    const variety = typedItem.variety.trim();
+    if (!cropId || !variety) {
+      return typedItem;
+    }
+
+    return {
+      ...typedItem,
+      cultivarId: getOrCreateCultivarId(cropId, variety),
+    };
+  });
+
+  if (existingCultivars.length === 0 && !Object.prototype.hasOwnProperty.call(state, 'cultivars')) {
+    return {
+      ...state,
+      seedInventoryItems: migratedSeedInventoryItems,
+    };
+  }
+
+  return {
+    ...state,
+    cultivars: existingCultivars,
+    seedInventoryItems: migratedSeedInventoryItems,
+  };
+};
+
 const compareByString = (left: string, right: string): number => left.localeCompare(right);
 
 const getStringValue = (record: unknown, key: string): string | null => {
@@ -788,14 +889,14 @@ const canonicalizeForExport = (appState: AppState): AppState => {
     crops: sortCollectionByKey(appState.crops, ['speciesId', 'cropId', 'name', 'cultivar']),
     cropPlans: sortCollectionByKey(appState.cropPlans, ['cropId', 'planId']),
     batches: sortBatchesForHierarchy(appState.batches),
-    seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cropId']),
+    seedInventoryItems: sortCollectionByKey(appState.seedInventoryItems, ['seedInventoryItemId', 'cultivarId']),
     tasks: sortCollectionByKey(appState.tasks, ['id', 'sourceKey']),
     segments: canonicalSegments,
   }, cultivars);
 };
 
 export const parseImportedAppState = (rawPayload: string): AppState => {
-  const parsed: unknown = normalizeImportedSpeciesRecords(JSON.parse(rawPayload));
+  const parsed: unknown = migrateLegacySeedInventoryItems(normalizeImportedSpeciesRecords(JSON.parse(rawPayload)));
   const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(parsed));
 
   if (migrationResult.report.warnings.length > 0) {

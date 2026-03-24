@@ -6,8 +6,7 @@
   "additionalProperties": false,
   "required": [
     "seedInventoryItemId",
-    "cropId",
-    "variety",
+    "cultivarId",
     "quantity",
     "unit",
     "status",
@@ -18,10 +17,15 @@
     "seedInventoryItemId": {
       "$ref": "#/$defs/id"
     },
+    "cultivarId": {
+      "$ref": "#/$defs/id"
+    },
     "cropId": {
+      "description": "Legacy compatibility field for migrated/imported records.",
       "$ref": "#/$defs/id"
     },
     "variety": {
+      "description": "Legacy compatibility field for migrated/imported records.",
       "type": "string",
       "minLength": 1,
       "maxLength": 120
