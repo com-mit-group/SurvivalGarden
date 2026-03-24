@@ -3065,7 +3065,7 @@ function BatchesPage({
             cultivarId: cultivar.cultivarId,
             cropTypeId: cultivar.cropTypeId,
             label,
-            inputValue: `${label}${suffix}`,
+            inputValue: `${label}${suffix ? `${suffix}` : ''} · ${cultivar.cultivarId}`,
             name: cultivar.name,
             cropTypeName: cropNames[cultivar.cropTypeId] ?? '',
             scientificName: cropScientificNames[cultivar.cropTypeId] ?? '',
@@ -3126,31 +3126,42 @@ function BatchesPage({
       return null;
     }
 
-    const exactMatch = cultivarInputOptions.find((option) => {
-      const aliases = option.aliases.map((alias) => normalizeCropSearchValue(alias));
-      return (
-        normalizeCropSearchValue(option.cultivarId) === normalizedInput ||
-        normalizeCropSearchValue(option.inputValue) === normalizedInput ||
-        normalizeCropSearchValue(option.label) === normalizedInput ||
-        normalizeCropSearchValue(option.name) === normalizedInput ||
-        normalizeCropSearchValue(option.cropTypeName) === normalizedInput ||
-        normalizeCropSearchValue(option.scientificName) === normalizedInput ||
-        aliases.includes(normalizedInput)
-      );
-    });
+    const exactMatch = cultivarInputOptions.find((option) =>
+      normalizeCropSearchValue(option.cultivarId) === normalizedInput
+      || normalizeCropSearchValue(option.inputValue) === normalizedInput,
+    );
 
     if (exactMatch) {
       return exactMatch.cultivarId;
     }
 
-    const containsMatch = cultivarInputOptions.find((option) => {
-      const searchFields = [option.cultivarId, option.inputValue, option.label, option.name, option.cropTypeName, option.scientificName, ...option.aliases]
-        .map((value) => normalizeCropSearchValue(value))
-        .filter(Boolean);
-      return searchFields.some((field) => field.includes(normalizedInput) || normalizedInput.includes(field));
-    });
+    const byName = cultivarInputOptions.filter((option) => normalizeCropSearchValue(option.name) === normalizedInput);
+    if (byName.length === 1) {
+      const match = byName[0];
+      if (match) {
+        return match.cultivarId;
+      }
+    }
 
-    return containsMatch?.cultivarId ?? null;
+    const byLabel = cultivarInputOptions.filter((option) => normalizeCropSearchValue(option.label) === normalizedInput);
+    if (byLabel.length === 1) {
+      const match = byLabel[0];
+      if (match) {
+        return match.cultivarId;
+      }
+    }
+
+    const byAlias = cultivarInputOptions.filter((option) =>
+      option.aliases.some((alias) => normalizeCropSearchValue(alias) === normalizedInput),
+    );
+    if (byAlias.length === 1) {
+      const match = byAlias[0];
+      if (match) {
+        return match.cultivarId;
+      }
+    }
+
+    return null;
   }, [cultivarInputOptions]);
 
   const selectedCultivarId = useMemo(
