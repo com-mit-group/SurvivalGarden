@@ -427,6 +427,7 @@ describe('data boundary validation', () => {
   it('roundtrips vNext crop identity and batch count/confidence fields exactly', () => {
     const state = {
       ...validAppState,
+      cultivars: [],
       crops: [
         {
           ...validCrop,
