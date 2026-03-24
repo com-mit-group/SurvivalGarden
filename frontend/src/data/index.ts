@@ -550,6 +550,12 @@ const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
 
   const state = payload as Record<string, unknown>;
   const seedInventoryItems = Array.isArray(state.seedInventoryItems) ? state.seedInventoryItems : [];
+  const cropIds = new Set(
+    (Array.isArray(state.crops) ? state.crops : [])
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+      .map((entry) => (typeof entry.cropId === 'string' ? entry.cropId : null))
+      .filter((entry): entry is string => entry !== null),
+  );
   const existingCultivars = Array.isArray(state.cultivars) ? [...state.cultivars] : [];
   const usedCultivarIds = new Set(
     existingCultivars
@@ -559,7 +565,7 @@ const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
   );
   const nowIso = new Date().toISOString();
 
-  const getOrCreateCultivarId = (cropId: string, variety: string): string => {
+  const getOrCreateCultivarId = (cropId: string, variety: string): string | null => {
     const exactMatch = existingCultivars.find((entry) => {
       if (!entry || typeof entry !== 'object') {
         return false;
@@ -574,6 +580,10 @@ const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
 
     if (exactMatch && typeof exactMatch.cultivarId === 'string') {
       return exactMatch.cultivarId;
+    }
+
+    if (!cropIds.has(cropId)) {
+      return null;
     }
 
     const base = normalizeSeedInventoryCultivarIdPart(`${cropId}-${variety}`) || `seed-inventory-${Date.now()}`;
@@ -616,9 +626,14 @@ const migrateLegacySeedInventoryItems = (payload: unknown): unknown => {
       return typedItem;
     }
 
+    const cultivarId = getOrCreateCultivarId(cropId, variety);
+    if (!cultivarId) {
+      return typedItem;
+    }
+
     return {
       ...typedItem,
-      cultivarId: getOrCreateCultivarId(cropId, variety),
+      cultivarId,
     };
   });
 
