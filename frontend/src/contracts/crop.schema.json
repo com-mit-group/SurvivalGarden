@@ -1,73 +1,70 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://survivalgarden/contracts/crop.schema.json",
-  "title": "Crop (Cultivar)",
+  "title": "Crop Type",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "createdAt",
-    "updatedAt"
+    "updatedAt",
+    "speciesId"
   ],
   "allOf": [
     {
       "anyOf": [
         {
           "required": [
-            "cropId"
-          ]
-        },
-        {
-          "required": [
-            "id"
-          ]
-        }
-      ]
-    },
-    {
-      "anyOf": [
-        {
-          "required": [
-            "cultivar"
-          ]
-        },
-        {
-          "required": [
             "name"
-          ]
+          ],
+          "properties": {
+            "name": {}
+          }
         },
         {
           "required": [
             "commonName"
-          ]
+          ],
+          "properties": {
+            "commonName": {}
+          }
+        },
+        {
+          "required": [
+            "cultivar"
+          ],
+          "properties": {
+            "cultivar": {}
+          }
         }
       ]
     }
   ],
   "properties": {
     "cropId": {
-      "$ref": "#/$defs/id"
+      "$ref": "#/$defs/id",
+      "description": "Canonical identifier for this crop type record."
     },
     "name": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Display name for the cultivar/variety record."
+      "description": "Display name for the crop type record."
     },
     "cultivar": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Cultivar or variety name for this crop record."
+      "description": "Legacy migration alias for crop type naming; use name for crop type display labels."
     },
     "cultivarGroup": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Optional informational cultivar group label for crop-type taxonomy clarity."
+      "description": "Optional informational cultivar group label associated with this crop type."
     },
     "speciesId": {
       "$ref": "#/$defs/id",
-      "description": "Required reference to a top-level species record for this cultivar/crop."
+      "description": "Required reference to the parent species record for this crop type."
     },
     "species": {
       "type": "object",
@@ -118,7 +115,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 160,
-      "description": "Deprecated migration alias for species.scientificName."
+      "description": "Deprecated migration alias for species scientific naming fields; crop types do not own scientific taxonomy."
     },
     "taxonomy": {
       "type": "object",
@@ -218,7 +215,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Migration alias for the cultivar/variety display name."
+      "description": "Migration alias for the crop type display name."
     },
     "defaults": {
       "type": "object",
@@ -476,28 +473,6 @@
       "properties": {
         "id": {}
       }
-    }
-  ],
-  "allOf": [
-    {
-      "anyOf": [
-        {
-          "required": [
-            "name"
-          ],
-          "properties": {
-            "name": {}
-          }
-        },
-        {
-          "required": [
-            "commonName"
-          ],
-          "properties": {
-            "commonName": {}
-          }
-        }
-      ]
     }
   ]
 }
