@@ -4217,7 +4217,7 @@ function BatchesPage({
               list="batch-cultivar-options"
               value={formValues.cropInput}
               onChange={(event) => setFormValues((current) => ({ ...current, cropInput: event.target.value }))}
-              placeholder="Cultivar · Crop Type · Species · Cultivar ID"
+              placeholder="Cultivar · Crop Type · Species"
             />
             <datalist id="batch-cultivar-options">
               {cultivarInputOptions.map((cultivar) => (
