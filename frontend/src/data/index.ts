@@ -1294,7 +1294,7 @@ export const saveAppStateToIndexedDb = async (
 
     for (const segment of stateToPersist.segments ?? []) {
       for (const bed of segment.beds ?? []) {
-        const normalizedBed = { ...(bed as Record<string, unknown>) };
+        const normalizedBed = { ...(bed as unknown as Record<string, unknown>) };
         delete normalizedBed.x;
         delete normalizedBed.y;
         delete normalizedBed.width;
