@@ -6,8 +6,7 @@
   "additionalProperties": false,
   "required": [
     "createdAt",
-    "updatedAt",
-    "speciesId"
+    "updatedAt"
   ],
   "allOf": [
     {
