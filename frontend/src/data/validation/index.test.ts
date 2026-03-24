@@ -251,6 +251,7 @@ const validTask = {
 
 const validSeedInventoryItem = {
   seedInventoryItemId: 'seed-item-1',
+  cultivarId: 'cultivar-1',
   cropId: 'crop-1',
   variety: 'Nantes',
   quantity: 120,
@@ -266,6 +267,15 @@ const validAppState = {
   beds: [validBed],
   species: [validSpecies],
   crops: [validCrop],
+  cultivars: [
+    {
+      cultivarId: 'cultivar-1',
+      cropTypeId: 'crop-1',
+      name: 'Nantes',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+    },
+  ],
   cropPlans: [validCropPlan],
   batches: [validBatch],
   tasks: [],
@@ -417,6 +427,7 @@ describe('data boundary validation', () => {
   it('roundtrips vNext crop identity and batch count/confidence fields exactly', () => {
     const state = {
       ...validAppState,
+      cultivars: [],
       crops: [
         {
           ...validCrop,
@@ -1231,7 +1242,7 @@ describe('seed inventory repository boundary helpers', () => {
     ).toEqual(validSeedInventoryItem);
     expect(getSeedInventoryItemFromAppState(withSeedItem, 'missing-seed-item')).toBeNull();
 
-    expect(listSeedInventoryItemsFromAppState(withSeedItem, { filter: { cropId: 'crop-1' } })).toEqual([
+    expect(listSeedInventoryItemsFromAppState(withSeedItem, { filter: { cultivarId: 'cultivar-1' } })).toEqual([
       validSeedInventoryItem,
     ]);
     expect(

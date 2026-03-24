@@ -1788,8 +1788,6 @@ function CalendarPage() {
   );
 }
 
-const UNLINKED_CROP_ID = 'unlinked-seed-inventory-crop';
-
 function CultivarAdminPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -2230,14 +2228,15 @@ function CultivarAdminPage() {
 
 function SeedInventoryPage() {
   const [items, setItems] = useState<SeedInventoryItem[]>([]);
+  const [cultivarsById, setCultivarsById] = useState<Record<string, CultivarRecord>>({});
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
-  const [cropIds, setCropIds] = useState<string[]>([]);
+  const [speciesNames, setSpeciesNames] = useState<Record<string, string>>({});
+  const [cultivarIds, setCultivarIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
-    variety: '',
-    cropId: UNLINKED_CROP_ID,
+    cultivarId: '',
     quantity: '0',
     unit: 'seeds' as SeedInventoryItem['unit'],
     notes: '',
@@ -2248,17 +2247,29 @@ function SeedInventoryPage() {
 
     if (!appState) {
       setItems([]);
+      setCultivarsById({});
       setCropNames({});
-      setCropIds([]);
+      setSpeciesNames({});
+      setCultivarIds([]);
       setIsLoading(false);
       return;
     }
 
-    setItems(
-      listSeedInventoryItemsFromAppState(appState).sort((left, right) => left.variety.localeCompare(right.variety)),
-    );
+    const cultivars = getCultivarsFromAppState(appState);
+    const nextCultivarsById = Object.fromEntries(cultivars.map((cultivar) => [cultivar.cultivarId, cultivar]));
+    const speciesById = Object.fromEntries((appState.species ?? []).map((species) => [species.id, species]));
+    const getInventoryLabel = (item: SeedInventoryItem): string =>
+      nextCultivarsById[item.cultivarId]?.name ?? item.variety ?? item.cultivarId;
+
+    setItems(listSeedInventoryItemsFromAppState(appState).sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
+    setCultivarsById(nextCultivarsById);
     setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
-    setCropIds(appState.crops.map((crop) => crop.cropId).sort((left, right) => left.localeCompare(right)));
+    setSpeciesNames(
+      Object.fromEntries(
+        appState.crops.map((crop) => [crop.cropId, crop.speciesId ? (speciesById[crop.speciesId]?.commonName ?? speciesById[crop.speciesId]?.scientificName ?? '') : '']),
+      ),
+    );
+    setCultivarIds(cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
     setIsLoading(false);
   }, []);
 
@@ -2269,8 +2280,7 @@ function SeedInventoryPage() {
   const resetForm = () => {
     setEditingId(null);
     setFormValues({
-      variety: '',
-      cropId: UNLINKED_CROP_ID,
+      cultivarId: '',
       quantity: '0',
       unit: 'seeds',
       notes: '',
@@ -2279,8 +2289,8 @@ function SeedInventoryPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmedVariety = formValues.variety.trim();
-    if (!trimmedVariety) {
+    const trimmedCultivarId = formValues.cultivarId.trim();
+    if (!trimmedCultivarId) {
       return;
     }
 
@@ -2304,8 +2314,7 @@ function SeedInventoryPage() {
 
       const nextItem: SeedInventoryItem = {
         seedInventoryItemId: existing?.seedInventoryItemId ?? `seed-item-${crypto.randomUUID()}`,
-        cropId: formValues.cropId,
-        variety: trimmedVariety,
+        cultivarId: trimmedCultivarId,
         quantity: parsedQuantity,
         unit: formValues.unit,
         status: parsedQuantity === 0 ? 'depleted' : parsedQuantity <= 10 ? 'low' : 'available',
@@ -2352,24 +2361,28 @@ function SeedInventoryPage() {
         <Link to="/taxonomy/crop-types">Crop types</Link>
       </nav>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
+        <select
+          value={formValues.cultivarId}
+          onChange={(event) => setFormValues((current) => ({ ...current, cultivarId: event.target.value }))}
+          required
+        >
+          <option value="">Select cultivar</option>
+          {cultivarIds.map((cultivarId) => {
+            const cultivar = cultivarsById[cultivarId];
+            const cropTypeName = cultivar ? (cropNames[cultivar.cropTypeId] ?? cultivar.cropTypeId) : '';
+            return (
+              <option key={cultivarId} value={cultivarId}>
+                {cultivar ? `${cultivar.name} · ${cropTypeName}` : cultivarId}
+              </option>
+            );
+          })}
+        </select>
         <input
           type="text"
-          value={formValues.variety}
-          onChange={(event) => setFormValues((current) => ({ ...current, variety: event.target.value }))}
-          placeholder="Cultivar name"
-          required
+          value={formValues.notes}
+          onChange={(event) => setFormValues((current) => ({ ...current, notes: event.target.value }))}
+          placeholder="Notes"
         />
-        <select
-          value={formValues.cropId}
-          onChange={(event) => setFormValues((current) => ({ ...current, cropId: event.target.value }))}
-        >
-          <option value={UNLINKED_CROP_ID}>Unlinked crop type</option>
-          {cropIds.map((cropId) => (
-            <option key={cropId} value={cropId}>
-              {cropNames[cropId] ?? cropId}
-            </option>
-          ))}
-        </select>
         <input
           type="number"
           min="0"
@@ -2387,12 +2400,6 @@ function SeedInventoryPage() {
           <option value="g">g</option>
           <option value="packets">packets</option>
         </select>
-        <input
-          type="text"
-          value={formValues.notes}
-          onChange={(event) => setFormValues((current) => ({ ...current, notes: event.target.value }))}
-          placeholder="Notes"
-        />
         <button type="submit" disabled={savingId !== null}>
           {editingId ? 'Save item' : 'Add item'}
         </button>
@@ -2406,41 +2413,51 @@ function SeedInventoryPage() {
       {isLoading ? <p>Loading inventory…</p> : null}
       {!isLoading ? (
         <ul className="seed-inventory-list">
-          {items.map((item) => (
-            <li key={item.seedInventoryItemId} className="seed-inventory-row">
-              <div>
-                <p className="seed-inventory-primary">{item.variety}</p>
-                <p className="seed-inventory-meta">
-                  Crop type: {item.cropId === UNLINKED_CROP_ID ? 'Unlinked' : cropNames[item.cropId] ?? 'Unknown crop type'}
-                </p>
-                <p className="seed-inventory-meta">
-                  {item.quantity} {item.unit} • {item.status}
-                </p>
-                {item.notes ? <p className="seed-inventory-meta">{item.notes}</p> : null}
-              </div>
-              <div className="seed-inventory-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(item.seedInventoryItemId);
-                    setFormValues({
-                      variety: item.variety,
-                      cropId: item.cropId,
-                      quantity: String(item.quantity),
-                      unit: item.unit,
-                      notes: item.notes ?? '',
-                    });
-                  }}
-                  disabled={savingId !== null}
-                >
-                  Edit
-                </button>
-                <button type="button" onClick={() => void handleDelete(item.seedInventoryItemId)} disabled={savingId !== null}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
+          {items.map((item) => {
+            const cultivar = cultivarsById[item.cultivarId];
+            const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
+            const cropTypeName = cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type';
+            const speciesName = cropTypeId ? speciesNames[cropTypeId] : '';
+            const displayName = cultivar?.name ?? item.variety ?? item.cultivarId;
+
+            return (
+              <li key={item.seedInventoryItemId} className="seed-inventory-row">
+                <div>
+                  <p className="seed-inventory-primary">{displayName}</p>
+                  <p className="seed-inventory-meta">
+                    Crop type: {cropTypeName}
+                  </p>
+                  {speciesName ? (
+                    <p className="seed-inventory-meta">Species: {speciesName}</p>
+                  ) : null}
+                  <p className="seed-inventory-meta">
+                    {item.quantity} {item.unit} • {item.status}
+                  </p>
+                  {item.notes ? <p className="seed-inventory-meta">{item.notes}</p> : null}
+                </div>
+                <div className="seed-inventory-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(item.seedInventoryItemId);
+                      setFormValues({
+                        cultivarId: item.cultivarId,
+                        quantity: String(item.quantity),
+                        unit: item.unit,
+                        notes: item.notes ?? '',
+                      });
+                    }}
+                    disabled={savingId !== null}
+                  >
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => void handleDelete(item.seedInventoryItemId)} disabled={savingId !== null}>
+                    Delete
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       {!isLoading && items.length === 0 ? <p>No seed inventory items yet. Create cultivar records in Admin first, then track packets or saved seed here.</p> : null}

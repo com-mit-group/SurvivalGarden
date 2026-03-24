@@ -204,6 +204,7 @@ describe('AppState schema', () => {
       seedInventoryItems: [
         {
           seedInventoryItemId: 'seed_item_001',
+          cultivarId: 'cultivar_tomato_san_marzano',
           cropId: 'crop_tomato_san_marzano',
           variety: 'San Marzano',
           quantity: 120,

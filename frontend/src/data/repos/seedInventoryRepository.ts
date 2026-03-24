@@ -22,7 +22,7 @@ export const getSeedInventoryItemFromAppState = (
 
 export const listSeedInventoryItemsFromAppState = (
   appState: unknown,
-  query: ListQuery<Pick<SeedInventoryItem, 'cropId' | 'status'>> = {},
+  query: ListQuery<Pick<SeedInventoryItem, 'cultivarId' | 'status'>> = {},
 ): SeedInventoryItem[] => {
   const state = assertValid('appState', appState);
   const { filter } = query;
@@ -33,7 +33,7 @@ export const listSeedInventoryItemsFromAppState = (
         return true;
       }
 
-      if (filter.cropId && seedInventoryItem.cropId !== filter.cropId) {
+      if (filter.cultivarId && seedInventoryItem.cultivarId !== filter.cultivarId) {
         return false;
       }
 
