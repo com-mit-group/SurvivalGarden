@@ -382,7 +382,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
       payload: withSegments(
         {
           ...state,
-          beds: [],
+          beds: Array.isArray(state.beds) ? state.beds : [],
           segments: normalizedSegments,
         },
         false,
@@ -458,7 +458,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
 
   const nextState = {
     ...state,
-    beds: [],
+    beds: Array.isArray(state.beds) ? state.beds : [],
     paths: [],
     segments: [
       {
