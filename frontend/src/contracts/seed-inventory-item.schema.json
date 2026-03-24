@@ -14,11 +14,18 @@
   ],
   "anyOf": [
     {
+      "properties": {
+        "cultivarId": {}
+      },
       "required": [
         "cultivarId"
       ]
     },
     {
+      "properties": {
+        "cropId": {},
+        "variety": {}
+      },
       "required": [
         "cropId",
         "variety"
