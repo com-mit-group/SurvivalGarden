@@ -6,12 +6,24 @@
   "additionalProperties": false,
   "required": [
     "seedInventoryItemId",
-    "cultivarId",
     "quantity",
     "unit",
     "status",
     "createdAt",
     "updatedAt"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "cultivarId"
+      ]
+    },
+    {
+      "required": [
+        "cropId",
+        "variety"
+      ]
+    }
   ],
   "properties": {
     "seedInventoryItemId": {
