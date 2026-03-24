@@ -2496,7 +2496,7 @@ const getInitialBatchLifecycleError = (reason?: string): string | null => {
   return null;
 };
 
-const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string }>): Record<string, string> => {
+const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string; message: string }>): Record<string, string> => {
   const issueErrors: Record<string, string> = {};
 
   for (const issue of issues) {
@@ -2519,6 +2519,15 @@ const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string }>): 
   }
 
   return issueErrors;
+};
+
+const buildBatchValidationIssueSummary = (issues: Array<{ path: string; message: string }>): string => {
+  const details = issues.map((issue) => {
+    const field = issue.path.split('/').filter(Boolean).pop() ?? 'unknown';
+    return `${field}: ${issue.message}`;
+  });
+
+  return `Please fix the highlighted fields. ${details.join(' | ')}`;
 };
 
 const resolveInitialBatchMethod = (value: string): InitialBatchMethodKey | null => {
@@ -4048,10 +4057,9 @@ function BatchesPage({
         ...(plantCountAliveConfidence !== null ? { plantCountAliveConfidence } : {}),
       };
 
-      const nextBatch: Batch = {
+      const nextBatch = {
         batchId,
         cultivarId: resolvedCultivarId,
-        cropId: resolvedCultivarId,
         cropTypeId: resolvedCultivar.cropTypeId,
         ...(existingBatch?.variety ? { variety: existingBatch.variety } : {}),
         startedAt,
@@ -4074,7 +4082,7 @@ function BatchesPage({
         ...(seedCountGerminated !== null ? { seedCountGerminated } : {}),
         ...(plantCountAlive !== null ? { plantCountAlive } : {}),
         ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
-      };
+      } as Batch;
 
       const nextState = upsertBatchInAppState(appState, nextBatch);
       await saveAppStateToIndexedDb(nextState);
@@ -4092,7 +4100,7 @@ function BatchesPage({
     } catch (error) {
       if (error instanceof SchemaValidationError && error.issues.length > 0) {
         setFormErrors(mapBatchValidationIssuesToFormErrors(error.issues));
-        setSaveMessage('Please fix the highlighted fields.');
+        setSaveMessage(buildBatchValidationIssueSummary(error.issues));
         return;
       }
 
