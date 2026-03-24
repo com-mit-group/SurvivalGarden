@@ -3137,19 +3137,28 @@ function BatchesPage({
 
     const byName = cultivarInputOptions.filter((option) => normalizeCropSearchValue(option.name) === normalizedInput);
     if (byName.length === 1) {
-      return byName[0].cultivarId;
+      const match = byName[0];
+      if (match) {
+        return match.cultivarId;
+      }
     }
 
     const byLabel = cultivarInputOptions.filter((option) => normalizeCropSearchValue(option.label) === normalizedInput);
     if (byLabel.length === 1) {
-      return byLabel[0].cultivarId;
+      const match = byLabel[0];
+      if (match) {
+        return match.cultivarId;
+      }
     }
 
     const byAlias = cultivarInputOptions.filter((option) =>
       option.aliases.some((alias) => normalizeCropSearchValue(alias) === normalizedInput),
     );
     if (byAlias.length === 1) {
-      return byAlias[0].cultivarId;
+      const match = byAlias[0];
+      if (match) {
+        return match.cultivarId;
+      }
     }
 
     return null;
