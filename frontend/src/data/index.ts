@@ -400,7 +400,9 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     const y = toFiniteNumber(bed.y) ?? index;
     const width = getWidthMeters(bed);
     const height = getLengthMeters(bed);
-    const { widthM, lengthM, ...rest } = bed;
+    const rest = { ...bed };
+    delete rest.widthM;
+    delete rest.lengthM;
     return {
       ...rest,
       segmentId: DEFAULT_SEGMENT_ID,
