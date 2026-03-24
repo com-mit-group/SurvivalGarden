@@ -1129,20 +1129,15 @@ function BedDetailPage() {
 
       setIsDeletingBed(true);
 
-      let wasRemovedFromSegment = false;
       const nextSegments = (appState.segments ?? []).map((segment) => {
         const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
-        if (nextBeds.length !== segment.beds.length) {
-          wasRemovedFromSegment = true;
-        }
-
         return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
       });
 
       const nextState = {
         ...appState,
         segments: nextSegments,
-        beds: wasRemovedFromSegment ? appState.beds : appState.beds.filter((candidateBed) => candidateBed.bedId !== bedId),
+        beds: [],
       };
 
       await saveAppStateToIndexedDb(nextState);
@@ -1455,7 +1450,7 @@ function CalendarPage() {
       }
 
       setTasks(listTasksFromAppState(appState));
-      setBedNames(Object.fromEntries(appState.beds.map((bed) => [bed.bedId, bed.name])));
+      setBedNames(Object.fromEntries(listBedsFromAppState(appState).map((bed) => [bed.bedId, bed.name])));
       setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
@@ -6235,7 +6230,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         species: appState?.species?.length ?? 0,
         crops: appState?.crops.length ?? 0,
         segments: appState?.segments?.length ?? 0,
-        beds: appState?.beds.length ?? 0,
+        beds: appState ? listBedsFromAppState(appState).length : 0,
         paths: (appState?.segments ?? []).reduce((total, segment) => total + segment.paths.length, 0),
         cropPlans: appState?.cropPlans.length ?? 0,
         batches: appState?.batches.length ?? 0,
