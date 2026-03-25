@@ -6444,20 +6444,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
         try {
           const normalizedCandidate = normalizeBatchCandidate(candidate);
-          const validatedSingleBatch = parseImportedAppState(JSON.stringify({
-            schemaVersion: 1,
-            beds: [],
-            crops: [],
-            cropPlans: [],
-            batches: [normalizedCandidate],
-            seedInventoryItems: [],
-            tasks: [],
-            settings: importValidationSettings,
-          }));
-          const validatedBatch = validatedSingleBatch.batches[0];
-          if (validatedBatch) {
-            validBatches.push(validatedBatch);
-          }
+          validBatches.push(assertValid('batch', normalizedCandidate));
         } catch (validationError) {
           validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
         }
@@ -7352,20 +7339,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
           try {
             const normalizedCandidate = normalizeBatchCandidate(candidate);
-            const validatedSingleBatch = parseImportedAppState(JSON.stringify({
-              schemaVersion: 1,
-              beds: [],
-              crops: [],
-              cropPlans: [],
-              batches: [normalizedCandidate],
-              seedInventoryItems: [],
-              tasks: [],
-              settings: importValidationSettings,
-            }));
-            const validatedBatch = validatedSingleBatch.batches[0];
-            if (validatedBatch) {
-              validBatches.push(validatedBatch);
-            }
+            validBatches.push(assertValid('batch', normalizedCandidate));
           } catch (validationError) {
             validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
           }
