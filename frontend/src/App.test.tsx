@@ -829,7 +829,10 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining(validOnlyState), { mode: 'merge' });
+      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
+        ...validOnlyState,
+        batches: expect.arrayContaining([expect.objectContaining({ batchId: 'batch-1' })]),
+      }), { mode: 'merge' });
     });
   });
 
