@@ -6442,7 +6442,20 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             : `index-${index}`;
 
         try {
-          validBatches.push(assertValid('batch', candidate));
+          const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+            schemaVersion: 1,
+            beds: [],
+            crops: [],
+            cropPlans: [],
+            batches: [candidate],
+            seedInventoryItems: [],
+            tasks: [],
+            settings: importValidationSettings,
+          }));
+          const validatedBatch = validatedSingleBatch.batches[0];
+          if (validatedBatch) {
+            validBatches.push(validatedBatch);
+          }
         } catch (validationError) {
           validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
         }
@@ -6454,7 +6467,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         return;
       }
 
-      const validatedBatchImportState = {
+      const validatedBatchImportState = parseImportedAppState(JSON.stringify({
         schemaVersion: 1,
         beds: [],
         crops: [],
@@ -6463,7 +6476,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         seedInventoryItems: [],
         tasks: [],
         settings: importValidationSettings,
-      };
+      }));
       const previewItems = validatedBatchImportState.batches.map((batch) => ({
         batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
         seedCount: batch.seedCountPlanned ?? 0,
@@ -6747,7 +6760,19 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         throw new Error('Segment import payload must be an object with a segments array.');
       }
 
-      const validatedSegments = rawParsed.segments.map((candidate) => assertValid('segment', candidate));
+      const validatedSingleSegmentState = parseImportedAppState(JSON.stringify({
+        schemaVersion: 1,
+        segments: rawParsed.segments,
+        beds: [],
+        crops: [],
+        cropPlans: [],
+        batches: [],
+        seedInventoryItems: [],
+        tasks: [],
+        settings: importValidationSettings,
+      }));
+
+      const validatedSegments = validatedSingleSegmentState.segments ?? [];
       const existingState = await loadAppStateFromIndexedDb();
       const existingSegments = existingState?.segments ?? [];
       const existingById = new Map(existingSegments.map((segment) => [segment.segmentId, segment]));
@@ -7324,7 +7349,20 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               : `index-${index}`;
 
           try {
-            validBatches.push(assertValid('batch', candidate));
+            const validatedSingleBatch = parseImportedAppState(JSON.stringify({
+              schemaVersion: 1,
+              beds: [],
+              crops: [],
+              cropPlans: [],
+              batches: [candidate],
+              seedInventoryItems: [],
+              tasks: [],
+              settings: importValidationSettings,
+            }));
+            const validatedBatch = validatedSingleBatch.batches[0];
+            if (validatedBatch) {
+              validBatches.push(validatedBatch);
+            }
           } catch (validationError) {
             validationErrors.push(...buildBatchValidationMessages(validationError, batchId, index));
           }
@@ -7334,7 +7372,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
           setImportErrors(validationErrors);
         } else {
-          const validatedBatchImportState = {
+          const validatedBatchImportState = parseImportedAppState(JSON.stringify({
             schemaVersion: 1,
             beds: [],
             crops: [],
@@ -7343,7 +7381,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             seedInventoryItems: [],
             tasks: [],
             settings: importValidationSettings,
-          };
+          }));
           const previewBatchIds = validatedBatchImportState.batches
             .map((batch) => ({
               batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
@@ -7439,7 +7477,18 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           throw new Error('Deep-link payload must decode to an object with a segments array.');
         }
 
-        const validatedSegments = rawParsed.segments.map((candidate) => assertValid('segment', candidate));
+        const validatedSegmentState = parseImportedAppState(JSON.stringify({
+          schemaVersion: 1,
+          segments: rawParsed.segments,
+          beds: [],
+          crops: [],
+          cropPlans: [],
+          batches: [],
+          seedInventoryItems: [],
+          tasks: [],
+          settings: importValidationSettings,
+        }));
+        const validatedSegments = validatedSegmentState.segments ?? [];
         const existingState = await loadAppStateFromIndexedDb();
         const existingById = new Map((existingState?.segments ?? []).map((segment) => [segment.segmentId, segment]));
 
