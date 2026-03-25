@@ -60,6 +60,9 @@ export type ValidationIssue = {
   path: string;
   message: string;
   keyword: string;
+  params?: {
+    additionalProperty?: string;
+  };
 };
 
 export type ValidationResult<T extends SchemaName> =
@@ -949,12 +952,20 @@ const validators: { [K in SchemaName]: ValidateFunction<SchemaTypeMap[K]> } = {
   task: ajv.compile<SchemaTypeMap['task']>(taskSchema),
 };
 
-const normalizeError = (schemaName: SchemaName, error: ErrorObject): ValidationIssue => ({
-  schemaName,
-  path: error.instancePath || '/',
-  message: error.message || 'Invalid value',
-  keyword: error.keyword,
-});
+const normalizeError = (schemaName: SchemaName, error: ErrorObject): ValidationIssue => {
+  const additionalProperty =
+    error.keyword === 'additionalProperties' && isObjectRecord(error.params)
+      ? asString(error.params.additionalProperty)
+      : undefined;
+
+  return {
+    schemaName,
+    path: error.instancePath || '/',
+    message: error.message || 'Invalid value',
+    keyword: error.keyword,
+    ...(additionalProperty ? { params: { additionalProperty } } : {}),
+  };
+};
 
 export const assertValid = <T extends SchemaName>(
   schemaName: T,
