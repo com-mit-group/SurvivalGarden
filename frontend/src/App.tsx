@@ -6183,6 +6183,18 @@ export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: R
 }
 
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
+  const importValidationSettings: AppState['settings'] = {
+    settingsId: 'settings-default',
+    locale: 'en-US',
+    timezone: 'Europe/Berlin',
+    units: {
+      temperature: 'celsius',
+      yield: 'metric',
+    },
+    createdAt: '1970-01-01T00:00:00Z',
+    updatedAt: '1970-01-01T00:00:00Z',
+  };
+
   const location = useLocation();
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
@@ -6438,7 +6450,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             batches: [candidate],
             seedInventoryItems: [],
             tasks: [],
-            settings: createEmptyAppState(null).settings,
+            settings: importValidationSettings,
           }));
           validBatches.push(validatedSingleBatch.batches[0]);
         } catch (validationError) {
@@ -6460,7 +6472,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         batches: validBatches,
         seedInventoryItems: [],
         tasks: [],
-        settings: createEmptyAppState(null).settings,
+        settings: importValidationSettings,
       }));
       const previewItems = validatedBatchImportState.batches.map((batch) => ({
         batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
@@ -6535,7 +6547,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             batches: [],
             seedInventoryItems: [],
             tasks: [],
-            settings: createEmptyAppState(null).settings,
+            settings: importValidationSettings,
           }));
           const validatedCrop = validatedSingleCrop.crops[0];
           if (validatedCrop) {
@@ -6624,7 +6636,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             batches: [],
             seedInventoryItems: [],
             tasks: [],
-            settings: createEmptyAppState(null).settings,
+            settings: importValidationSettings,
           }));
           const validatedSpecies = validatedSingleSpecies.species?.[0];
           if (validatedSpecies) {
@@ -6712,7 +6724,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             batches: [],
             seedInventoryItems: [],
             tasks: [],
-            settings: createEmptyAppState(null).settings,
+            settings: importValidationSettings,
           }));
           const validatedPlan = validatedSinglePlan.cropPlans[0];
           if (validatedPlan) {
@@ -6794,7 +6806,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         batches: [],
         seedInventoryItems: [],
         tasks: [],
-        settings: createEmptyAppState(null).settings,
+        settings: importValidationSettings,
       }));
 
       const validatedSegments = validatedSingleSegmentState.segments ?? [];
@@ -7382,7 +7394,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               batches: [candidate],
               seedInventoryItems: [],
               tasks: [],
-              settings: createEmptyAppState(null).settings,
+              settings: importValidationSettings,
             }));
             validBatches.push(validatedSingleBatch.batches[0]);
           } catch (validationError) {
@@ -7402,7 +7414,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             batches: validBatches,
             seedInventoryItems: [],
             tasks: [],
-            settings: createEmptyAppState(null).settings,
+            settings: importValidationSettings,
           }));
           const previewBatchIds = validatedBatchImportState.batches
             .map((batch) => ({
@@ -7433,7 +7445,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               batches: [],
               seedInventoryItems: [],
               tasks: [],
-              settings: createEmptyAppState(null).settings,
+              settings: importValidationSettings,
             }));
             const validatedCrop = validatedSingleCrop.crops[0];
             if (validatedCrop) {
@@ -7473,7 +7485,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               batches: [],
               seedInventoryItems: [],
               tasks: [],
-              settings: createEmptyAppState(null).settings,
+              settings: importValidationSettings,
             }));
             const validatedSpecies = validatedSingleSpecies.species?.[0];
             if (validatedSpecies) {
@@ -7512,7 +7524,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               batches: [],
               seedInventoryItems: [],
               tasks: [],
-              settings: createEmptyAppState(null).settings,
+              settings: importValidationSettings,
             }));
             const validatedPlan = validatedSinglePlan.cropPlans[0];
             if (validatedPlan) {
@@ -7548,7 +7560,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           batches: [],
           seedInventoryItems: [],
           tasks: [],
-          settings: createEmptyAppState(null).settings,
+          settings: importValidationSettings,
         }));
         const validatedSegments = validatedSegmentState.segments ?? [];
         const existingState = await loadAppStateFromIndexedDb();
