@@ -31,6 +31,7 @@ import {
   removeBatchFromBed,
   assertValid,
 } from './data';
+import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { applyStageEvent, canTransition, inferBatchStartMethod } from './domain';
 
 type CultivarRecord = {
@@ -6442,12 +6443,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             : `index-${index}`;
 
         try {
+          const normalizedCandidate = normalizeBatchCandidate(candidate);
           const validatedSingleBatch = parseImportedAppState(JSON.stringify({
             schemaVersion: 1,
             beds: [],
             crops: [],
             cropPlans: [],
-            batches: [candidate],
+            batches: [normalizedCandidate],
             seedInventoryItems: [],
             tasks: [],
             settings: importValidationSettings,
@@ -7349,12 +7351,13 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
               : `index-${index}`;
 
           try {
+            const normalizedCandidate = normalizeBatchCandidate(candidate);
             const validatedSingleBatch = parseImportedAppState(JSON.stringify({
               schemaVersion: 1,
               beds: [],
               crops: [],
               cropPlans: [],
-              batches: [candidate],
+              batches: [normalizedCandidate],
               seedInventoryItems: [],
               tasks: [],
               settings: importValidationSettings,
