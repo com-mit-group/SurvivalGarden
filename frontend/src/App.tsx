@@ -28,10 +28,10 @@ import {
   getActiveBedAssignment,
   assignBatchToBed,
   moveBatch,
-  normalizeBatchCandidate,
   removeBatchFromBed,
   assertValid,
 } from './data';
+import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { applyStageEvent, canTransition, inferBatchStartMethod } from './domain';
 
 type CultivarRecord = {
