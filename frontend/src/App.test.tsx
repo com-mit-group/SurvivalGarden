@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import App, { RecoveryScreen } from './App';
 import {
+  assertValid,
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
   parseImportedAppState,
@@ -524,7 +525,6 @@ describe('App', () => {
   });
 
   it('previews batch json with partial success and imports only after confirmation', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
     const validationError = new SchemaValidationError('batch', [
       {
         schemaName: 'batch',
@@ -533,14 +533,17 @@ describe('App', () => {
         message: "must have required property 'startedAt'",
       },
     ]);
-    vi.mocked(parseImportedAppState).mockImplementation((payload: string) => {
-      if (payload.includes('"batch-invalid"')) {
+    vi.mocked(assertValid).mockImplementation((schemaName: string, value: unknown) => {
+      if (
+        schemaName === 'batch'
+        && value
+        && typeof value === 'object'
+        && 'batchId' in value
+        && value.batchId === 'batch-invalid'
+      ) {
         throw validationError;
       }
-      if (payload.includes('"batches":[{"batchId":"batch-1"},{"batchId":"batch-invalid"}]')) {
-        return validOnlyState as never;
-      }
-      return validOnlyState as never;
+      return value as never;
     });
     vi.mocked(saveAppStateToIndexedDb).mockResolvedValue({
       beds: { added: 0, updated: 0, unchanged: 0 },
@@ -575,7 +578,7 @@ describe('App', () => {
       expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(validOnlyState, { mode: 'merge' });
+    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Import Preview')).not.toBeInTheDocument();
@@ -803,21 +806,8 @@ describe('App', () => {
   });
 
   it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }], seedInventoryItems: [], tasks: [] };
-    vi.mocked(parseImportedAppState).mockImplementation((payload: string) => {
-      if (payload.includes('"batches":[{"batchId":"batch-1"}]')) {
-        return validOnlyState as never;
-      }
-      return {
-        schemaVersion: 1,
-        beds: [],
-        crops: [],
-        cropPlans: [],
-        batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }],
-        seedInventoryItems: [],
-        tasks: [],
-      } as never;
-    });
+    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
+    vi.mocked(assertValid).mockImplementation((_schemaName: string, value: unknown) => value as never);
 
     const deepLinkPayload = btoa(JSON.stringify({
       batches: [{ batchId: 'batch-1', startedAt: '2026-01-01' }],
