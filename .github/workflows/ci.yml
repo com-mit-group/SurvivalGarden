@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   frontend:
@@ -43,18 +45,24 @@ jobs:
 
   backend:
     name: backend
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
-      - name: Resolve backend target
+      - name: Resolve solution or project target
         id: target
         shell: bash
         run: |
@@ -65,26 +73,28 @@ jobs:
             target="$(git ls-files '*.csproj' | head -n 1)"
           fi
 
-          if [ -n "$target" ]; then
-            echo "target=$target" >> "$GITHUB_OUTPUT"
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "target=" >> "$GITHUB_OUTPUT"
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$target" ]; then
+            echo "No .sln or .csproj found for backend CI." >&2
+            exit 1
           fi
 
-      - name: No backend project found
-        if: ${{ steps.target.outputs.should_run != 'true' }}
-        run: echo "No .sln or .csproj found skipping backend CI for now."
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Using backend target: $target"
 
-      - name: Restore
-        if: ${{ steps.target.outputs.should_run == 'true' }}
+      - name: Restore Dependencies
         run: dotnet restore "${{ steps.target.outputs.target }}"
 
       - name: Build
-        if: ${{ steps.target.outputs.should_run == 'true' }}
-        run: dotnet build --no-restore "${{ steps.target.outputs.target }}"
+        id: build
+        run: dotnet build -c Debug --no-restore "${{ steps.target.outputs.target }}"
 
       - name: Test
-        if: ${{ steps.target.outputs.should_run == 'true' }}
-        run: dotnet test --no-build "${{ steps.target.outputs.target }}"
+        run: dotnet test --logger "trx" --no-build -c Debug --verbosity normal "${{ steps.target.outputs.target }}"
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action/windows@v2
+        if: ${{ steps.build.outcome == 'success' }}
+        with:
+          files: |
+            ./**/TestResults/*.trx
+          check_name: "Backend Test Results"
