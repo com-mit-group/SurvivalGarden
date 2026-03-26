@@ -40,3 +40,51 @@ jobs:
 
       - name: Test
         run: pnpm --filter frontend test
+
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve backend target
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target="$(git ls-files '*.sln' | head -n 1)"
+          if [ -z "$target" ]; then
+            target="$(git ls-files '*.csproj' | head -n 1)"
+          fi
+
+          if [ -n "$target" ]; then
+            echo "target=$target" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=" >> "$GITHUB_OUTPUT"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: No backend project found
+        if: ${{ steps.target.outputs.should_run != 'true' }}
+        run: echo "No .sln or .csproj found skipping backend CI for now."
+
+      - name: Restore
+        if: ${{ steps.target.outputs.should_run == 'true' }}
+        run: dotnet restore "${{ steps.target.outputs.target }}"
+
+      - name: Build
+        if: ${{ steps.target.outputs.should_run == 'true' }}
+        run: dotnet build --no-restore "${{ steps.target.outputs.target }}"
+
+      - name: Test
+        if: ${{ steps.target.outputs.should_run == 'true' }}
+        run: dotnet test --no-build "${{ steps.target.outputs.target }}"
