@@ -313,6 +313,33 @@ describe('batch normalization pipeline', () => {
     expect(report.warnings.map((warning) => warning.code)).toContain('legacy_propagation_heuristic');
   });
 
+  it('drops unknown stage event fields during normalization', () => {
+    const { batches, report } = normalizeBatchesWithReport([
+      {
+        batchId: 'legacy-stage-extra-1',
+        cropId: 'crop-1',
+        stage: 'sowing',
+        stageEvents: [
+          {
+            stage: 'sowing',
+            date: '2026-01-01T00:00:00Z',
+            unexpectedLegacyField: 'should-be-removed',
+          },
+        ],
+        assignments: [],
+      },
+    ]);
+
+    expect(report.invalidRecords).toEqual([]);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.stageEvents[0]).toMatchObject({
+      stage: 'sowing',
+      date: '2026-01-01T00:00:00Z',
+      occurredAt: '2026-01-01T00:00:00Z',
+    });
+    expect(batches[0]?.stageEvents[0]).not.toHaveProperty('unexpectedLegacyField');
+  });
+
 
   it('normalizes seed/regrow/tuber/cutting examples with non-seed seed-count omission', () => {
     const input = [
