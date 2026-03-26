@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>SurvivalGarden.Api</AssemblyName>
+    <RootNamespace>SurvivalGarden.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
+    <ProjectReference Include="../SurvivalGarden.Persistence/SurvivalGarden.Persistence.csproj" />
+    <ProjectReference Include="../SurvivalGarden.Domain/SurvivalGarden.Domain.csproj" />
+  </ItemGroup>
+</Project>

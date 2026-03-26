@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>SurvivalGarden.Domain</AssemblyName>
+    <RootNamespace>SurvivalGarden.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>SurvivalGarden.Persistence</AssemblyName>
+    <RootNamespace>SurvivalGarden.Persistence</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
+    <ProjectReference Include="../SurvivalGarden.Domain/SurvivalGarden.Domain.csproj" />
+  </ItemGroup>
+</Project>
