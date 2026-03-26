@@ -1,0 +1,13 @@
+{
+  "cropId": "crop_type_tomato_plum",
+  "name": "Plum Tomato",
+  "cultivarGroup": "Paste",
+  "speciesId": "species_tomato",
+  "aliases": [
+    "Processing Tomato"
+  ],
+  "isUserDefined": true,
+  "category": "fruiting",
+  "createdAt": "2026-01-10T09:00:00Z",
+  "updatedAt": "2026-02-01T09:00:00Z"
+}

@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/crop-plan.schema.json",
+  "title": "CropPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "planId",
+    "bedId",
+    "cropId",
+    "seasonYear",
+    "plannedWindows",
+    "expectedYield"
+  ],
+  "properties": {
+    "planId": {
+      "$ref": "#/$defs/id"
+    },
+    "segmentId": {
+      "$ref": "#/$defs/id"
+    },
+    "cropId": {
+      "$ref": "#/$defs/id"
+    },
+    "bedId": {
+      "$ref": "#/$defs/id"
+    },
+    "seasonYear": {
+      "type": "integer",
+      "minimum": 2000,
+      "maximum": 2100
+    },
+    "plannedWindows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sowing",
+        "harvest"
+      ],
+      "properties": {
+        "sowing": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/windowRange"
+          }
+        },
+        "transplant": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/windowRange"
+          }
+        },
+        "harvest": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/windowRange"
+          }
+        }
+      }
+    },
+    "expectedYield": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "unit"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "g",
+            "kg",
+            "pieces"
+          ]
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "placements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/placement"
+      }
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Meters east from the bed NW corner."
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Meters south from the bed NW corner."
+        }
+      }
+    },
+    "placement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "points"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "points"
+            },
+            "points": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/point"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "formula"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "formula"
+            },
+            "formula": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "origin",
+                    "dx",
+                    "dy",
+                    "rows",
+                    "cols"
+                  ],
+                  "properties": {
+                    "kind": { "const": "grid" },
+                    "origin": { "$ref": "#/$defs/point" },
+                    "dx": { "type": "number", "exclusiveMinimum": 0 },
+                    "dy": { "type": "number", "exclusiveMinimum": 0 },
+                    "rows": { "type": "integer", "minimum": 1, "maximum": 500 },
+                    "cols": { "type": "integer", "minimum": 1, "maximum": 500 }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "origin",
+                    "dx",
+                    "count"
+                  ],
+                  "properties": {
+                    "kind": { "const": "row" },
+                    "origin": { "$ref": "#/$defs/point" },
+                    "dx": { "type": "number", "exclusiveMinimum": 0 },
+                    "count": { "type": "integer", "minimum": 1, "maximum": 500 }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "origin",
+                    "dx",
+                    "dy",
+                    "rows",
+                    "cols",
+                    "staggerX"
+                  ],
+                  "properties": {
+                    "kind": { "const": "staggered_grid" },
+                    "origin": { "$ref": "#/$defs/point" },
+                    "dx": { "type": "number", "exclusiveMinimum": 0 },
+                    "dy": { "type": "number", "exclusiveMinimum": 0 },
+                    "rows": { "type": "integer", "minimum": 1, "maximum": 500 },
+                    "cols": { "type": "integer", "minimum": 1, "maximum": 500 },
+                    "staggerX": { "type": "number" }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "start",
+                    "end",
+                    "count"
+                  ],
+                  "properties": {
+                    "kind": { "const": "line" },
+                    "start": { "$ref": "#/$defs/point" },
+                    "end": { "$ref": "#/$defs/point" },
+                    "count": { "type": "integer", "minimum": 2, "maximum": 500 }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "origin",
+                    "dx",
+                    "dy",
+                    "count"
+                  ],
+                  "properties": {
+                    "kind": { "const": "repeated_offset" },
+                    "origin": { "$ref": "#/$defs/point" },
+                    "dx": { "type": "number" },
+                    "dy": { "type": "number" },
+                    "count": { "type": "integer", "minimum": 1, "maximum": 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "windowRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startMonth",
+        "startWeek",
+        "endMonth",
+        "endWeek"
+      ],
+      "properties": {
+        "startMonth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "startWeek": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "endMonth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "endWeek": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    }
+  }
+}

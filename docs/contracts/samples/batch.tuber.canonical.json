@@ -1,0 +1,42 @@
+{
+  "batchId": "batch_potato_tuber_2026",
+  "cropId": "crop_potato_bintje",
+  "startedAt": "2026-03-22T09:15:00Z",
+  "propagationType": "tuber",
+  "startQuantity": {
+    "count": 12,
+    "unit": "seed_tubers"
+  },
+  "plantCountAlive": 11,
+  "stage": "sprouting",
+  "currentStage": "sprouting",
+  "stageEvents": [
+    {
+      "stage": "planted",
+      "occurredAt": "2026-03-22T09:15:00Z",
+      "method": "trench",
+      "meta": {
+        "confidence": "exact"
+      }
+    },
+    {
+      "stage": "sprouting",
+      "occurredAt": "2026-04-08T09:15:00Z",
+      "meta": {
+        "confidence": "estimated"
+      }
+    }
+  ],
+  "bedAssignments": [
+    {
+      "bedId": "bed_root_001",
+      "assignedAt": "2026-03-22T09:15:00Z"
+    }
+  ],
+  "assignments": [
+    {
+      "bedId": "bed_root_001",
+      "assignedAt": "2026-03-22T09:15:00Z"
+    }
+  ]
+}
