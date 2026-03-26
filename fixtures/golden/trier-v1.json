@@ -1,0 +1,1021 @@
+{
+  "batches": [],
+  "beds": [
+    {
+      "bedId": "bed_001",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 1",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_002",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 2",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_003",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 3",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_004",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 4",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_005",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 5",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_006",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 6",
+      "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_007",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 7",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "bedId": "bed_008",
+      "createdAt": "2026-01-05T00:00:00Z",
+      "gardenId": "garden_trier_001",
+      "name": "Bed 8",
+      "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+      "type": "vegetable_bed",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    }
+  ],
+  "cropPlans": [
+    {
+      "bedId": "bed_001",
+      "cropId": "crop_type_potato",
+      "expectedYield": {
+        "amount": 22,
+        "unit": "kg"
+      },
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~1.2 kg/m²) for planning only.",
+      "planId": "plan_001",
+      "plannedWindows": {
+        "harvest": [
+          {
+            "endMonth": 9,
+            "endWeek": 4,
+            "startMonth": 7,
+            "startWeek": 1
+          }
+        ],
+        "sowing": [
+          {
+            "endMonth": 4,
+            "endWeek": 4,
+            "startMonth": 3,
+            "startWeek": 2
+          }
+        ]
+      },
+      "seasonYear": 2026
+    },
+    {
+      "bedId": "bed_002",
+      "cropId": "crop_type_beans",
+      "expectedYield": {
+        "amount": 8,
+        "unit": "kg"
+      },
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.45 kg/m² edible beans) for planning only.",
+      "planId": "plan_002",
+      "plannedWindows": {
+        "harvest": [
+          {
+            "endMonth": 10,
+            "endWeek": 2,
+            "startMonth": 7,
+            "startWeek": 2
+          }
+        ],
+        "sowing": [
+          {
+            "endMonth": 6,
+            "endWeek": 3,
+            "startMonth": 5,
+            "startWeek": 1
+          }
+        ]
+      },
+      "seasonYear": 2026
+    },
+    {
+      "bedId": "bed_003",
+      "cropId": "crop_type_pea",
+      "expectedYield": {
+        "amount": 6,
+        "unit": "kg"
+      },
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.35 kg/m² shelled peas) for planning only.",
+      "planId": "plan_003",
+      "plannedWindows": {
+        "harvest": [
+          {
+            "endMonth": 8,
+            "endWeek": 1,
+            "startMonth": 6,
+            "startWeek": 1
+          }
+        ],
+        "sowing": [
+          {
+            "endMonth": 4,
+            "endWeek": 3,
+            "startMonth": 3,
+            "startWeek": 1
+          }
+        ]
+      },
+      "seasonYear": 2026
+    },
+    {
+      "bedId": "bed_004",
+      "cropId": "crop_type_carrot",
+      "expectedYield": {
+        "amount": 12,
+        "unit": "kg"
+      },
+      "notes": "Placeholder estimate: conservative staple-yield assumption (~0.7 kg/m² carrots) for planning only.",
+      "planId": "plan_004",
+      "plannedWindows": {
+        "harvest": [
+          {
+            "endMonth": 11,
+            "endWeek": 2,
+            "startMonth": 6,
+            "startWeek": 3
+          }
+        ],
+        "sowing": [
+          {
+            "endMonth": 6,
+            "endWeek": 2,
+            "startMonth": 3,
+            "startWeek": 3
+          }
+        ]
+      },
+      "seasonYear": 2026
+    }
+  ],
+  "crops": [
+    {
+      "category": "root",
+      "companionsAvoid": [
+        "crop_type_tomato"
+      ],
+      "companionsGood": [
+        "crop_type_beans",
+        "crop_type_pea"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_potato",
+      "name": "Potato",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g edible portion.",
+          "nutrient": "kcal",
+          "source": "USDA",
+          "unit": "kcal",
+          "value": 77
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 9,
+              "endWeek": 4,
+              "startMonth": 7,
+              "startWeek": 1
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 4,
+              "endWeek": 4,
+              "startMonth": 3,
+              "startWeek": 2
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 11,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "notes": "Direct-set seed potatoes; transplant window retained for schema completeness.",
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 5,
+              "endWeek": 1,
+              "startMonth": 4,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_potato",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "legume",
+      "companionsAvoid": [
+        "crop_type_leek"
+      ],
+      "companionsGood": [
+        "crop_type_carrot",
+        "crop_type_cabbage"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_beans",
+      "name": "Beans",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g cooked.",
+          "nutrient": "protein",
+          "source": "USDA",
+          "unit": "g",
+          "value": 8.7
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 2,
+              "startMonth": 7,
+              "startWeek": 2
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 3,
+              "startMonth": 5,
+              "startWeek": 1
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 4,
+              "startMonth": 5,
+              "startWeek": 2
+            }
+          ]
+        }
+      },
+      "speciesId": "species_beans",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "legume",
+      "companionsAvoid": [
+        "crop_type_leek"
+      ],
+      "companionsGood": [
+        "crop_type_carrot"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_pea",
+      "name": "Pea",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g cooked.",
+          "nutrient": "fiber",
+          "source": "USDA",
+          "unit": "g",
+          "value": 5.1
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 8,
+              "endWeek": 1,
+              "startMonth": 6,
+              "startWeek": 1
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 4,
+              "endWeek": 3,
+              "startMonth": 3,
+              "startWeek": 1
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 8,
+              "endWeek": 4,
+              "startMonth": 6,
+              "startWeek": 2
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 4,
+              "endWeek": 4,
+              "startMonth": 3,
+              "startWeek": 2
+            }
+          ]
+        }
+      },
+      "speciesId": "species_peas",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "root",
+      "companionsAvoid": [
+        "crop_type_tomato"
+      ],
+      "companionsGood": [
+        "crop_type_leek",
+        "crop_type_pea"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_carrot",
+      "name": "Carrot",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g raw.",
+          "nutrient": "vitamin_a",
+          "source": "USDA",
+          "unit": "mcg",
+          "value": 835
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 11,
+              "endWeek": 2,
+              "startMonth": 6,
+              "startWeek": 3
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 2,
+              "startMonth": 3,
+              "startWeek": 3
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 12,
+              "endWeek": 2,
+              "startMonth": 9,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "notes": "Typically direct sown; transplant window retained for schema completeness.",
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 3,
+              "startMonth": 4,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_carrot",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "allium",
+      "companionsAvoid": [
+        "crop_type_beans",
+        "crop_type_pea"
+      ],
+      "companionsGood": [
+        "crop_type_carrot",
+        "crop_type_cabbage"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_leek",
+      "name": "Leek",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g raw onion.",
+          "nutrient": "vitamin_c",
+          "source": "USDA",
+          "unit": "mg",
+          "value": 7.4
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 3,
+              "startMonth": 7,
+              "startWeek": 1
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 4,
+              "endWeek": 3,
+              "startMonth": 2,
+              "startWeek": 3
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 12,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 1,
+              "startMonth": 4,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_onion_leek",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "brassica",
+      "companionsAvoid": [
+        "crop_type_tomato"
+      ],
+      "companionsGood": [
+        "crop_type_leek",
+        "crop_type_beans"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_cabbage",
+      "name": "Cabbage",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g raw green cabbage.",
+          "nutrient": "vitamin_k",
+          "source": "USDA",
+          "unit": "mcg",
+          "value": 76
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 11,
+              "endWeek": 2,
+              "startMonth": 6,
+              "startWeek": 4
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 5,
+              "endWeek": 2,
+              "startMonth": 2,
+              "startWeek": 4
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 12,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 2,
+              "startMonth": 4,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_cabbage",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "fruit",
+      "companionsAvoid": [
+        "crop_type_potato",
+        "crop_type_cabbage"
+      ],
+      "companionsGood": [
+        "crop_type_leek"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_tomato",
+      "name": "Tomato",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g raw.",
+          "nutrient": "vitamin_c",
+          "source": "USDA",
+          "unit": "mg",
+          "value": 14
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 2,
+              "startMonth": 7,
+              "startWeek": 2
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 4,
+              "endWeek": 2,
+              "startMonth": 3,
+              "startWeek": 1
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 1,
+              "startMonth": 5,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_tomato",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "category": "fruit",
+      "companionsAvoid": [
+        "crop_type_potato"
+      ],
+      "companionsGood": [
+        "crop_type_beans"
+      ],
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_squash",
+      "name": "Squash",
+      "nutritionProfile": [
+        {
+          "assumptions": "Per 100g cooked winter squash.",
+          "nutrient": "vitamin_c",
+          "source": "USDA",
+          "unit": "mg",
+          "value": 12
+        }
+      ],
+      "rules": {
+        "harvest": {
+          "sequence": 3,
+          "windows": [
+            {
+              "endMonth": 10,
+              "endWeek": 4,
+              "startMonth": 8,
+              "startWeek": 1
+            }
+          ]
+        },
+        "sowing": {
+          "sequence": 1,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 1,
+              "startMonth": 4,
+              "startWeek": 3
+            }
+          ]
+        },
+        "storage": {
+          "sequence": 4,
+          "windows": [
+            {
+              "endMonth": 12,
+              "endWeek": 3,
+              "startMonth": 9,
+              "startWeek": 1
+            }
+          ]
+        },
+        "transplant": {
+          "sequence": 2,
+          "windows": [
+            {
+              "endMonth": 6,
+              "endWeek": 2,
+              "startMonth": 5,
+              "startWeek": 1
+            }
+          ]
+        }
+      },
+      "speciesId": "species_squash",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    }
+  ],
+  "cultivars": [
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_potato",
+      "cultivarId": "cultivar_potato_bintje",
+      "name": "Bintje",
+      "notes": "Extracted from legacy crop record crop_potato_bintje during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_beans",
+      "cultivarId": "cultivar_beans_blue_lake",
+      "name": "Blue Lake",
+      "notes": "Extracted from legacy crop record crop_beans_blue_lake during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_pea",
+      "cultivarId": "cultivar_pea_kelvedon_wonder",
+      "name": "Kelvedon Wonder",
+      "notes": "Extracted from legacy crop record crop_pea_kelvedon_wonder during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_carrot",
+      "cultivarId": "cultivar_carrot_nantes",
+      "name": "Nantes",
+      "notes": "Extracted from legacy crop record crop_carrot_nantes during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_leek",
+      "cultivarId": "cultivar_leek_blue_de_solaise",
+      "name": "Blue de Solaise",
+      "notes": "Extracted from legacy crop record crop_leek_blue_de_solaise during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_cabbage",
+      "cultivarId": "cultivar_cabbage_golden_acre",
+      "name": "Golden Acre",
+      "notes": "Extracted from legacy crop record crop_cabbage_golden_acre during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_tomato",
+      "cultivarId": "cultivar_tomato_san_marzano",
+      "name": "San Marzano",
+      "notes": "Extracted from legacy crop record crop_tomato_san_marzano during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropTypeId": "crop_type_squash",
+      "cultivarId": "cultivar_squash_black_beauty",
+      "name": "Black Beauty",
+      "notes": "Extracted from legacy crop record crop_squash_black_beauty during taxonomy normalization.",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    }
+  ],
+  "schemaVersion": 1,
+  "seedInventoryItems": [
+    {
+      "createdAt": "2026-01-05T00:00:00Z",
+      "cropId": "crop_type_potato",
+      "notes": "Seed tubers represented as grams for MVP fixture simplicity.",
+      "quantity": 2000,
+      "seedInventoryItemId": "seed_001",
+      "status": "available",
+      "unit": "g",
+      "updatedAt": "2026-01-05T00:00:00Z",
+      "variety": "Bintje"
+    }
+  ],
+  "segments": [
+    {
+      "beds": [
+        {
+          "bedId": "bed_001",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 1",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_002",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 2",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_003",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 3",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_004",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 4",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_005",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 5",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_006",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 6",
+          "notes": "Approx area 18 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_007",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 7",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "bedId": "bed_008",
+          "createdAt": "2026-01-05T00:00:00Z",
+          "gardenId": "garden_trier_001",
+          "height": 1,
+          "name": "Bed 8",
+          "notes": "Approx area 17 m² (documented in notes; no dedicated area field in current schema).",
+          "type": "vegetable_bed",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "width": 1,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "height": 100,
+      "name": "Main Segment",
+      "originReference": "nw_corner",
+      "paths": [],
+      "segmentId": "segment_main",
+      "width": 100
+    }
+  ],
+  "settings": {
+    "createdAt": "2026-01-05T00:00:00Z",
+    "locale": "de-DE",
+    "settingsId": "settings_001",
+    "timezone": "Europe/Berlin",
+    "units": {
+      "temperature": "celsius",
+      "yield": "metric"
+    },
+    "updatedAt": "2026-01-05T00:00:00Z",
+    "weekStartsOn": "monday"
+  },
+  "species": [
+    {
+      "commonName": "Potato",
+      "id": "species_potato",
+      "scientificName": "Solanum tuberosum"
+    },
+    {
+      "commonName": "Beans",
+      "id": "species_beans",
+      "scientificName": "Phaseolus vulgaris"
+    },
+    {
+      "commonName": "Peas",
+      "id": "species_peas",
+      "scientificName": "Pisum sativum"
+    },
+    {
+      "commonName": "Carrot",
+      "id": "species_carrot",
+      "scientificName": "Daucus carota"
+    },
+    {
+      "commonName": "Onion & Leek",
+      "id": "species_onion_leek",
+      "scientificName": "Allium ampeloprasum"
+    },
+    {
+      "commonName": "Cabbage",
+      "id": "species_cabbage",
+      "scientificName": "Brassica oleracea"
+    },
+    {
+      "commonName": "Tomato",
+      "id": "species_tomato",
+      "scientificName": "Solanum lycopersicum"
+    },
+    {
+      "commonName": "Squash",
+      "id": "species_squash",
+      "scientificName": "Cucurbita pepo"
+    }
+  ],
+  "tasks": [
+    {
+      "batchId": "batch_001",
+      "bedId": "bed_001",
+      "checklist": [],
+      "cropId": "crop_type_potato",
+      "date": "2026-03-15",
+      "id": "task_001",
+      "sourceKey": "plan_001:sowing",
+      "status": "open",
+      "type": "sow"
+    }
+  ]
+}

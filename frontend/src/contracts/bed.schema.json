@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/bed.schema.json",
+  "title": "Bed",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bedId",
+    "gardenId",
+    "type",
+    "name",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "bedId": {
+      "$ref": "#/$defs/id"
+    },
+    "segmentId": {
+      "$ref": "#/$defs/id"
+    },
+    "gardenId": {
+      "$ref": "#/$defs/id"
+    },
+    "type": {
+      "$ref": "#/$defs/bedType"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "widthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "lengthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "x": {
+      "type": "number",
+      "minimum": 0
+    },
+    "y": {
+      "type": "number",
+      "minimum": 0
+    },
+    "rotationDeg": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "createdAt": {
+      "$ref": "#/$defs/isoDate"
+    },
+    "updatedAt": {
+      "$ref": "#/$defs/isoDate"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "isoDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    },
+    "bedType": {
+      "type": "string",
+      "enum": [
+        "ecology_strip",
+        "vegetable_bed",
+        "perennial_bed"
+      ]
+    }
+  }
+}

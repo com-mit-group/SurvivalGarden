@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://survivalgarden/contracts/path.schema.json",
+  "title": "Path",
+  "description": "Path geometry uses segment-local NW-origin coordinates: x is meters east and y is meters south from the parent segment northwest corner.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pathId",
+    "name",
+    "x",
+    "y"
+  ],
+  "properties": {
+    "pathId": {
+      "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+    },
+    "segmentId": {
+      "$ref": "https://survivalgarden/contracts/bed.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "x": {
+      "type": "number",
+      "description": "Meters east from parent segment NW corner.",
+      "minimum": 0
+    },
+    "y": {
+      "type": "number",
+      "description": "Meters south from parent segment NW corner.",
+      "minimum": 0
+    },
+    "widthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "lengthM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "rotationDeg": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "width": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "height": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "surface": {
+      "type": "string",
+      "maxLength": 120
+    }
+  }
+}
