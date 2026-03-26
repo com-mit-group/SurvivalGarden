@@ -69,18 +69,37 @@ const normalizeStageEvent = (
   const normalizedStage = rawStage ? normalizeBatchStage(rawStage) : undefined;
   const normalizedMethod = inferBatchStartMethod(rawStage, asString(event.method));
   const nextMeta = asRecord(event.meta);
+  const normalizedEvent: Record<string, unknown> = {};
 
-  return {
-    ...event,
-    ...(normalizedStage ? { stage: normalizedStage } : {}),
-    occurredAt: asUtcIso(event.occurredAt) ?? asUtcIso(event.date),
-    ...(normalizedMethod ? { method: normalizedMethod } : {}),
-    ...(rawStage && normalizedStage && rawStage !== normalizedStage
-      ? { meta: { ...nextMeta, legacyStage: rawStage } }
-      : Object.keys(nextMeta).length > 0
-        ? { meta: nextMeta }
-        : {}),
-  };
+  if (typeof event.type === 'string') {
+    normalizedEvent.type = event.type;
+  }
+
+  if (typeof event.date === 'string') {
+    normalizedEvent.date = event.date;
+  }
+
+  if (event.location !== undefined) {
+    normalizedEvent.location = event.location;
+  }
+
+  if (normalizedStage) {
+    normalizedEvent.stage = normalizedStage;
+  }
+
+  normalizedEvent.occurredAt = asUtcIso(event.occurredAt) ?? asUtcIso(event.date);
+
+  if (normalizedMethod) {
+    normalizedEvent.method = normalizedMethod;
+  }
+
+  if (rawStage && normalizedStage && rawStage !== normalizedStage) {
+    normalizedEvent.meta = { ...nextMeta, legacyStage: rawStage };
+  } else if (Object.keys(nextMeta).length > 0) {
+    normalizedEvent.meta = nextMeta;
+  }
+
+  return normalizedEvent;
 };
 
 const detectPropagationType = (candidate: Record<string, unknown>): Batch['propagationType'] | undefined => {
