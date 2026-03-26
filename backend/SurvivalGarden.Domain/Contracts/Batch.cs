@@ -2,7 +2,7 @@ namespace SurvivalGarden.Domain.Contracts;
 
 public sealed record Batch(
     string Id,
-    string? CultivarId,
+    string CultivarId,
     string StartedAt,
     string CurrentStage,
     IReadOnlyList<StageEvent> StageEvents,
