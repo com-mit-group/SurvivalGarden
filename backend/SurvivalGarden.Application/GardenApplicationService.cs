@@ -54,13 +54,14 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
 
         var state = await EnsureStateAsync(cancellationToken);
         var records = GardenJsonCollectionHelpers.GetCollection(state, collectionName);
-        var entityId = entity[idProperty]?.GetValue<string>() ?? string.Empty;
+        var entityId = entity[idProperty]?.GetValue<string>() ?? entity["id"]?.GetValue<string>() ?? string.Empty;
 
         var existingIndex = records
             .Select((node, index) => new { node, index })
             .FirstOrDefault(entry =>
                 entry.node is JsonObject item &&
-                string.Equals(item[idProperty]?.GetValue<string>(), entityId, StringComparison.Ordinal))
+                (string.Equals(item[idProperty]?.GetValue<string>(), entityId, StringComparison.Ordinal) ||
+                 string.Equals(item["id"]?.GetValue<string>(), entityId, StringComparison.Ordinal)))
             ?.index;
 
         if (existingIndex.HasValue)
@@ -85,7 +86,8 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
             .Select((node, index) => new { node, index })
             .FirstOrDefault(entry =>
                 entry.node is JsonObject item &&
-                string.Equals(item[idProperty]?.GetValue<string>(), id, StringComparison.Ordinal))
+                (string.Equals(item[idProperty]?.GetValue<string>(), id, StringComparison.Ordinal) ||
+                 string.Equals(item["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
             ?.index;
 
         if (!existingIndex.HasValue)
@@ -126,28 +128,33 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
     {
         return collectionName switch
         {
-            "species" => RequireId(entity, "id"),
-            "crops" => RequireId(entity, "cropId"),
-            "cultivars" => RequireId(entity, "id"),
-            "batches" => RequireId(entity, "batchId"),
-            "segments" => RequireId(entity, "segmentId"),
-            "beds" => RequireId(entity, "bedId"),
-            "paths" => RequireId(entity, "pathId"),
-            "seedInventoryItems" => RequireId(entity, "seedInventoryItemId"),
-            "cropPlans" => RequireId(entity, "planId"),
+            "species" => RequireAnyId(entity, "id"),
+            "crops" => RequireAnyId(entity, "cropId"),
+            "cultivars" => RequireAnyId(entity, "id"),
+            "batches" => RequireAnyId(entity, "batchId"),
+            "segments" => RequireAnyId(entity, "segmentId"),
+            "beds" => RequireAnyId(entity, "bedId"),
+            "paths" => RequireAnyId(entity, "pathId"),
+            "seedInventoryItems" => RequireAnyId(entity, "seedInventoryItemId"),
+            "cropPlans" => RequireAnyId(entity, "planId"),
             _ => ValidationResult.Success()
         };
     }
 
-    private static ValidationResult RequireId(JsonObject entity, string idProperty)
+    private static ValidationResult RequireAnyId(JsonObject entity, string preferredIdProperty)
     {
-        var idValue = entity[idProperty]?.GetValue<string>();
-        if (!string.IsNullOrWhiteSpace(idValue))
+        var preferred = entity[preferredIdProperty]?.GetValue<string>();
+        var generic = entity["id"]?.GetValue<string>();
+
+        if (!string.IsNullOrWhiteSpace(preferred) || !string.IsNullOrWhiteSpace(generic))
         {
             return ValidationResult.Success();
         }
 
-        return ValidationResult.Failure(new ValidationIssue($"/{idProperty}", "is required"));
+        return ValidationResult.Failure(
+            new ValidationIssue($"/{preferredIdProperty}", "is required"),
+            new ValidationIssue("/id", "is required")
+        );
     }
 
     private async Task<JsonObject> EnsureStateAsync(CancellationToken cancellationToken)

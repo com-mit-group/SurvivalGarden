@@ -23,6 +23,9 @@ internal static class GardenJsonCollectionHelpers
 
     internal static void CanonicalizeBatchAliases(JsonObject batch)
     {
+        // Keep both canonical and legacy alias fields to mirror current TypeScript contract behavior.
+        // `assignments` is canonical while `bedAssignments` is a compatibility alias still present in fixtures.
+
         if (batch["currentStage"] is null && batch["stage"] is not null)
         {
             batch["currentStage"] = batch["stage"]?.DeepClone();
