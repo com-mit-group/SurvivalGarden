@@ -4,7 +4,7 @@ This harness runs a shared scenario suite against both implementations and write
 
 ## Inputs
 
-- Scenario file: `fixtures/golden/equivalence-scenarios.v1.json`
+- Scenario file: `fixtures/equivalence/equivalence-scenarios.v1.json`
 - Reset fixture: `fixtures/golden/trier-v1.json`
 - Runtime endpoints (must expose the same API contract):
   - TypeScript: `TS_BASE_URL` (or `--tsBaseUrl=...`)

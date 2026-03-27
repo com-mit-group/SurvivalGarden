@@ -15,7 +15,7 @@ const args = new Map(
   }),
 );
 
-const scenarioPath = path.resolve(repoRoot, args.get('--scenarios') ?? 'fixtures/golden/equivalence-scenarios.v1.json');
+const scenarioPath = path.resolve(repoRoot, args.get('--scenarios') ?? 'fixtures/equivalence/equivalence-scenarios.v1.json');
 const tsBaseUrl = (args.get('--tsBaseUrl') ?? process.env.TS_BASE_URL ?? '').replace(/\/$/, '');
 const dotnetBaseUrl = (args.get('--dotnetBaseUrl') ?? process.env.DOTNET_BASE_URL ?? '').replace(/\/$/, '');
 const outputPath = path.resolve(repoRoot, args.get('--out') ?? 'artifacts/equivalence-report.json');
