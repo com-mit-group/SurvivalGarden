@@ -213,6 +213,7 @@ Mirror critical business rules in C# domain services while preserving behavior f
 - Treat `fixtures/golden/trier-v1.json` as a versioned shared dataset consumed by both TS and .NET tests.
 - Add expected outputs for deterministic rule evaluations (e.g., derived task sets, filtered results, validation outcomes).
 - Both runtimes must pass against the same fixture version before release.
+- Run the shared harness `node scripts/equivalence/run-equivalence.mjs --tsBaseUrl=<ts> --dotnetBaseUrl=<dotnet>` with `fixtures/equivalence/equivalence-scenarios.v1.json`; block cutover on non-zero exit.
 
 ### Contract tests as release gate
 
