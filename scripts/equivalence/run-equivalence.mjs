@@ -47,7 +47,8 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
   const runResults = {};
 
   for (const runtime of runtimes) {
-    await api(runtime, 'PUT', '/api/app-state', resetFixture);
+    const resetResponse = await api(runtime, 'PUT', '/api/app-state', resetFixture);
+    assertSuccessfulResponse(runtime, 'PUT /api/app-state', resetResponse);
 
     const stepResults = [];
     for (const step of scenario.steps ?? []) {
@@ -55,6 +56,7 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
     }
 
     const finalState = await api(runtime, 'GET', '/api/app-state');
+    assertSuccessfulResponse(runtime, 'GET /api/app-state', finalState);
     runResults[runtime.name] = {
       stepResults,
       finalState: canonicalize(finalState.body),
@@ -92,39 +94,44 @@ console.log(`Report written to ${path.relative(repoRoot, outputPath)}`);
 
 async function runStep(runtime, step) {
   const { action } = step;
+  let response;
+
   switch (action) {
     case 'upsert': {
-      const response = await api(runtime, 'PUT', `/api/${step.collection}/${step.id}`, step.payload);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'PUT', `/api/${step.collection}/${step.id}`, step.payload);
+      break;
     }
     case 'delete': {
-      const response = await api(runtime, 'DELETE', `/api/${step.collection}/${step.id}`);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'DELETE', `/api/${step.collection}/${step.id}`);
+      break;
     }
     case 'get': {
-      const response = await api(runtime, 'GET', `/api/${step.collection}/${step.id}`);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'GET', `/api/${step.collection}/${step.id}`);
+      break;
     }
     case 'list': {
       const query = new URLSearchParams(step.query ?? {}).toString();
-      const response = await api(runtime, 'GET', `/api/${step.collection}${query ? `?${query}` : ''}`);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'GET', `/api/${step.collection}${query ? `?${query}` : ''}`);
+      break;
     }
     case 'validate': {
-      const response = await api(runtime, 'POST', `/api/validate/${step.collection}`, step.payload);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'POST', `/api/validate/${step.collection}`, step.payload);
+      break;
     }
     case 'saveAppState': {
-      const response = await api(runtime, 'PUT', '/api/app-state', step.payload);
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'PUT', '/api/app-state', step.payload);
+      break;
     }
     case 'loadAppState': {
-      const response = await api(runtime, 'GET', '/api/app-state');
-      return normalizeStepResult(step, response);
+      response = await api(runtime, 'GET', '/api/app-state');
+      break;
     }
     default:
       throw new Error(`Unsupported action: ${action}`);
   }
+
+  assertSuccessfulResponse(runtime, `${action}${step.collection ? ` ${step.collection}` : ''}`, response);
+  return normalizeStepResult(step, response);
 }
 
 function normalizeStepResult(step, response) {
@@ -160,6 +167,16 @@ async function api(runtime, method, endpoint, body) {
     status: response.status,
     body: payload,
   };
+}
+
+
+function assertSuccessfulResponse(runtime, operation, response) {
+  if (response.status >= 200 && response.status < 300) {
+    return;
+  }
+
+  const hint = response.status === 404 ? ' (check base URL points at backend API, not the frontend dev server)' : '';
+  throw new Error(`${runtime.name} ${operation} failed with ${response.status}${hint}`);
 }
 
 function canonicalize(value) {
