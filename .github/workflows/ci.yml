@@ -253,11 +253,11 @@ jobs:
         run: dotnet build -c Debug --no-restore "${{ steps.target.outputs.target }}"
 
       - name: Test
-        run: |
-          dotnet test --logger "trx" --no-build -c Debug --verbosity normal \
-            /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} \
-            /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} \
-            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }} \
+        run: >
+          dotnet test --logger "trx" --no-build -c Debug --verbosity normal
+            /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+            /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
             "${{ steps.target.outputs.target }}"
 
       - name: Publish Test Results
