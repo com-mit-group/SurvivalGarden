@@ -4,6 +4,9 @@
     <RootNamespace>SurvivalGarden.Api</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
     <ProjectReference Include="../SurvivalGarden.Persistence/SurvivalGarden.Persistence.csproj" />
     <ProjectReference Include="../SurvivalGarden.Domain/SurvivalGarden.Domain.csproj" />

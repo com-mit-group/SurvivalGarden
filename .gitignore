@@ -142,3 +142,4 @@ vite.config.ts.timestamp-*
 /backend/.vs
 /backend/**/obj
 /**/package-lock.json
+/backend/**/bin

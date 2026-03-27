@@ -23,4 +23,4 @@ app.MapGet("/", () => Results.Ok(new
     contracts = "mirrored"
 }));
 
-app.Run();
+await app.RunAsync();
