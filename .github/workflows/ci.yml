@@ -232,9 +232,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          target="$(git ls-files '*.sln' | head -n 1)"
+          target="$(git ls-files '**/*.sln' | head -n 1)"
           if [ -z "$target" ]; then
-            target="$(git ls-files '*.csproj' | head -n 1)"
+            target="$(git ls-files '**/*.csproj' | head -n 1)"
           fi
 
           if [ -z "$target" ]; then
