@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { createTypescriptAdapter } from './adapters/typescript.mjs';
+import { createDotnetAdapter } from './adapters/dotnet.mjs';
+import { assertSuccessfulResponse, canonicalize } from './adapters/http.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,8 +34,8 @@ const fixturePath = path.resolve(repoRoot, scenariosDoc.resetFixture ?? 'fixture
 const resetFixture = JSON.parse(await readFile(fixturePath, 'utf8'));
 
 const runtimes = [
-  { name: 'typescript', baseUrl: tsBaseUrl },
-  { name: 'dotnet', baseUrl: dotnetBaseUrl },
+  createTypescriptAdapter(tsBaseUrl),
+  createDotnetAdapter(dotnetBaseUrl),
 ];
 
 const report = {
@@ -47,16 +50,15 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
   const runResults = {};
 
   for (const runtime of runtimes) {
-    const resetResponse = await api(runtime, 'PUT', '/api/app-state', resetFixture);
-    assertSuccessfulResponse(runtime, 'PUT /api/app-state', resetResponse);
+    await runtime.resetState(resetFixture);
 
     const stepResults = [];
     for (const step of scenario.steps ?? []) {
       stepResults.push(await runStep(runtime, step));
     }
 
-    const finalState = await api(runtime, 'GET', '/api/app-state');
-    assertSuccessfulResponse(runtime, 'GET /api/app-state', finalState);
+    const finalState = await runtime.loadFinalState();
+    assertSuccessfulResponse(runtime.name, 'loadFinalState', finalState);
     runResults[runtime.name] = {
       stepResults,
       finalState: canonicalize(finalState.body),
@@ -77,7 +79,6 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
   report.mismatches.push(...scenarioMismatches);
 }
 
-const { writeFile, mkdir } = await import('node:fs/promises');
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
@@ -93,106 +94,53 @@ console.log(`Equivalence suite passed (${report.scenarios.length} scenarios).`);
 console.log(`Report written to ${path.relative(repoRoot, outputPath)}`);
 
 async function runStep(runtime, step) {
-  const { action } = step;
-  let response;
+  const response = await runtime.executeStep(step);
+  assertSuccessfulResponse(runtime.name, step.op, response);
+  assertStepExpectations(step, response);
+  return normalizeStepResult(step, response);
+}
 
-  switch (action) {
-    case 'upsert': {
-      response = await api(runtime, 'PUT', `/api/${step.collection}/${step.id}`, step.payload);
-      break;
-    }
-    case 'delete': {
-      response = await api(runtime, 'DELETE', `/api/${step.collection}/${step.id}`);
-      break;
-    }
-    case 'get': {
-      response = await api(runtime, 'GET', `/api/${step.collection}/${step.id}`);
-      break;
-    }
-    case 'list': {
-      const query = new URLSearchParams(step.query ?? {}).toString();
-      response = await api(runtime, 'GET', `/api/${step.collection}${query ? `?${query}` : ''}`);
-      break;
-    }
-    case 'validate': {
-      response = await api(runtime, 'POST', `/api/validate/${step.collection}`, step.payload);
-      break;
-    }
-    case 'saveAppState': {
-      response = await api(runtime, 'PUT', '/api/app-state', step.payload);
-      break;
-    }
-    case 'loadAppState': {
-      response = await api(runtime, 'GET', '/api/app-state');
-      break;
-    }
-    default:
-      throw new Error(`Unsupported action: ${action}`);
+function assertStepExpectations(step, response) {
+  if (!step.expect) {
+    return;
   }
 
-  assertSuccessfulResponse(runtime, `${action}${step.collection ? ` ${step.collection}` : ''}`, response);
-  return normalizeStepResult(step, response);
+  if (typeof step.expect.status === 'number' && response.status !== step.expect.status) {
+    throw new Error(`Expected ${step.op} to return ${step.expect.status} but got ${response.status}`);
+  }
+
+  if (step.expect.bodyIncludes !== undefined && !containsStructure(response.body, step.expect.bodyIncludes)) {
+    throw new Error(`Expected ${step.op} response body to include ${JSON.stringify(step.expect.bodyIncludes)}`);
+  }
+}
+
+function containsStructure(actual, expected) {
+  if (expected === null || typeof expected !== 'object') {
+    return actual === expected;
+  }
+
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || actual.length < expected.length) {
+      return false;
+    }
+
+    return expected.every((expectedItem, index) => containsStructure(actual[index], expectedItem));
+  }
+
+  if (!actual || typeof actual !== 'object') {
+    return false;
+  }
+
+  return Object.entries(expected).every(([key, expectedValue]) => containsStructure(actual[key], expectedValue));
 }
 
 function normalizeStepResult(step, response) {
   return {
-    id: step.id ?? null,
-    action: step.action,
-    collection: step.collection ?? null,
+    op: step.op,
+    input: canonicalize(step.input ?? null),
     status: response.status,
     body: canonicalize(response.body),
   };
-}
-
-async function api(runtime, method, endpoint, body) {
-  const response = await fetch(`${runtime.baseUrl}${endpoint}`, {
-    method,
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
-  const text = await response.text();
-  let payload = null;
-  if (text.length > 0) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { raw: text };
-    }
-  }
-
-  return {
-    status: response.status,
-    body: payload,
-  };
-}
-
-
-function assertSuccessfulResponse(runtime, operation, response) {
-  if (response.status >= 200 && response.status < 300) {
-    return;
-  }
-
-  const hint = response.status === 404 ? ' (check base URL points at backend API, not the frontend dev server)' : '';
-  throw new Error(`${runtime.name} ${operation} failed with ${response.status}${hint}`);
-}
-
-function canonicalize(value) {
-  if (Array.isArray(value)) {
-    return value.map(canonicalize);
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, inner]) => [key, canonicalize(inner)]),
-    );
-  }
-
-  return value;
 }
 
 function compareValues(currentPath, left, right, mismatches) {
