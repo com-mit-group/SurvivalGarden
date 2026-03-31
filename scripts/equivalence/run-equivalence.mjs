@@ -49,11 +49,17 @@ const report = {
   allowlistFile: path.relative(repoRoot, allowlistPath),
   fixture: path.relative(repoRoot, fixturePath),
   summary: {
+    totalAssertions: 0,
+    blockingFailures: 0,
+    allowlistedDifferences: 0,
+    suggestedNextAction: 'Review scenario-level mismatches for next steps.',
     blocked: 0,
     allowed: 0,
     allowlistValidationErrors: allowlistValidationErrors.length,
   },
   allowlistValidationErrors,
+  allowedMismatches: [],
+  blockingMismatches: [],
   mismatches: [],
   scenarios: [],
 };
@@ -113,23 +119,54 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
     };
   }
 
-  const scenarioMismatches = [];
-  compareStepObservations(`scenario:${scenario.id}:stepObservations`, runResults.typescript.stepObservations, runResults.dotnet.stepObservations, scenarioMismatches);
+  const stepObservationDiff = [];
+  compareStepObservations(
+    `scenario:${scenario.id}:stepObservations`,
+    runResults.typescript.stepObservations,
+    runResults.dotnet.stepObservations,
+    stepObservationDiff,
+  );
+
+  const projectedStateDiff = [];
   compareValues(
     `scenario:${scenario.id}:finalState`,
     runResults.typescript.finalStateProjected,
     runResults.dotnet.finalStateProjected,
-    scenarioMismatches,
+    projectedStateDiff,
   );
 
-  const classifiedMismatches = scenarioMismatches.map((mismatch) =>
+  const rawStateDiff = [];
+  compareValues(`scenario:${scenario.id}:finalStateRaw`, runResults.typescript.finalStateRaw, runResults.dotnet.finalStateRaw, rawStateDiff);
+
+  const semanticMismatchCandidates = [...stepObservationDiff, ...projectedStateDiff];
+  const classifiedSemanticMismatches = semanticMismatchCandidates.map((mismatch) =>
     classifyMismatch(mismatch, scenario.id, compiledAllowlistEntries),
   );
+  const classifiedRawStateDiff = rawStateDiff.map((mismatch) => classifyMismatch(mismatch, scenario.id, compiledAllowlistEntries));
+
+  const blockingMismatches = classifiedSemanticMismatches.filter((mismatch) => mismatch.classification === 'blocked');
+  const allowedMismatches = classifiedSemanticMismatches.filter((mismatch) => mismatch.classification === 'allowed');
 
   report.scenarios.push({
     id: scenario.id,
     name: scenario.name,
     steps: scenario.steps?.length ?? 0,
+    semanticAssertions: [
+      {
+        id: 'stepObservationsEquivalent',
+        pass: stepObservationDiff.length === 0,
+        failureCount: stepObservationDiff.length,
+      },
+      {
+        id: 'projectedStateEquivalent',
+        pass: projectedStateDiff.length === 0,
+        failureCount: projectedStateDiff.length,
+      },
+    ],
+    projectedStateDiff: classifiedSemanticMismatches.filter((mismatch) => mismatch.path.includes(':finalState')),
+    rawStateDiff: classifiedRawStateDiff,
+    blockingMismatches,
+    allowedMismatches,
     snapshots: {
       typescript: {
         raw: runResults.typescript.finalStateRaw,
@@ -140,14 +177,25 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
         projected: runResults.dotnet.finalStateProjected,
       },
     },
-    mismatches: classifiedMismatches,
+    mismatches: classifiedSemanticMismatches,
   });
 
-  report.mismatches.push(...classifiedMismatches);
+  report.mismatches.push(...classifiedSemanticMismatches);
+  report.blockingMismatches.push(...blockingMismatches);
+  report.allowedMismatches.push(...allowedMismatches);
+  report.summary.totalAssertions += 2;
 }
 
 report.summary.blocked = report.mismatches.filter((mismatch) => mismatch.classification === 'blocked').length;
 report.summary.allowed = report.mismatches.filter((mismatch) => mismatch.classification === 'allowed').length;
+report.summary.blockingFailures = report.summary.blocked;
+report.summary.allowlistedDifferences = report.summary.allowed;
+report.summary.suggestedNextAction =
+  report.summary.blockingFailures > 0
+    ? 'Investigate blocking mismatches in projectedStateDiff and semanticAssertions.'
+    : report.summary.allowlistedDifferences > 0
+      ? 'No blockers found; review allowlisted differences and retire debt where possible.'
+      : 'No mismatches detected; proceed with cutover checks.';
 
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
@@ -167,13 +215,12 @@ if (report.summary.blocked > 0) {
 }
 
 if (allowlistValidationErrors.length > 0 || report.summary.blocked > 0) {
+  logConsoleSummary(report);
   process.exit(1);
 }
 
+logConsoleSummary(report);
 console.log(`Equivalence suite passed (${report.scenarios.length} scenarios).`);
-if (report.summary.allowed > 0) {
-  console.log(`Allowed mismatches (tracked debt): ${report.summary.allowed}`);
-}
 console.log(`Report written to ${path.relative(repoRoot, outputPath)}`);
 
 function compileAllowlist(allowlist, todayDate) {
@@ -629,4 +676,12 @@ function chooseStableSortKey(items) {
   }
 
   return null;
+}
+
+function logConsoleSummary(reportDocument) {
+  console.log('Equivalence summary:');
+  console.log(`- total assertions: ${reportDocument.summary.totalAssertions}`);
+  console.log(`- blocking failures: ${reportDocument.summary.blockingFailures}`);
+  console.log(`- allowlisted differences: ${reportDocument.summary.allowlistedDifferences}`);
+  console.log(`- suggested next action: ${reportDocument.summary.suggestedNextAction}`);
 }
