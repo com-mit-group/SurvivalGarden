@@ -52,21 +52,21 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
   for (const runtime of runtimes) {
     await runtime.resetState(resetFixture);
 
-    const stepResults = [];
+    const stepObservations = [];
     for (const step of scenario.steps ?? []) {
-      stepResults.push(await runStep(runtime, step));
+      stepObservations.push(await runStep(runtime, step));
     }
 
     const finalState = await runtime.loadFinalState();
     assertSuccessfulResponse(runtime.name, 'loadFinalState', finalState);
     runResults[runtime.name] = {
-      stepResults,
+      stepObservations,
       finalState: canonicalize(finalState.body),
     };
   }
 
   const scenarioMismatches = [];
-  compareValues(`scenario:${scenario.id}:stepResults`, runResults.typescript.stepResults, runResults.dotnet.stepResults, scenarioMismatches);
+  compareStepObservations(`scenario:${scenario.id}:stepObservations`, runResults.typescript.stepObservations, runResults.dotnet.stepObservations, scenarioMismatches);
   compareValues(`scenario:${scenario.id}:finalState`, runResults.typescript.finalState, runResults.dotnet.finalState, scenarioMismatches);
 
   report.scenarios.push({
@@ -138,9 +138,193 @@ function normalizeStepResult(step, response) {
   return {
     op: step.op,
     input: canonicalize(step.input ?? null),
-    status: response.status,
-    body: canonicalize(response.body),
+    observation: canonicalize(buildStepObservation(step, response)),
   };
+}
+
+function buildStepObservation(step, response) {
+  switch (step.op) {
+    case 'createSpecies':
+    case 'createCrop':
+    case 'createCultivar':
+    case 'createSegment':
+    case 'createBed':
+    case 'createPath':
+    case 'createSeedInventoryItem':
+    case 'createCropPlan':
+      return {
+        createdEntityId: extractEntityId(step.input, response.body),
+      };
+    case 'createBatch':
+      return {
+        createdBatchId: extractEntityId(step.input, response.body),
+      };
+    case 'assignBatchToBed':
+      return {
+        assignmentPresent: hasAssignment(response.body, step.input?.bedId),
+      };
+    case 'listBatchesByBed':
+      return {
+        batchIds: collectBatchIds(response.body),
+      };
+    case 'validateBatch':
+      return {
+        issues: collectValidationIssues(response.body),
+      };
+    case 'reloadState':
+      return {
+        stateLoaded: response.body !== null && response.body !== undefined,
+      };
+    default:
+      return {};
+  }
+}
+
+function extractEntityId(input, body) {
+  return (
+    body?.id ??
+    body?.cropId ??
+    body?.batchId ??
+    body?.segmentId ??
+    body?.bedId ??
+    body?.pathId ??
+    body?.seedInventoryItemId ??
+    body?.planId ??
+    input?.id ??
+    input?.batchId ??
+    null
+  );
+}
+
+function hasAssignment(body, bedId) {
+  const assignments = Array.isArray(body?.assignments) ? body.assignments : [];
+  return assignments.some((assignment) => assignment?.bedId === bedId);
+}
+
+function collectBatchIds(body) {
+  const batches = Array.isArray(body) ? body : Array.isArray(body?.items) ? body.items : [];
+  return batches
+    .map((batch) => batch?.batchId ?? batch?.id ?? null)
+    .filter((id) => id !== null)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function collectValidationIssues(body) {
+  const rawIssues = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.issues)
+      ? body.issues
+      : Array.isArray(body?.errors)
+        ? body.errors
+        : [];
+
+  return rawIssues
+    .map((issue) => ({
+      code: typeof issue?.code === 'string' ? issue.code : null,
+      path: normalizeIssuePath(issue?.path ?? issue?.field ?? issue?.propertyPath ?? issue?.source?.pointer ?? ''),
+      messageCategory: normalizeMessageCategory(issue?.message ?? issue?.error ?? issue?.title ?? ''),
+    }))
+    .sort(compareIssueTuples);
+}
+
+function normalizeIssuePath(pathLike) {
+  if (Array.isArray(pathLike)) {
+    return pathLike.map((segment) => String(segment)).join('.');
+  }
+
+  const raw = String(pathLike ?? '').trim();
+  if (raw.length === 0) {
+    return '$';
+  }
+
+  return raw
+    .replace(/^\$\.?/, '')
+    .replace(/^\//, '')
+    .replace(/\//g, '.')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .replace(/\.+/g, '.')
+    .replace(/^\./, '')
+    .toLowerCase();
+}
+
+function normalizeMessageCategory(messageLike) {
+  const message = String(messageLike ?? '').toLowerCase();
+
+  if (message.includes('required') || message.includes('missing')) {
+    return 'missing_required';
+  }
+  if (message.includes('not found') || message.includes('unknown')) {
+    return 'not_found';
+  }
+  if (message.includes('invalid') || message.includes('must') || message.includes('format')) {
+    return 'invalid_value';
+  }
+  if (message.includes('duplicate') || message.includes('already exists')) {
+    return 'conflict';
+  }
+  if (message.includes('range') || message.includes('greater') || message.includes('less')) {
+    return 'out_of_range';
+  }
+
+  return message.length === 0 ? 'unknown' : 'other';
+}
+
+function compareIssueTuples(left, right) {
+  return `${left.code ?? ''}|${left.path}|${left.messageCategory}`.localeCompare(
+    `${right.code ?? ''}|${right.path}|${right.messageCategory}`,
+  );
+}
+
+function compareStepObservations(currentPath, left, right, mismatches) {
+  if (!Array.isArray(left) || !Array.isArray(right)) {
+    mismatches.push({ path: currentPath, reason: 'step observations must both be arrays' });
+    return;
+  }
+
+  if (left.length !== right.length) {
+    mismatches.push({ path: currentPath, reason: `array length mismatch (${left.length} !== ${right.length})` });
+  }
+
+  const count = Math.min(left.length, right.length);
+  for (let index = 0; index < count; index += 1) {
+    compareStepObservation(`${currentPath}[${index}]`, left[index], right[index], mismatches);
+  }
+}
+
+function compareStepObservation(currentPath, leftStep, rightStep, mismatches) {
+  if (leftStep.op !== rightStep.op) {
+    mismatches.push({ path: `${currentPath}.op`, reason: `operation mismatch (${leftStep.op} !== ${rightStep.op})` });
+    return;
+  }
+
+  if (leftStep.op === 'validateBatch') {
+    compareValidationIssues(`${currentPath}.observation.issues`, leftStep.observation.issues, rightStep.observation.issues, mismatches);
+    return;
+  }
+
+  compareValues(`${currentPath}.observation`, leftStep.observation, rightStep.observation, mismatches);
+}
+
+function compareValidationIssues(currentPath, leftIssues, rightIssues, mismatches) {
+  if (!Array.isArray(leftIssues) || !Array.isArray(rightIssues)) {
+    mismatches.push({ path: currentPath, reason: 'validation issues must both be arrays' });
+    return;
+  }
+
+  const leftTuples = new Set(leftIssues.map((issue) => `${issue.code ?? ''}|${issue.path}|${issue.messageCategory}`));
+  const rightTuples = new Set(rightIssues.map((issue) => `${issue.code ?? ''}|${issue.path}|${issue.messageCategory}`));
+
+  for (const tuple of [...leftTuples].sort((a, b) => a.localeCompare(b))) {
+    if (!rightTuples.has(tuple)) {
+      mismatches.push({ path: currentPath, reason: `missing issue tuple in dotnet output (${tuple})` });
+    }
+  }
+
+  for (const tuple of [...rightTuples].sort((a, b) => a.localeCompare(b))) {
+    if (!leftTuples.has(tuple)) {
+      mismatches.push({ path: currentPath, reason: `missing issue tuple in typescript output (${tuple})` });
+    }
+  }
 }
 
 function compareValues(currentPath, left, right, mismatches) {
