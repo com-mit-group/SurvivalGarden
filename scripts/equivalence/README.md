@@ -48,6 +48,11 @@ node scripts/equivalence/run-equivalence.mjs \
 - It compares for each scenario:
   - normalized semantic step results (status + response body)
   - normalized final persisted app-state snapshot after scenario execution
-- Report output contains mismatch paths, reasons, scenario IDs, and classification for triage.
+- Report output contains:
+  - `semanticAssertions` (pass/fail assertion results per scenario)
+  - `projectedStateDiff` (business-level state mismatches used for gate decisions)
+  - `rawStateDiff` (debug-only raw snapshot differences)
+  - `allowedMismatches` and `blockingMismatches` (both scenario-level and top-level)
+- Console output includes a short summary of total assertions, blocking failures, allowlisted differences, and suggested next action.
 
 This is intended as a required pre-cutover gate between the legacy TypeScript path and .NET backend.
