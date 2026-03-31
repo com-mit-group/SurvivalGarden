@@ -33,15 +33,21 @@ Each adapter maps semantic operations to runtime-specific endpoint flows.
 node scripts/equivalence/run-equivalence.mjs \
   --tsBaseUrl=http://localhost:5174 \
   --dotnetBaseUrl=http://localhost:5050 \
+  --allowlist=fixtures/equivalence/allowlist.v1.json \
   --out=artifacts/equivalence-report.json
 ```
 
 ## Gate behavior
 
-- The harness exits non-zero if **any** mismatch is found.
+- The harness classifies each mismatch as:
+  - `blocked`: no active allowlist entry matched the mismatch signature (fails gate).
+  - `allowed`: matched allowlist debt entry (does not fail gate until expiry).
+- The harness exits non-zero when:
+  - one or more `blocked` mismatches exist.
+  - an allowlist entry is invalid, expired, or missing `owner`.
 - It compares for each scenario:
   - normalized semantic step results (status + response body)
   - normalized final persisted app-state snapshot after scenario execution
-- Report output contains mismatch paths and reasons for triage.
+- Report output contains mismatch paths, reasons, scenario IDs, and classification for triage.
 
 This is intended as a required pre-cutover gate between the legacy TypeScript path and .NET backend.
