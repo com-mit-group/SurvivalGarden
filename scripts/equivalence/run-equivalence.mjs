@@ -19,6 +19,7 @@ const args = new Map(
 );
 
 const scenarioPath = path.resolve(repoRoot, args.get('--scenarios') ?? 'fixtures/equivalence/equivalence-scenarios.v1.json');
+const allowlistPath = path.resolve(repoRoot, args.get('--allowlist') ?? 'fixtures/equivalence/allowlist.v1.json');
 const tsBaseUrl = (args.get('--tsBaseUrl') ?? process.env.TS_BASE_URL ?? '').replace(/\/$/, '');
 const dotnetBaseUrl = (args.get('--dotnetBaseUrl') ?? process.env.DOTNET_BASE_URL ?? '').replace(/\/$/, '');
 const outputPath = path.resolve(repoRoot, args.get('--out') ?? 'artifacts/equivalence-report.json');
@@ -30,8 +31,12 @@ if (!tsBaseUrl || !dotnetBaseUrl) {
 }
 
 const scenariosDoc = JSON.parse(await readFile(scenarioPath, 'utf8'));
+const allowlistDoc = JSON.parse(await readFile(allowlistPath, 'utf8'));
 const fixturePath = path.resolve(repoRoot, scenariosDoc.resetFixture ?? 'fixtures/golden/trier-v1.json');
 const resetFixture = JSON.parse(await readFile(fixturePath, 'utf8'));
+const todayIsoDate = new Date().toISOString().slice(0, 10);
+
+const { compiledAllowlistEntries, allowlistValidationErrors } = compileAllowlist(allowlistDoc, todayIsoDate);
 
 const runtimes = [
   createTypescriptAdapter(tsBaseUrl),
@@ -41,7 +46,14 @@ const runtimes = [
 const report = {
   generatedAtUtc: new Date().toISOString(),
   scenariosFile: path.relative(repoRoot, scenarioPath),
+  allowlistFile: path.relative(repoRoot, allowlistPath),
   fixture: path.relative(repoRoot, fixturePath),
+  summary: {
+    blocked: 0,
+    allowed: 0,
+    allowlistValidationErrors: allowlistValidationErrors.length,
+  },
+  allowlistValidationErrors,
   mismatches: [],
   scenarios: [],
 };
@@ -110,6 +122,10 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
     scenarioMismatches,
   );
 
+  const classifiedMismatches = scenarioMismatches.map((mismatch) =>
+    classifyMismatch(mismatch, scenario.id, compiledAllowlistEntries),
+  );
+
   report.scenarios.push({
     id: scenario.id,
     name: scenario.name,
@@ -124,25 +140,125 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
         projected: runResults.dotnet.finalStateProjected,
       },
     },
-    mismatches: scenarioMismatches,
+    mismatches: classifiedMismatches,
   });
 
-  report.mismatches.push(...scenarioMismatches);
+  report.mismatches.push(...classifiedMismatches);
 }
+
+report.summary.blocked = report.mismatches.filter((mismatch) => mismatch.classification === 'blocked').length;
+report.summary.allowed = report.mismatches.filter((mismatch) => mismatch.classification === 'allowed').length;
 
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
-if (report.mismatches.length > 0) {
-  console.error(`Equivalence mismatches: ${report.mismatches.length}`);
-  for (const mismatch of report.mismatches.slice(0, 20)) {
-    console.error(`- ${mismatch.path}: ${mismatch.reason}`);
+if (allowlistValidationErrors.length > 0) {
+  console.error(`Allowlist validation errors: ${allowlistValidationErrors.length}`);
+  for (const error of allowlistValidationErrors.slice(0, 20)) {
+    console.error(`- ${error}`);
   }
+}
+
+if (report.summary.blocked > 0) {
+  console.error(`Blocked equivalence mismatches: ${report.summary.blocked}`);
+  for (const mismatch of report.mismatches.filter((item) => item.classification === 'blocked').slice(0, 20)) {
+    console.error(`- [${mismatch.scenarioId}] ${mismatch.path}: ${mismatch.reason}`);
+  }
+}
+
+if (allowlistValidationErrors.length > 0 || report.summary.blocked > 0) {
   process.exit(1);
 }
 
 console.log(`Equivalence suite passed (${report.scenarios.length} scenarios).`);
+if (report.summary.allowed > 0) {
+  console.log(`Allowed mismatches (tracked debt): ${report.summary.allowed}`);
+}
 console.log(`Report written to ${path.relative(repoRoot, outputPath)}`);
+
+function compileAllowlist(allowlist, todayDate) {
+  const entries = Array.isArray(allowlist?.entries) ? allowlist.entries : [];
+  const compiledAllowlistEntries = [];
+  const validationErrors = [];
+
+  for (const [index, entry] of entries.entries()) {
+    const label = `entries[${index}]`;
+    if (!entry || typeof entry !== 'object') {
+      validationErrors.push(`${label}: must be an object`);
+      continue;
+    }
+
+    if (typeof entry.scenarioId !== 'string' || entry.scenarioId.trim().length === 0) {
+      validationErrors.push(`${label}: scenarioId is required`);
+      continue;
+    }
+
+    if (typeof entry.owner !== 'string' || entry.owner.trim().length === 0) {
+      validationErrors.push(`${label}: owner is required`);
+      continue;
+    }
+
+    if (typeof entry.expiresOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(entry.expiresOn)) {
+      validationErrors.push(`${label}: expiresOn must be an ISO date (YYYY-MM-DD)`);
+      continue;
+    }
+
+    if (entry.expiresOn < todayDate) {
+      validationErrors.push(`${label}: expired on ${entry.expiresOn}`);
+      continue;
+    }
+
+    let pathRegex;
+    let reasonRegex;
+    try {
+      pathRegex = new RegExp(entry.pathPattern);
+    } catch (error) {
+      validationErrors.push(`${label}: invalid pathPattern regex (${error.message})`);
+      continue;
+    }
+
+    try {
+      reasonRegex = new RegExp(entry.reasonPattern);
+    } catch (error) {
+      validationErrors.push(`${label}: invalid reasonPattern regex (${error.message})`);
+      continue;
+    }
+
+    compiledAllowlistEntries.push({
+      scenarioId: entry.scenarioId,
+      owner: entry.owner,
+      expiresOn: entry.expiresOn,
+      pathPattern: entry.pathPattern,
+      reasonPattern: entry.reasonPattern,
+      pathRegex,
+      reasonRegex,
+    });
+  }
+
+  return { compiledAllowlistEntries, allowlistValidationErrors: validationErrors };
+}
+
+function classifyMismatch(mismatch, scenarioId, allowlistEntries) {
+  const matchedEntry = allowlistEntries.find(
+    (entry) =>
+      entry.scenarioId === scenarioId && entry.pathRegex.test(mismatch.path) && entry.reasonRegex.test(mismatch.reason),
+  );
+
+  return {
+    ...mismatch,
+    scenarioId,
+    classification: matchedEntry ? 'allowed' : 'blocked',
+    allowlist: matchedEntry
+      ? {
+          pathPattern: matchedEntry.pathPattern,
+          reasonPattern: matchedEntry.reasonPattern,
+          scenarioId: matchedEntry.scenarioId,
+          owner: matchedEntry.owner,
+          expiresOn: matchedEntry.expiresOn,
+        }
+      : null,
+  };
+}
 
 async function runStep(runtime, step) {
   const response = await runtime.executeStep(step);
