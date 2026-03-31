@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "resetFixture": "fixtures/golden/trier-v1.json",
   "scenarios": [
     {
@@ -7,36 +7,33 @@
       "name": "Species/crop/cultivar CRUD and cross references",
       "steps": [
         {
-          "action": "upsert",
-          "collection": "species",
-          "id": "species_equivalence_001",
-          "payload": {
+          "op": "createSpecies",
+          "input": {
             "id": "species_equivalence_001",
             "name": "Phaseolus vulgaris"
           }
         },
         {
-          "action": "upsert",
-          "collection": "crops",
-          "id": "crop_equivalence_001",
-          "payload": {
-            "cropId": "crop_equivalence_001",
+          "op": "createCrop",
+          "input": {
+            "id": "crop_equivalence_001",
             "speciesId": "species_equivalence_001",
             "name": "Bush Bean"
           }
         },
         {
-          "action": "upsert",
-          "collection": "cultivars",
-          "id": "cultivar_equivalence_001",
-          "payload": {
+          "op": "createCultivar",
+          "input": {
             "id": "cultivar_equivalence_001",
             "cropId": "crop_equivalence_001",
             "name": "Provider"
           }
         },
         {
-          "action": "loadAppState"
+          "op": "reloadState",
+          "expect": {
+            "status": 200
+          }
         }
       ]
     },
@@ -45,61 +42,57 @@
       "name": "Segment/bed/path + batch assignment + reload",
       "steps": [
         {
-          "action": "upsert",
-          "collection": "segments",
-          "id": "segment_equivalence_001",
-          "payload": {
-            "segmentId": "segment_equivalence_001",
+          "op": "createSegment",
+          "input": {
+            "id": "segment_equivalence_001",
             "name": "North Strip",
             "surface": "ground"
           }
         },
         {
-          "action": "upsert",
-          "collection": "beds",
-          "id": "bed_equivalence_001",
-          "payload": {
-            "bedId": "bed_equivalence_001",
+          "op": "createBed",
+          "input": {
+            "id": "bed_equivalence_001",
             "segmentId": "segment_equivalence_001",
             "name": "North Bed 1"
           }
         },
         {
-          "action": "upsert",
-          "collection": "paths",
-          "id": "path_equivalence_001",
-          "payload": {
-            "pathId": "path_equivalence_001",
+          "op": "createPath",
+          "input": {
+            "id": "path_equivalence_001",
             "segmentId": "segment_equivalence_001",
             "name": "North Path"
           }
         },
         {
-          "action": "upsert",
-          "collection": "batches",
-          "id": "batch_equivalence_001",
-          "payload": {
+          "op": "createBatch",
+          "input": {
             "batchId": "batch_equivalence_001",
             "cropId": "crop_potato_bintje",
             "stage": "planned",
-            "assignments": [
-              {
-                "bedId": "bed_equivalence_001",
-                "assignedAt": "2026-03-01"
-              }
-            ],
             "startedAt": "2026-03-01"
           }
         },
         {
-          "action": "list",
-          "collection": "batches",
-          "query": {
-            "bedId": "bed_equivalence_001"
+          "op": "assignBatchToBed",
+          "input": {
+            "batchId": "batch_equivalence_001",
+            "bedId": "bed_equivalence_001",
+            "assignedAt": "2026-03-01"
           }
         },
         {
-          "action": "loadAppState"
+          "op": "listBatchesByBed",
+          "input": {
+            "bedId": "bed_equivalence_001"
+          },
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "op": "reloadState"
         }
       ]
     },
@@ -108,36 +101,34 @@
       "name": "Inventory + crop plan + validation failure comparison",
       "steps": [
         {
-          "action": "upsert",
-          "collection": "seedInventoryItems",
-          "id": "seed_equivalence_001",
-          "payload": {
-            "seedInventoryItemId": "seed_equivalence_001",
+          "op": "createSeedInventoryItem",
+          "input": {
+            "id": "seed_equivalence_001",
             "cultivarId": "cultivar_cabbage_golden_acre",
             "quantity": 20,
             "unit": "seed"
           }
         },
         {
-          "action": "upsert",
-          "collection": "cropPlans",
-          "id": "plan_equivalence_001",
-          "payload": {
-            "planId": "plan_equivalence_001",
+          "op": "createCropPlan",
+          "input": {
+            "id": "plan_equivalence_001",
             "cropId": "crop_cabbage_golden_acre",
             "bedId": "bed_001",
             "plannedDate": "2026-04-01"
           }
         },
         {
-          "action": "validate",
-          "collection": "batches",
-          "payload": {
+          "op": "validateBatch",
+          "input": {
             "cropId": "crop_cabbage_golden_acre"
+          },
+          "expect": {
+            "status": 200
           }
         },
         {
-          "action": "loadAppState"
+          "op": "reloadState"
         }
       ]
     }
