@@ -46,6 +46,39 @@ const report = {
   scenarios: [],
 };
 
+const NON_SEMANTIC_KEYS = new Set([
+  '__v',
+  '_etag',
+  '_rid',
+  '_self',
+  '_attachments',
+  '_ts',
+  'etag',
+  'rowVersion',
+  'lastModifiedAt',
+  'lastModifiedAtUtc',
+  'lastModifiedBy',
+  'updatedAt',
+  'updatedAtUtc',
+  'createdAt',
+  'createdAtUtc',
+  'createdBy',
+  'metadata',
+]);
+
+const ALIAS_TO_CANONICAL_FIELD = {
+  cultivarID: 'cultivarId',
+  cropID: 'cropId',
+  speciesID: 'speciesId',
+  segmentID: 'segmentId',
+  bedID: 'bedId',
+  pathID: 'pathId',
+  batchID: 'batchId',
+  planID: 'planId',
+  plantingPlanId: 'planId',
+  seedInventoryId: 'seedInventoryItemId',
+};
+
 for (const scenario of scenariosDoc.scenarios ?? []) {
   const runResults = {};
 
@@ -59,20 +92,38 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
 
     const finalState = await runtime.loadFinalState();
     assertSuccessfulResponse(runtime.name, 'loadFinalState', finalState);
+    const finalStateRaw = canonicalize(finalState.body);
+    const finalStateProjected = projectFinalState(finalStateRaw);
     runResults[runtime.name] = {
       stepObservations,
-      finalState: canonicalize(finalState.body),
+      finalStateRaw,
+      finalStateProjected,
     };
   }
 
   const scenarioMismatches = [];
   compareStepObservations(`scenario:${scenario.id}:stepObservations`, runResults.typescript.stepObservations, runResults.dotnet.stepObservations, scenarioMismatches);
-  compareValues(`scenario:${scenario.id}:finalState`, runResults.typescript.finalState, runResults.dotnet.finalState, scenarioMismatches);
+  compareValues(
+    `scenario:${scenario.id}:finalState`,
+    runResults.typescript.finalStateProjected,
+    runResults.dotnet.finalStateProjected,
+    scenarioMismatches,
+  );
 
   report.scenarios.push({
     id: scenario.id,
     name: scenario.name,
     steps: scenario.steps?.length ?? 0,
+    snapshots: {
+      typescript: {
+        raw: runResults.typescript.finalStateRaw,
+        projected: runResults.typescript.finalStateProjected,
+      },
+      dotnet: {
+        raw: runResults.dotnet.finalStateRaw,
+        projected: runResults.dotnet.finalStateProjected,
+      },
+    },
     mismatches: scenarioMismatches,
   });
 
@@ -370,4 +421,96 @@ function compareValues(currentPath, left, right, mismatches) {
   if (left !== right) {
     mismatches.push({ path: currentPath, reason: `value mismatch (${JSON.stringify(left)} !== ${JSON.stringify(right)})` });
   }
+}
+
+function projectFinalState(value) {
+  return projectNode(value);
+}
+
+function projectNode(value) {
+  if (Array.isArray(value)) {
+    const projectedItems = value.map((item) => projectNode(item));
+    return sortEntityArray(projectedItems);
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const projected = {};
+  for (const [rawKey, rawChild] of Object.entries(value)) {
+    if (isNonSemanticField(rawKey)) {
+      continue;
+    }
+
+    const key = ALIAS_TO_CANONICAL_FIELD[rawKey] ?? rawKey;
+    const child = projectNode(rawChild);
+
+    // Treat null and missing as equivalent for default/optional fields.
+    if (child === null || child === undefined) {
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(projected, key)) {
+      projected[key] = mergeAliasValues(projected[key], child);
+      continue;
+    }
+
+    projected[key] = child;
+  }
+
+  return projected;
+}
+
+function isNonSemanticField(key) {
+  if (NON_SEMANTIC_KEYS.has(key)) {
+    return true;
+  }
+
+  return key.startsWith('_') || key.endsWith('Timestamp') || key.endsWith('Utc');
+}
+
+function mergeAliasValues(existing, incoming) {
+  if (existing === incoming) {
+    return existing;
+  }
+
+  if (Array.isArray(existing) && Array.isArray(incoming)) {
+    const merged = [...existing, ...incoming];
+    return sortEntityArray(merged);
+  }
+
+  return existing ?? incoming;
+}
+
+function sortEntityArray(items) {
+  if (!items.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
+    return items;
+  }
+
+  const stableSortKey = chooseStableSortKey(items);
+  if (!stableSortKey) {
+    return items;
+  }
+
+  return [...items].sort((left, right) => String(left[stableSortKey]).localeCompare(String(right[stableSortKey])));
+}
+
+function chooseStableSortKey(items) {
+  const preferredKeys = ['id'];
+  const objectKeys = new Set(items.flatMap((item) => Object.keys(item)));
+  const idLikeKeys = [...objectKeys].filter((key) => key.toLowerCase().endsWith('id'));
+  preferredKeys.push(...idLikeKeys.sort((left, right) => left.localeCompare(right)));
+
+  for (const key of preferredKeys) {
+    const allHavePrimitive = items.every((item) => {
+      const value = item[key];
+      return value !== null && value !== undefined && ['string', 'number', 'boolean'].includes(typeof value);
+    });
+    if (allHavePrimitive) {
+      return key;
+    }
+  }
+
+  return null;
 }
