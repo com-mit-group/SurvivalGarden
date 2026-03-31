@@ -11,6 +11,12 @@
           "input": {
             "id": "species_equivalence_001",
             "name": "Phaseolus vulgaris"
+          },
+          "assert": {
+            "invariant": "species entity is persisted with the requested identity",
+            "observation": {
+              "createdEntityId": "species_equivalence_001"
+            }
           }
         },
         {
@@ -19,6 +25,12 @@
             "id": "crop_equivalence_001",
             "speciesId": "species_equivalence_001",
             "name": "Bush Bean"
+          },
+          "assert": {
+            "invariant": "crop creation resolves and keeps the species reference",
+            "observation": {
+              "createdEntityId": "crop_equivalence_001"
+            }
           }
         },
         {
@@ -27,12 +39,21 @@
             "id": "cultivar_equivalence_001",
             "cropId": "crop_equivalence_001",
             "name": "Provider"
+          },
+          "assert": {
+            "invariant": "taxonomy references resolve species -> crop -> cultivar",
+            "observation": {
+              "createdEntityId": "cultivar_equivalence_001"
+            }
           }
         },
         {
           "op": "reloadState",
-          "expect": {
-            "status": 200
+          "assert": {
+            "invariant": "taxonomy links survive reload without materialized-trace coupling",
+            "observation": {
+              "stateLoaded": true
+            }
           }
         }
       ]
@@ -47,6 +68,12 @@
             "id": "segment_equivalence_001",
             "name": "North Strip",
             "surface": "ground"
+          },
+          "assert": {
+            "invariant": "segment identity is created for downstream layout operations",
+            "observation": {
+              "createdEntityId": "segment_equivalence_001"
+            }
           }
         },
         {
@@ -55,6 +82,12 @@
             "id": "bed_equivalence_001",
             "segmentId": "segment_equivalence_001",
             "name": "North Bed 1"
+          },
+          "assert": {
+            "invariant": "bed is created beneath the selected segment",
+            "observation": {
+              "createdEntityId": "bed_equivalence_001"
+            }
           }
         },
         {
@@ -63,6 +96,12 @@
             "id": "path_equivalence_001",
             "segmentId": "segment_equivalence_001",
             "name": "North Path"
+          },
+          "assert": {
+            "invariant": "path is created in the same segment namespace as the bed",
+            "observation": {
+              "createdEntityId": "path_equivalence_001"
+            }
           }
         },
         {
@@ -72,6 +111,12 @@
             "cropId": "crop_potato_bintje",
             "stage": "planned",
             "startedAt": "2026-03-01"
+          },
+          "assert": {
+            "invariant": "batch is created with a stable batch identity",
+            "observation": {
+              "createdBatchId": "batch_equivalence_001"
+            }
           }
         },
         {
@@ -80,6 +125,12 @@
             "batchId": "batch_equivalence_001",
             "bedId": "bed_equivalence_001",
             "assignedAt": "2026-03-01"
+          },
+          "assert": {
+            "invariant": "assignment response confirms batch is linked to the bed",
+            "observation": {
+              "assignmentPresent": true
+            }
           }
         },
         {
@@ -87,12 +138,37 @@
           "input": {
             "bedId": "bed_equivalence_001"
           },
-          "expect": {
-            "status": 200
+          "assert": {
+            "invariant": "assigned batch is discoverable by bed query",
+            "observation": {
+              "batchIds": [
+                "batch_equivalence_001"
+              ]
+            }
           }
         },
         {
-          "op": "reloadState"
+          "op": "reloadState",
+          "assert": {
+            "invariant": "batch assignment remains visible after reload",
+            "observation": {
+              "stateLoaded": true
+            }
+          }
+        },
+        {
+          "op": "listBatchesByBed",
+          "input": {
+            "bedId": "bed_equivalence_001"
+          },
+          "assert": {
+            "invariant": "reloaded state returns the same batch assignment",
+            "observation": {
+              "batchIds": [
+                "batch_equivalence_001"
+              ]
+            }
+          }
         }
       ]
     },
@@ -107,6 +183,12 @@
             "cultivarId": "cultivar_cabbage_golden_acre",
             "quantity": 20,
             "unit": "seed"
+          },
+          "assert": {
+            "invariant": "inventory item is persisted with a deterministic identity",
+            "observation": {
+              "createdEntityId": "seed_equivalence_001"
+            }
           }
         },
         {
@@ -116,6 +198,12 @@
             "cropId": "crop_cabbage_golden_acre",
             "bedId": "bed_001",
             "plannedDate": "2026-04-01"
+          },
+          "assert": {
+            "invariant": "crop plan creation is represented semantically by plan identity",
+            "observation": {
+              "createdEntityId": "plan_equivalence_001"
+            }
           }
         },
         {
@@ -123,12 +211,66 @@
           "input": {
             "cropId": "crop_cabbage_golden_acre"
           },
-          "expect": {
-            "status": 200
+          "assert": {
+            "invariant": "validation fails with the expected normalized rule category",
+            "observation": {
+              "issues": [
+                {
+                  "messageCategory": "missing_required"
+                }
+              ]
+            }
           }
         },
         {
-          "op": "reloadState"
+          "op": "reloadState",
+          "assert": {
+            "invariant": "state reload succeeds before export/idempotence checks",
+            "observation": {
+              "stateLoaded": true
+            }
+          }
+        },
+        {
+          "op": "validateBatch",
+          "input": {
+            "cropId": "crop_cabbage_golden_acre"
+          },
+          "assert": {
+            "invariant": "repeated reload/validation is idempotent",
+            "observation": {
+              "issues": [
+                {
+                  "messageCategory": "missing_required"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "op": "reloadState",
+          "assert": {
+            "invariant": "second reload preserves export-equivalent state",
+            "observation": {
+              "stateLoaded": true
+            }
+          }
+        },
+        {
+          "op": "validateBatch",
+          "input": {
+            "cropId": "crop_cabbage_golden_acre"
+          },
+          "assert": {
+            "invariant": "second validation remains semantically identical to the first",
+            "observation": {
+              "issues": [
+                {
+                  "messageCategory": "missing_required"
+                }
+              ]
+            }
+          }
         }
       ]
     }
