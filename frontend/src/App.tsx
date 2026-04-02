@@ -7982,6 +7982,8 @@ function App() {
   const [isInitializingStorage, setIsInitializingStorage] = useState(true);
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
   const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const configuredFrontendMode = env?.VITE_FRONTEND_MODE ?? processEnv?.VITE_FRONTEND_MODE ?? 'typescript';
+  const frontendMode = configuredFrontendMode.toLowerCase() === 'backend' ? 'backend' : 'typescript';
   const isDevResetEnabled =
     env?.VITE_ENABLE_DEV_RESET === 'true' || processEnv?.VITE_ENABLE_DEV_RESET === 'true';
   const isTestEnvironment = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
@@ -8071,6 +8073,9 @@ function App() {
     <div className="app-shell">
       <header className="app-header">
         <h1>SurvivalGarden</h1>
+        <p className={`app-mode-indicator app-mode-indicator--${frontendMode}`} aria-live="polite">
+          Mode: {frontendMode === 'backend' ? '.NET backend' : 'TypeScript local'}
+        </p>
       </header>
 
       <main className="app-content" ref={mainContentRef}>
