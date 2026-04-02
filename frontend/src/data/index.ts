@@ -71,8 +71,10 @@ const DEFAULT_SEGMENT_ID = 'segment_default_main';
 const DEFAULT_SEGMENT_NAME = 'Main Segment';
 const DEFAULT_SEGMENT_ORIGIN = 'default_bootstrap';
 type AppSegment = NonNullable<AppState['segments']>[number];
+type DataExecutionMode = 'typescript' | 'backend';
 
 const LEGACY_BED_TYPE = 'vegetable_bed';
+const DEFAULT_BACKEND_API_BASE_URL = '';
 
 type LayoutMigrationWarningCode =
   | 'legacy_layout_segment_created'
@@ -93,6 +95,29 @@ type LayoutMigrationReport = {
   migrated: boolean;
   warnings: LayoutMigrationWarning[];
 };
+
+const resolveRuntimeEnv = (): Record<string, string | undefined> => {
+  const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  if (importMetaEnv) {
+    return importMetaEnv;
+  }
+
+  const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return processEnv ?? {};
+};
+
+const getDataExecutionMode = (): DataExecutionMode => {
+  const env = resolveRuntimeEnv();
+  const configuredMode = env.VITE_FRONTEND_MODE ?? 'typescript';
+  return configuredMode.toLowerCase() === 'backend' ? 'backend' : 'typescript';
+};
+
+const getBackendApiBaseUrl = (): string => {
+  const env = resolveRuntimeEnv();
+  return (env.VITE_BACKEND_API_BASE_URL ?? DEFAULT_BACKEND_API_BASE_URL).trim().replace(/\/$/, '');
+};
+
+const toBackendApiUrl = (path: string): string => `${getBackendApiBaseUrl()}${path}`;
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
@@ -1286,6 +1311,16 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 };
 
 export const initializeAppStateStorage = async (): Promise<void> => {
+  if (getDataExecutionMode() === 'backend') {
+    const currentState = await loadAppStateFromIndexedDb();
+
+    if (!currentState) {
+      await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace' });
+    }
+
+    return;
+  }
+
   const database = await openAppStateDatabase();
 
   try {
@@ -1323,6 +1358,11 @@ export const createEmptyAppState = (currentState: AppState | null): AppState => 
 });
 
 export const resetToGoldenDataset = async (): Promise<void> => {
+  if (getDataExecutionMode() === 'backend') {
+    await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace' });
+    return;
+  }
+
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
   }
@@ -1340,6 +1380,27 @@ export const resetToGoldenDataset = async (): Promise<void> => {
 };
 
 export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
+  if (getDataExecutionMode() === 'backend') {
+    const response = await fetch(toBackendApiUrl('/api/app-state'));
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new AppStateStorageError(`Failed to load app state from backend API: ${response.status} ${response.statusText}`);
+    }
+
+    const payload = await response.json();
+    const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(payload));
+
+    if (migrationResult.report.warnings.length > 0) {
+      console.warn('AppState backend load migration warnings', migrationResult.report.warnings);
+    }
+
+    return canonicalizeForExport(assertValid('appState', migrationResult.payload));
+  }
+
   const database = await openAppStateDatabase();
 
   try {
@@ -1371,6 +1432,45 @@ export const saveAppStateToIndexedDb = async (
   appState: unknown,
   options: SaveAppStateOptions = {},
 ): Promise<MergeReport | null> => {
+  if (getDataExecutionMode() === 'backend') {
+    const candidateState =
+      appState && typeof appState === 'object'
+        ? {
+            ...(appState as Record<string, unknown>),
+            settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+          }
+        : appState;
+    const validState = assertValid('appState', candidateState);
+    const isReplaceMode = options.mode === 'replace';
+    let report: MergeReport | null = null;
+    let stateToPersist = canonicalizeForExport(validState);
+
+    if (!isReplaceMode) {
+      const existingState = await loadAppStateFromIndexedDb();
+
+      if (existingState) {
+        const merged = mergeAppStates(existingState, stateToPersist);
+        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        report = merged.report;
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        report.warnings.push(...hierarchyValidation.warnings);
+        report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
+      }
+    }
+
+    const response = await fetch(toBackendApiUrl('/api/app-state'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stateToPersist),
+    });
+
+    if (!response.ok) {
+      throw new AppStateStorageError(`Failed to save app state to backend API: ${response.status} ${response.statusText}`);
+    }
+
+    return report;
+  }
+
   const database = await openAppStateDatabase();
 
   try {
