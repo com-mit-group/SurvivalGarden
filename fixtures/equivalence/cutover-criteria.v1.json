@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "workflows": {
+    "batches": {
+      "minRuns": 3,
+      "maxMismatchRate": 0,
+      "maxValidationMismatches": 0
+    },
+    "tasks": {
+      "minRuns": 2,
+      "maxMismatchRate": 0,
+      "maxValidationMismatches": 0
+    },
+    "bedsSegments": {
+      "minRuns": 3,
+      "maxMismatchRate": 0,
+      "maxValidationMismatches": 0
+    },
+    "taxonomy": {
+      "minRuns": 3,
+      "maxMismatchRate": 0,
+      "maxValidationMismatches": 0
+    },
+    "inventory": {
+      "minRuns": 2,
+      "maxMismatchRate": 0,
+      "maxValidationMismatches": 0
+    }
+  }
+}

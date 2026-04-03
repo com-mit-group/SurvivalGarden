@@ -20,9 +20,12 @@ const args = new Map(
 
 const scenarioPath = path.resolve(repoRoot, args.get('--scenarios') ?? 'fixtures/equivalence/equivalence-scenarios.v1.json');
 const allowlistPath = path.resolve(repoRoot, args.get('--allowlist') ?? 'fixtures/equivalence/allowlist.v1.json');
+const cutoverCriteriaPath = path.resolve(repoRoot, args.get('--cutoverCriteria') ?? 'fixtures/equivalence/cutover-criteria.v1.json');
 const tsBaseUrl = (args.get('--tsBaseUrl') ?? process.env.TS_BASE_URL ?? '').replace(/\/$/, '');
 const dotnetBaseUrl = (args.get('--dotnetBaseUrl') ?? process.env.DOTNET_BASE_URL ?? '').replace(/\/$/, '');
 const outputPath = path.resolve(repoRoot, args.get('--out') ?? 'artifacts/equivalence-report.json');
+const rolloutReportPath = path.resolve(repoRoot, args.get('--rolloutOut') ?? 'artifacts/equivalence-rollout-report.json');
+const flipWorkflows = parseCsvArg(args.get('--flipWorkflows'));
 
 if (!tsBaseUrl || !dotnetBaseUrl) {
   console.error('Missing TS_BASE_URL or DOTNET_BASE_URL.');
@@ -32,6 +35,7 @@ if (!tsBaseUrl || !dotnetBaseUrl) {
 
 const scenariosDoc = JSON.parse(await readFile(scenarioPath, 'utf8'));
 const allowlistDoc = JSON.parse(await readFile(allowlistPath, 'utf8'));
+const cutoverCriteriaDoc = JSON.parse(await readFile(cutoverCriteriaPath, 'utf8'));
 const fixturePath = path.resolve(repoRoot, scenariosDoc.resetFixture ?? 'fixtures/golden/trier-v1.json');
 const resetFixture = JSON.parse(await readFile(fixturePath, 'utf8'));
 const todayIsoDate = new Date().toISOString().slice(0, 10);
@@ -62,6 +66,24 @@ const report = {
   blockingMismatches: [],
   mismatches: [],
   scenarios: [],
+};
+
+const rolloutReport = {
+  generatedAtUtc: new Date().toISOString(),
+  sourceMode: 'dual-path',
+  scenarioFile: path.relative(repoRoot, scenarioPath),
+  cutoverCriteriaFile: path.relative(repoRoot, cutoverCriteriaPath),
+  outputReportFile: path.relative(repoRoot, outputPath),
+  boundaries: [],
+  workflows: {},
+  summary: {
+    totalBoundaries: 0,
+    succeeded: 0,
+    failed: 0,
+    validationMismatches: 0,
+    requestedCutoverWorkflows: flipWorkflows,
+    blockedCutovers: [],
+  },
 };
 
 const NON_SEMANTIC_KEYS = new Set([
@@ -138,6 +160,14 @@ for (const scenario of scenariosDoc.scenarios ?? []) {
   const rawStateDiff = [];
   compareValues(`scenario:${scenario.id}:finalStateRaw`, runResults.typescript.finalStateRaw, runResults.dotnet.finalStateRaw, rawStateDiff);
 
+  recordBoundaryOutcomes({
+    rolloutReport,
+    scenario,
+    runResults,
+    stepObservationDiff,
+    projectedStateDiff,
+  });
+
   const semanticMismatchCandidates = [...stepObservationDiff, ...projectedStateDiff];
   const classifiedSemanticMismatches = semanticMismatchCandidates.map((mismatch) =>
     classifyMismatch(mismatch, scenario.id, compiledAllowlistEntries),
@@ -197,8 +227,19 @@ report.summary.suggestedNextAction =
       ? 'No blockers found; review allowlisted differences and retire debt where possible.'
       : 'No mismatches detected; proceed with cutover checks.';
 
+rolloutReport.summary.totalBoundaries = rolloutReport.boundaries.length;
+rolloutReport.summary.succeeded = rolloutReport.boundaries.filter((entry) => entry.success).length;
+rolloutReport.summary.failed = rolloutReport.boundaries.filter((entry) => !entry.success).length;
+rolloutReport.summary.validationMismatches = rolloutReport.boundaries.filter((entry) => entry.validationMismatch).length;
+rolloutReport.workflows = evaluateWorkflowRollout(rolloutReport.boundaries, cutoverCriteriaDoc, flipWorkflows);
+rolloutReport.summary.blockedCutovers = Object.values(rolloutReport.workflows)
+  .filter((workflow) => workflow.cutoverRequested && !workflow.cutoverAllowed)
+  .map((workflow) => workflow.workflow);
+
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+await mkdir(path.dirname(rolloutReportPath), { recursive: true });
+await writeFile(rolloutReportPath, `${JSON.stringify(rolloutReport, null, 2)}\n`, 'utf8');
 
 if (allowlistValidationErrors.length > 0) {
   console.error(`Allowlist validation errors: ${allowlistValidationErrors.length}`);
@@ -219,9 +260,145 @@ if (allowlistValidationErrors.length > 0 || report.summary.blocked > 0) {
   process.exit(1);
 }
 
+if (rolloutReport.summary.blockedCutovers.length > 0) {
+  console.error(`Cutover blocked for workflows: ${rolloutReport.summary.blockedCutovers.join(', ')}`);
+  process.exit(1);
+}
+
 logConsoleSummary(report);
 console.log(`Equivalence suite passed (${report.scenarios.length} scenarios).`);
 console.log(`Report written to ${path.relative(repoRoot, outputPath)}`);
+console.log(`Rollout report written to ${path.relative(repoRoot, rolloutReportPath)}`);
+
+function parseCsvArg(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function recordBoundaryOutcomes({ rolloutReport, scenario, runResults, stepObservationDiff, projectedStateDiff }) {
+  const mismatchPaths = new Set([...stepObservationDiff, ...projectedStateDiff].map((mismatch) => mismatch.path));
+  const stepCount = Math.min(runResults.typescript.stepObservations.length, runResults.dotnet.stepObservations.length);
+
+  for (let index = 0; index < stepCount; index += 1) {
+    const tsStep = runResults.typescript.stepObservations[index];
+    const dotnetStep = runResults.dotnet.stepObservations[index];
+    const boundaryPath = `scenario:${scenario.id}:stepObservations[${index}]`;
+    const failed = [...mismatchPaths].some((path) => path.startsWith(boundaryPath));
+    const workflow = mapOpToWorkflow(tsStep.op);
+    const validationMismatch = tsStep.op === 'validateBatch' && failed;
+
+    rolloutReport.boundaries.push({
+      workflow,
+      scenarioId: scenario.id,
+      scenarioName: scenario.name,
+      boundaryId: `${scenario.id}:step:${index}:${tsStep.op}`,
+      boundaryType: 'step',
+      operation: tsStep.op,
+      sourceMode: 'dual-path',
+      success: !failed,
+      validationMismatch,
+      timingMs: {
+        typescript: tsStep.timingMs,
+        dotnet: dotnetStep.timingMs,
+      },
+    });
+  }
+
+  const projectedFailed = [...mismatchPaths].some((path) => path.startsWith(`scenario:${scenario.id}:finalState`));
+  rolloutReport.boundaries.push({
+    workflow: inferScenarioWorkflow(rolloutReport.boundaries, scenario.id),
+    scenarioId: scenario.id,
+    scenarioName: scenario.name,
+    boundaryId: `${scenario.id}:finalState`,
+    boundaryType: 'finalState',
+    operation: 'finalStateProjection',
+    sourceMode: 'dual-path',
+    success: !projectedFailed,
+    validationMismatch: false,
+    timingMs: {
+      typescript: null,
+      dotnet: null,
+    },
+  });
+}
+
+function inferScenarioWorkflow(boundaries, scenarioId) {
+  const matches = boundaries.filter((entry) => entry.scenarioId === scenarioId && entry.boundaryType === 'step');
+  return matches.length > 0 ? matches[0].workflow : 'unknown';
+}
+
+function mapOpToWorkflow(op) {
+  if (op === 'validateBatch' || op === 'createSeedInventoryItem') {
+    return 'inventory';
+  }
+
+  if (op === 'createCropPlan') {
+    return 'tasks';
+  }
+
+  if (op === 'createSpecies' || op === 'createCrop' || op === 'createCultivar') {
+    return 'taxonomy';
+  }
+
+  if (op === 'createSegment' || op === 'createBed' || op === 'createPath') {
+    return 'bedsSegments';
+  }
+
+  if (op === 'createBatch' || op === 'assignBatchToBed' || op === 'listBatchesByBed') {
+    return 'batches';
+  }
+
+  return 'shared';
+}
+
+function evaluateWorkflowRollout(boundaries, cutoverCriteriaDoc, flipWorkflows) {
+  const criteriaByWorkflow = cutoverCriteriaDoc?.workflows ?? {};
+  const workflows = {};
+  const seen = new Set([...Object.keys(criteriaByWorkflow), ...boundaries.map((entry) => entry.workflow), ...flipWorkflows]);
+
+  for (const workflow of [...seen].sort((left, right) => left.localeCompare(right))) {
+    const entries = boundaries.filter((entry) => entry.workflow === workflow && entry.boundaryType === 'step');
+    const failures = entries.filter((entry) => !entry.success).length;
+    const mismatchRate = entries.length > 0 ? failures / entries.length : 1;
+    const validationMismatches = entries.filter((entry) => entry.validationMismatch).length;
+    const criteria = criteriaByWorkflow[workflow] ?? {
+      minRuns: 1,
+      maxMismatchRate: 0,
+      maxValidationMismatches: 0,
+    };
+    const minRunsMet = entries.length >= criteria.minRuns;
+    const mismatchRateMet = mismatchRate <= criteria.maxMismatchRate;
+    const validationMismatchMet = validationMismatches <= criteria.maxValidationMismatches;
+    const cutoverAllowed = minRunsMet && mismatchRateMet && validationMismatchMet;
+
+    workflows[workflow] = {
+      workflow,
+      sourceMode: 'dual-path',
+      cutoverRequested: flipWorkflows.includes(workflow),
+      cutoverAllowed,
+      criteria,
+      observed: {
+        runs: entries.length,
+        failures,
+        mismatchRate,
+        validationMismatches,
+      },
+      checks: {
+        minRunsMet,
+        mismatchRateMet,
+        validationMismatchMet,
+      },
+    };
+  }
+
+  return workflows;
+}
 
 function compileAllowlist(allowlist, todayDate) {
   const entries = Array.isArray(allowlist?.entries) ? allowlist.entries : [];
@@ -308,10 +485,12 @@ function classifyMismatch(mismatch, scenarioId, allowlistEntries) {
 }
 
 async function runStep(runtime, step) {
+  const startedAt = Date.now();
   const response = await runtime.executeStep(step);
+  const timingMs = Date.now() - startedAt;
   assertSuccessfulResponse(runtime.name, step.op, response);
   assertStepExpectations(step, response);
-  return normalizeStepResult(step, response);
+  return normalizeStepResult(step, response, timingMs);
 }
 
 function assertStepExpectations(step, response) {
@@ -348,9 +527,10 @@ function containsStructure(actual, expected) {
   return Object.entries(expected).every(([key, expectedValue]) => containsStructure(actual[key], expectedValue));
 }
 
-function normalizeStepResult(step, response) {
+function normalizeStepResult(step, response, timingMs) {
   return {
     op: step.op,
+    timingMs,
     input: canonicalize(step.input ?? null),
     observation: canonicalize(buildStepObservation(step, response)),
   };
