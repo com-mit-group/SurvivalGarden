@@ -3,7 +3,6 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
 
 import {
-  generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
   createEmptyAppState,
   initializeAppStateStorage,
@@ -20,19 +19,18 @@ import {
   listSeedInventoryItemsFromAppState,
   removeSeedInventoryItemFromAppState,
   upsertSeedInventoryItemInAppState,
-  upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
   upsertCropInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
-  assignBatchToBed,
-  moveBatch,
-  removeBatchFromBed,
   assertValid,
+  mutateBatchAssignment,
+  regenerateCalendarTasks,
+  transitionBatchStage,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
-import { applyStageEvent, canTransition, inferBatchStartMethod } from './domain';
+import { canTransition, inferBatchStartMethod } from './domain';
 
 type CultivarRecord = {
   cultivarId: string;
@@ -961,10 +959,8 @@ function BedDetailPage() {
       }
 
       const assignedAt = new Date(assignDate).toISOString();
-      const updatedBatch = assignBatchToBed(existingBatch, bedId, assignedAt);
-      const nextState = upsertBatchInAppState(appState, updatedBatch);
-      await saveAppStateToIndexedDb(nextState);
-
+      await mutateBatchAssignment('assign', { batchId: existingBatch.batchId, bedId, at: assignedAt });
+      const nextState = await loadAppStateFromIndexedDb();
       refreshBedBatches(nextState);
       setAssignDate(getLocalDateTimeDefault());
       setAssignMeta('');
@@ -1010,9 +1006,8 @@ function BedDetailPage() {
       }
 
       const moveDate = new Date(moveDateInput).toISOString();
-      const movedBatch = moveBatch(existingBatch, targetBedId, moveDate);
-      const nextState = upsertBatchInAppState(appState, movedBatch);
-      await saveAppStateToIndexedDb(nextState);
+      await mutateBatchAssignment('move', { batchId: existingBatch.batchId, bedId: targetBedId, at: moveDate });
+      const nextState = await loadAppStateFromIndexedDb();
       refreshBedBatches(nextState);
       setMoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
       setMoveMetaByBatchId((current) => ({ ...current, [batch.batchId]: '' }));
@@ -1066,9 +1061,8 @@ function BedDetailPage() {
       }
 
       const endDate = new Date(removeDateInput).toISOString();
-      const nextBatch = removeBatchFromBed(existingBatch, endDate);
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
+      const nextBatch = await mutateBatchAssignment('remove', { batchId: existingBatch.batchId, at: endDate });
+      const nextState = await loadAppStateFromIndexedDb();
       refreshBedBatches(nextState);
       setRemoveConfirmByBatchId((current) => ({ ...current, [batch.batchId]: false }));
       setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
@@ -1608,9 +1602,9 @@ function CalendarPage() {
 
       const tasksBeforeBySourceKey = new Map(listTasksFromAppState(appState).map((task) => [task.sourceKey, task]));
       const currentYear = new Date().getUTCFullYear();
-      const generationResult = generateCalendarTasksWithDiagnostics(appState, currentYear);
-      const generatedTasks = generationResult.tasks;
-      const nextState = upsertGeneratedTasksInAppState(appState, generatedTasks);
+      const generationResult = await regenerateCalendarTasks(currentYear);
+      const generatedTasks = generationResult.generatedTasks;
+      const nextState = generationResult.stateAfter;
       const tasksAfter = listTasksFromAppState(nextState);
       const tasksAfterBySourceKey = new Map(tasksAfter.map((task) => [task.sourceKey, task]));
 
@@ -5047,24 +5041,11 @@ function BatchDetailPage() {
       setStageActionMessage('Enter a valid date and time before applying a stage action.');
       return;
     }
-    const transition = applyStageEvent(batch, { stage: nextStage, occurredAt });
-    if (!transition.ok) {
-      setStageActionMessage(`Unable to apply stage event: ${transition.reason}.`);
-      return;
-    }
-
     setIsSavingStageAction(true);
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setStageActionMessage('Unable to save because local app state is unavailable.');
-        return;
-      }
-
-      const nextState = upsertBatchInAppState(appState, transition.batch);
-      await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      const nextBatch = await transitionBatchStage(batchId, nextStage, occurredAt);
+      const refreshedBatch = nextBatch;
       setBatch(refreshedBatch);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
@@ -5201,22 +5182,7 @@ function BatchDetailPage() {
     setIsSavingAssignToBed(true);
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setAssignToBedMessage('Unable to save because local app state is unavailable.');
-        return;
-      }
-
-      const existingBatch = appState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
-      if (!existingBatch) {
-        setAssignToBedMessage('Batch was not found.');
-        return;
-      }
-
-      const nextBatch = assignBatchToBed(existingBatch, assignToBedId, assignedAt);
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      const refreshedBatch = await mutateBatchAssignment('assign', { batchId, bedId: assignToBedId, at: assignedAt });
       setBatch(refreshedBatch);
       setAssignToBedMessage(`Batch assigned to ${assignToBedId}.`);
       setRemoveFromBedMessage(null);
@@ -5251,22 +5217,12 @@ function BatchDetailPage() {
       setRemoveFromBedMessage('Enter a valid date and time before removing from bed.');
       return;
     }
-    const nextBatch = removeBatchFromBed(batch, endDate);
-
     setIsSavingRemoveFromBed(true);
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setRemoveFromBedMessage('Unable to save because local app state is unavailable.');
-        return;
-      }
-
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      const refreshedBatch = await mutateBatchAssignment('remove', { batchId, at: endDate });
       setBatch(refreshedBatch);
-      setRemoveFromBedMessage(nextBatch === batch ? 'Batch is already unassigned for that date.' : 'Batch removed from bed.');
+      setRemoveFromBedMessage('Batch removed from bed.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove batch from bed.';
       setRemoveFromBedMessage(message);
