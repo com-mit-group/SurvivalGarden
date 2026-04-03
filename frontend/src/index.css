@@ -44,6 +44,25 @@ summary:focus-visible {
   font-size: 1.25rem;
 }
 
+.app-mode-indicator {
+  display: inline-block;
+  margin: 0.5rem 0 0;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.app-mode-indicator--typescript {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.app-mode-indicator--backend {
+  color: #065f46;
+  background: #d1fae5;
+}
+
 .app-content {
   display: grid;
   padding: 1.5rem 1rem 5.5rem;
