@@ -1477,6 +1477,45 @@ const saveAppStateToLocalIndexedDb = async (
   appState: unknown,
   options: SaveAppStateOptions = {},
 ): Promise<MergeReport | null> => {
+  if (getDataExecutionMode() === 'backend') {
+    const candidateState =
+      appState && typeof appState === 'object'
+        ? {
+            ...(appState as Record<string, unknown>),
+            settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+          }
+        : appState;
+    const validState = assertValid('appState', candidateState);
+    const isReplaceMode = options.mode === 'replace';
+    let report: MergeReport | null = null;
+    let stateToPersist = canonicalizeForExport(validState);
+
+    if (!isReplaceMode) {
+      const existingState = await loadAppStateFromIndexedDb();
+
+      if (existingState) {
+        const merged = mergeAppStates(existingState, stateToPersist);
+        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        report = merged.report;
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        report.warnings.push(...hierarchyValidation.warnings);
+        report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
+      }
+    }
+
+    const response = await fetch(toBackendApiUrl('/api/app-state'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stateToPersist),
+    });
+
+    if (!response.ok) {
+      throw new AppStateStorageError(`Failed to save app state to backend API: ${response.status} ${response.statusText}`);
+    }
+
+    return report;
+  }
+
   const database = await openAppStateDatabase();
 
   try {
