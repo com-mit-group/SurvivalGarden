@@ -2,6 +2,18 @@ import type { AppState, Batch } from '../contracts';
 import { assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
+import {
+  assignBatchToBed as assignBatchToBedLocal,
+  getBatchFromAppState as getBatchFromAppStateLocal,
+  moveBatch as moveBatchLocal,
+  removeBatchFromBed as removeBatchFromBedLocal,
+  upsertBatchInAppState as upsertBatchInAppStateLocal,
+} from './repos/batchRepository';
+import {
+  generateCalendarTasksWithDiagnostics as generateCalendarTasksWithDiagnosticsLocal,
+  upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
+} from './repos/taskRepository';
+import { applyStageEvent } from '../domain';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -1675,6 +1687,132 @@ export const saveAppStateToIndexedDb = async (
   }
 
   return saveAppStateToLocalIndexedDb(appState, options);
+};
+
+const parseBackendError = async (response: Response): Promise<string> => {
+  try {
+    const payload = await response.json();
+    if (payload && typeof payload.error === 'string') {
+      return payload.error;
+    }
+  } catch {
+    // ignore parse issues; fall back to status text
+  }
+
+  return `${response.status} ${response.statusText}`;
+};
+
+export const transitionBatchStage = async (
+  batchId: string,
+  nextStage: string,
+  occurredAt: string,
+): Promise<Batch> => {
+  if (getDataExecutionMode() === 'backend') {
+    const response = await fetch(toBackendApiUrl(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: nextStage, occurredAt }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseBackendError(response));
+    }
+
+    return assertValid('batch', await response.json());
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const existingBatch = getBatchFromAppStateLocal(appState, batchId);
+  if (!existingBatch) {
+    throw new Error('Batch not found.');
+  }
+
+  const transition = applyStageEvent(existingBatch, { stage: nextStage, occurredAt });
+  if (!transition.ok) {
+    throw new Error(transition.reason);
+  }
+
+  const nextState = upsertBatchInAppStateLocal(appState, transition.batch);
+  await saveAppStateToIndexedDb(nextState);
+  return transition.batch;
+};
+
+export const mutateBatchAssignment = async (
+  operation: 'assign' | 'move' | 'remove',
+  payload: { batchId: string; bedId?: string; at: string },
+): Promise<Batch> => {
+  if (getDataExecutionMode() === 'backend') {
+    const response = await fetch(toBackendApiUrl(`/api/domain/batches/${encodeURIComponent(payload.batchId)}/assignment`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation, bedId: payload.bedId, at: payload.at }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseBackendError(response));
+    }
+
+    return assertValid('batch', await response.json());
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const existingBatch = getBatchFromAppStateLocal(appState, payload.batchId);
+  if (!existingBatch) {
+    throw new Error('Batch not found.');
+  }
+
+  const nextBatch =
+    operation === 'assign'
+      ? assignBatchToBedLocal(existingBatch, payload.bedId ?? '', payload.at)
+      : operation === 'move'
+        ? moveBatchLocal(existingBatch, payload.bedId ?? '', payload.at)
+        : removeBatchFromBedLocal(existingBatch, payload.at);
+  const nextState = upsertBatchInAppStateLocal(appState, nextBatch);
+  await saveAppStateToIndexedDb(nextState);
+  return nextBatch;
+};
+
+export const regenerateCalendarTasks = async (year: number) => {
+  if (getDataExecutionMode() === 'backend') {
+    const response = await fetch(toBackendApiUrl('/api/domain/tasks/regenerate-calendar'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseBackendError(response));
+    }
+
+    const payload = await response.json();
+    return {
+      generatedTasks: payload.generatedTasks as AppState['tasks'],
+      diagnostics: (payload.diagnostics ?? []) as { cropId: string; reason: string; detail: string }[],
+      stateAfter: assertValid('appState', payload.stateAfter),
+    };
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const generationResult = generateCalendarTasksWithDiagnosticsLocal(appState, year);
+  const nextState = upsertGeneratedTasksInAppStateLocal(appState, generationResult.tasks);
+  await saveAppStateToIndexedDb(nextState);
+  return {
+    generatedTasks: generationResult.tasks,
+    diagnostics: generationResult.diagnostics,
+    stateAfter: nextState,
+  };
 };
 
 export const savePhotoBlobToIndexedDb = async (photoId: string, blob: Blob): Promise<void> => {
