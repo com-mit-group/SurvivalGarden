@@ -7,7 +7,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services, string? appStatePath = null)
     {
-        var resolvedPath = appStatePath ?? Path.Combine(AppContext.BaseDirectory, "data", "app-state.json");
+        var resolvedPath = appStatePath ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "data", "app-state.json"));
 
         // Current default adapter is file-backed JSON persistence.
         // The IGardenStateStore abstraction remains the seam for swapping to a database-backed adapter later.

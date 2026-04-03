@@ -1456,13 +1456,18 @@ const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
 
 export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
   if (getDataExecutionMode() === 'backend') {
-    const backendState = await loadAppStateFromBackendApi();
+    try {
+      const backendState = await loadAppStateFromBackendApi();
 
-    if (backendState) {
-      await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+      if (backendState) {
+        await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+      }
+
+      return backendState;
+    } catch (error) {
+      console.warn('Backend app-state load failed; using local IndexedDB state.', error);
+      return loadAppStateFromLocalIndexedDb();
     }
-
-    return backendState;
   }
 
   return loadAppStateFromLocalIndexedDb();
@@ -1654,9 +1659,8 @@ export const saveAppStateToIndexedDb = async (
         body: JSON.stringify(stateToPersist),
       });
     } catch (error) {
-      throw new AppStateStorageError(
-        `Failed to reach backend API while saving app state: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.warn('Backend app-state save failed; saving to local IndexedDB only.', error);
+      return saveAppStateToLocalIndexedDb(stateToPersist, { mode: 'replace' });
     }
 
     if (!response.ok) {
