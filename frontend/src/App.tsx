@@ -3,7 +3,6 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
 
 import {
-  generateCalendarTasksWithDiagnostics,
   SchemaValidationError,
   createEmptyAppState,
   initializeAppStateStorage,
@@ -20,15 +19,11 @@ import {
   listSeedInventoryItemsFromAppState,
   removeSeedInventoryItemFromAppState,
   upsertSeedInventoryItemInAppState,
-  upsertGeneratedTasksInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
   upsertCropInAppState,
   upsertBedInAppState,
   getActiveBedAssignment,
-  assignBatchToBed,
-  moveBatch,
-  removeBatchFromBed,
   assertValid,
   mutateBatchAssignment,
   regenerateCalendarTasks,

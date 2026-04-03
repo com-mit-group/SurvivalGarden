@@ -19,7 +19,7 @@ internal static class DomainOperationEndpoints
                 return Results.NotFound(new { error = "app_state_not_found" });
             }
 
-            var batch = GardenJsonCollectionHelpers.GetCollection(state, "batches")
+            var batch = GetCollection(state, "batches")
                 .OfType<JsonObject>()
                 .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
             if (batch is null)
@@ -56,7 +56,7 @@ internal static class DomainOperationEndpoints
                 return Results.NotFound(new { error = "app_state_not_found" });
             }
 
-            var batch = GardenJsonCollectionHelpers.GetCollection(state, "batches")
+            var batch = GetCollection(state, "batches")
                 .OfType<JsonObject>()
                 .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
             if (batch is null)
@@ -94,7 +94,7 @@ internal static class DomainOperationEndpoints
             }
 
             var diagnostics = new JsonArray();
-            var tasks = GardenJsonCollectionHelpers.GetCollection(state, "tasks");
+            var tasks = GetCollection(state, "tasks");
             var generatedTasks = new JsonArray();
             foreach (var task in tasks.OfType<JsonObject>())
             {
@@ -296,5 +296,17 @@ internal static class DomainOperationEndpoints
         }
 
         return (false, "invalid_assignment_operation", batch);
+    }
+
+    private static JsonArray GetCollection(JsonObject state, string name)
+    {
+        if (state[name] is JsonArray collection)
+        {
+            return collection;
+        }
+
+        var created = new JsonArray();
+        state[name] = created;
+        return created;
     }
 }
