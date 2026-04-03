@@ -14,6 +14,7 @@ import {
   upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
 } from './repos/taskRepository';
 import { applyStageEvent } from '../domain';
+import { getFrontendMode, isWorkflowRoutedToBackend, toBackendApiUrl, workflowAdapter } from './workflowAdapter';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -83,10 +84,7 @@ const DEFAULT_SEGMENT_ID = 'segment_default_main';
 const DEFAULT_SEGMENT_NAME = 'Main Segment';
 const DEFAULT_SEGMENT_ORIGIN = 'default_bootstrap';
 type AppSegment = NonNullable<AppState['segments']>[number];
-type DataExecutionMode = 'typescript' | 'backend';
-
 const LEGACY_BED_TYPE = 'vegetable_bed';
-const DEFAULT_BACKEND_API_BASE_URL = '';
 
 type LayoutMigrationWarningCode =
   | 'legacy_layout_segment_created'
@@ -108,28 +106,7 @@ type LayoutMigrationReport = {
   warnings: LayoutMigrationWarning[];
 };
 
-const resolveRuntimeEnv = (): Record<string, string | undefined> => {
-  const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-  if (importMetaEnv) {
-    return importMetaEnv;
-  }
-
-  const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  return processEnv ?? {};
-};
-
-const getDataExecutionMode = (): DataExecutionMode => {
-  const env = resolveRuntimeEnv();
-  const configuredMode = env.VITE_FRONTEND_MODE ?? 'typescript';
-  return configuredMode.toLowerCase() === 'backend' ? 'backend' : 'typescript';
-};
-
-const getBackendApiBaseUrl = (): string => {
-  const env = resolveRuntimeEnv();
-  return (env.VITE_BACKEND_API_BASE_URL ?? DEFAULT_BACKEND_API_BASE_URL).trim().replace(/\/$/, '');
-};
-
-const toBackendApiUrl = (path: string): string => `${getBackendApiBaseUrl()}${path}`;
+const isBackendModeEnabled = (): boolean => getFrontendMode() === 'backend';
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
@@ -1323,7 +1300,7 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 };
 
 export const initializeAppStateStorage = async (): Promise<void> => {
-  if (getDataExecutionMode() === 'backend') {
+  if (isBackendModeEnabled()) {
     try {
       const backendState = await loadAppStateFromBackendApi();
       const localState = await loadAppStateFromLocalIndexedDb();
@@ -1388,7 +1365,7 @@ export const createEmptyAppState = (currentState: AppState | null): AppState => 
 });
 
 export const resetToGoldenDataset = async (): Promise<void> => {
-  if (getDataExecutionMode() === 'backend') {
+  if (isBackendModeEnabled()) {
     await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace' });
     return;
   }
@@ -1467,7 +1444,7 @@ const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
 };
 
 export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
-  if (getDataExecutionMode() === 'backend') {
+  if (isBackendModeEnabled()) {
     try {
       const backendState = await loadAppStateFromBackendApi();
 
@@ -1489,7 +1466,7 @@ const saveAppStateToLocalIndexedDb = async (
   appState: unknown,
   options: SaveAppStateOptions = {},
 ): Promise<MergeReport | null> => {
-  if (getDataExecutionMode() === 'backend') {
+  if (isBackendModeEnabled()) {
     const candidateState =
       appState && typeof appState === 'object'
         ? {
@@ -1636,7 +1613,7 @@ export const saveAppStateToIndexedDb = async (
   appState: unknown,
   options: SaveAppStateOptions & { mirrorToLocal?: boolean } = {},
 ): Promise<MergeReport | null> => {
-  if (getDataExecutionMode() === 'backend') {
+  if (isBackendModeEnabled()) {
     const candidateState =
       appState && typeof appState === 'object'
         ? {
@@ -1689,36 +1666,13 @@ export const saveAppStateToIndexedDb = async (
   return saveAppStateToLocalIndexedDb(appState, options);
 };
 
-const parseBackendError = async (response: Response): Promise<string> => {
-  try {
-    const payload = await response.json();
-    if (payload && typeof payload.error === 'string') {
-      return payload.error;
-    }
-  } catch {
-    // ignore parse issues; fall back to status text
-  }
-
-  return `${response.status} ${response.statusText}`;
-};
-
 export const transitionBatchStage = async (
   batchId: string,
   nextStage: string,
   occurredAt: string,
 ): Promise<Batch> => {
-  if (getDataExecutionMode() === 'backend') {
-    const response = await fetch(toBackendApiUrl(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: nextStage, occurredAt }),
-    });
-
-    if (!response.ok) {
-      throw new Error(await parseBackendError(response));
-    }
-
-    return assertValid('batch', await response.json());
+  if (isWorkflowRoutedToBackend('batches')) {
+    return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1745,18 +1699,8 @@ export const mutateBatchAssignment = async (
   operation: 'assign' | 'move' | 'remove',
   payload: { batchId: string; bedId?: string; at: string },
 ): Promise<Batch> => {
-  if (getDataExecutionMode() === 'backend') {
-    const response = await fetch(toBackendApiUrl(`/api/domain/batches/${encodeURIComponent(payload.batchId)}/assignment`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operation, bedId: payload.bedId, at: payload.at }),
-    });
-
-    if (!response.ok) {
-      throw new Error(await parseBackendError(response));
-    }
-
-    return assertValid('batch', await response.json());
+  if (isWorkflowRoutedToBackend('batches')) {
+    return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1781,21 +1725,11 @@ export const mutateBatchAssignment = async (
 };
 
 export const regenerateCalendarTasks = async (year: number) => {
-  if (getDataExecutionMode() === 'backend') {
-    const response = await fetch(toBackendApiUrl('/api/domain/tasks/regenerate-calendar'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year }),
-    });
-
-    if (!response.ok) {
-      throw new Error(await parseBackendError(response));
-    }
-
-    const payload = await response.json();
+  if (isWorkflowRoutedToBackend('tasks')) {
+    const payload = await workflowAdapter.tasks.regenerateCalendar(year);
     return {
-      generatedTasks: payload.generatedTasks as AppState['tasks'],
-      diagnostics: (payload.diagnostics ?? []) as { cropId: string; reason: string; detail: string }[],
+      generatedTasks: payload.generatedTasks,
+      diagnostics: payload.diagnostics,
       stateAfter: assertValid('appState', payload.stateAfter),
     };
   }
