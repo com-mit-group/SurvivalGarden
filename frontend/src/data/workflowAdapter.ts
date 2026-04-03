@@ -26,6 +26,13 @@ export const getBackendApiBaseUrl = (): string => {
 export const toBackendApiUrl = (path: string): string => `${getBackendApiBaseUrl()}${path}`;
 
 const isFeatureFlagEnabled = (value: string | undefined): boolean => value?.trim().toLowerCase() === 'true';
+const parseWorkflowList = (value: string | undefined): WorkflowFeature[] =>
+  (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry): entry is WorkflowFeature =>
+      entry === 'batches' || entry === 'tasks' || entry === 'bedsSegments' || entry === 'taxonomy' || entry === 'inventory',
+    );
 
 export const getFrontendMode = (): 'typescript' | 'backend' => {
   const env = resolveRuntimeEnv();
@@ -48,6 +55,39 @@ export const isWorkflowRoutedToBackend = (feature: WorkflowFeature): boolean => 
   const env = resolveRuntimeEnv();
   return isFeatureFlagEnabled(env[workflowFlagByFeature[feature]]);
 };
+
+const isParityAcceptedWorkflow = (feature: WorkflowFeature): boolean => {
+  const env = resolveRuntimeEnv();
+  return parseWorkflowList(env.VITE_PARITY_ACCEPTED_WORKFLOWS).includes(feature);
+};
+
+const isTypescriptRollbackShimEnabled = (feature: WorkflowFeature): boolean => {
+  const env = resolveRuntimeEnv();
+  if (!isFeatureFlagEnabled(env.VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS)) {
+    return false;
+  }
+
+  const rollbackFeatures = parseWorkflowList(env.VITE_TYPESCRIPT_ROLLBACK_WORKFLOWS);
+  return rollbackFeatures.length === 0 || rollbackFeatures.includes(feature);
+};
+
+export const shouldUseCanonicalBackendPath = (feature: WorkflowFeature): boolean => {
+  if (getFrontendMode() !== 'backend') {
+    return false;
+  }
+
+  if (isParityAcceptedWorkflow(feature)) {
+    return true;
+  }
+
+  return isWorkflowRoutedToBackend(feature);
+};
+
+/**
+ * @deprecated Rollback-only helper. Remove alongside VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS retirement.
+ */
+export const shouldUseTypescriptRollbackShim = (feature: WorkflowFeature): boolean =>
+  !shouldUseCanonicalBackendPath(feature) || isTypescriptRollbackShimEnabled(feature);
 
 export const parseBackendError = async (response: Response): Promise<string> => {
   try {

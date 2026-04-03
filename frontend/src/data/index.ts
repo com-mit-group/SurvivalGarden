@@ -14,7 +14,13 @@ import {
   upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
 } from './repos/taskRepository';
 import { applyStageEvent } from '../domain';
-import { getFrontendMode, isWorkflowRoutedToBackend, toBackendApiUrl, workflowAdapter } from './workflowAdapter';
+import {
+  getFrontendMode,
+  shouldUseCanonicalBackendPath,
+  shouldUseTypescriptRollbackShim,
+  toBackendApiUrl,
+  workflowAdapter,
+} from './workflowAdapter';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -1671,10 +1677,12 @@ export const transitionBatchStage = async (
   nextStage: string,
   occurredAt: string,
 ): Promise<Batch> => {
-  if (isWorkflowRoutedToBackend('batches')) {
+  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
     return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
   }
 
+  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  console.warn('[DEPRECATED] Using TypeScript batch stage transition rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {
     throw new Error('App state unavailable.');
@@ -1699,10 +1707,12 @@ export const mutateBatchAssignment = async (
   operation: 'assign' | 'move' | 'remove',
   payload: { batchId: string; bedId?: string; at: string },
 ): Promise<Batch> => {
-  if (isWorkflowRoutedToBackend('batches')) {
+  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
     return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
   }
 
+  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  console.warn('[DEPRECATED] Using TypeScript batch assignment rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {
     throw new Error('App state unavailable.');
@@ -1725,7 +1735,7 @@ export const mutateBatchAssignment = async (
 };
 
 export const regenerateCalendarTasks = async (year: number) => {
-  if (isWorkflowRoutedToBackend('tasks')) {
+  if (shouldUseCanonicalBackendPath('tasks') && !shouldUseTypescriptRollbackShim('tasks')) {
     const payload = await workflowAdapter.tasks.regenerateCalendar(year);
     return {
       generatedTasks: payload.generatedTasks,
@@ -1734,6 +1744,8 @@ export const regenerateCalendarTasks = async (year: number) => {
     };
   }
 
+  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  console.warn('[DEPRECATED] Using TypeScript task regeneration rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {
     throw new Error('App state unavailable.');

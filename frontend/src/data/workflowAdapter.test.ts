@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   isWorkflowRoutedToBackend,
+  shouldUseCanonicalBackendPath,
+  shouldUseTypescriptRollbackShim,
   workflowAdapter,
 } from './workflowAdapter';
 
@@ -27,6 +29,31 @@ describe('workflow routing flags', () => {
 
     expect(isWorkflowRoutedToBackend('batches')).toBe(true);
     expect(isWorkflowRoutedToBackend('tasks')).toBe(false);
+  });
+
+  it('treats parity-accepted workflows as canonical backend paths', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
+    vi.stubEnv('VITE_ROUTE_BATCHES_TO_BACKEND', 'false');
+
+    expect(shouldUseCanonicalBackendPath('batches')).toBe(true);
+  });
+
+  it('keeps rollback shim disabled unless explicitly enabled', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches');
+
+    expect(shouldUseTypescriptRollbackShim('batches')).toBe(false);
+  });
+
+  it('re-enables rollback shim for accepted workflows when rollback flags are enabled', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
+    vi.stubEnv('VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS', 'true');
+    vi.stubEnv('VITE_TYPESCRIPT_ROLLBACK_WORKFLOWS', 'batches');
+
+    expect(shouldUseTypescriptRollbackShim('batches')).toBe(true);
+    expect(shouldUseTypescriptRollbackShim('tasks')).toBe(false);
   });
 });
 
