@@ -34,7 +34,18 @@ node scripts/equivalence/run-equivalence.mjs \
   --tsBaseUrl=http://localhost:5174 \
   --dotnetBaseUrl=http://localhost:5050 \
   --allowlist=fixtures/equivalence/allowlist.v1.json \
-  --out=artifacts/equivalence-report.json
+  --cutoverCriteria=fixtures/equivalence/cutover-criteria.v1.json \
+  --out=artifacts/equivalence-report.json \
+  --rolloutOut=artifacts/equivalence-rollout-report.json
+```
+
+To gate a workflow cutover to backend-only canonical mode, pass `--flipWorkflows`:
+
+```bash
+node scripts/equivalence/run-equivalence.mjs \
+  --tsBaseUrl=http://localhost:5174 \
+  --dotnetBaseUrl=http://localhost:5050 \
+  --flipWorkflows=batches,tasks
 ```
 
 ## Gate behavior
@@ -53,6 +64,13 @@ node scripts/equivalence/run-equivalence.mjs \
   - `projectedStateDiff` (business-level state mismatches used for gate decisions)
   - `rawStateDiff` (debug-only raw snapshot differences)
   - `allowedMismatches` and `blockingMismatches` (both scenario-level and top-level)
+- Rollout report output (`--rolloutOut`) contains boundary-level metadata for each dual-path step comparison:
+  - `success` / `failure`
+  - `validationMismatch`
+  - `timingMs` per runtime
+  - `sourceMode` (`dual-path`)
+  - workflow cutover checks against `fixtures/equivalence/cutover-criteria.v1.json`
+- If a workflow is requested in `--flipWorkflows`, the run exits non-zero unless that workflow meets its cutover criteria.
 - Console output includes a short summary of total assertions, blocking failures, allowlisted differences, and suggested next action.
 
 This is intended as a required pre-cutover gate between the legacy TypeScript path and .NET backend.

@@ -214,6 +214,7 @@ Mirror critical business rules in C# domain services while preserving behavior f
 - Add expected outputs for deterministic rule evaluations (e.g., derived task sets, filtered results, validation outcomes).
 - Both runtimes must pass against the same fixture version before release.
 - Run the shared harness `node scripts/equivalence/run-equivalence.mjs --tsBaseUrl=<ts> --dotnetBaseUrl=<dotnet>` with `fixtures/equivalence/equivalence-scenarios.v1.json`; block cutover on non-zero exit.
+- Require workflow-level cutover checks before flipping backend-only mode: run with `--cutoverCriteria=fixtures/equivalence/cutover-criteria.v1.json --flipWorkflows=<workflow,...>` and block on any unmet mismatch-rate/min-run threshold.
 
 ### Contract tests as release gate
 
