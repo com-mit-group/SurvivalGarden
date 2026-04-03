@@ -1312,28 +1312,31 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 
 export const initializeAppStateStorage = async (): Promise<void> => {
   if (getDataExecutionMode() === 'backend') {
-    const backendState = await loadAppStateFromBackendApi();
-    const localState = await loadAppStateFromLocalIndexedDb();
+    try {
+      const backendState = await loadAppStateFromBackendApi();
+      const localState = await loadAppStateFromLocalIndexedDb();
 
-    if (backendState && localState) {
-      const mergedState = mergeAppStates(backendState, localState).state;
-      await saveAppStateToIndexedDb(mergedState, { mode: 'replace', mirrorToLocal: true });
+      if (backendState && localState) {
+        const mergedState = mergeAppStates(backendState, localState).state;
+        await saveAppStateToIndexedDb(mergedState, { mode: 'replace', mirrorToLocal: true });
+        return;
+      }
+
+      if (backendState) {
+        await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+        return;
+      }
+
+      if (localState) {
+        await saveAppStateToIndexedDb(localState, { mode: 'replace', mirrorToLocal: true });
+        return;
+      }
+
+      await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace', mirrorToLocal: true });
       return;
+    } catch (error) {
+      console.warn('Backend mode initialization failed; falling back to local IndexedDB.', error);
     }
-
-    if (backendState) {
-      await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
-      return;
-    }
-
-    if (localState) {
-      await saveAppStateToIndexedDb(localState, { mode: 'replace', mirrorToLocal: true });
-      return;
-    }
-
-    await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace', mirrorToLocal: true });
-
-    return;
   }
 
   const database = await openAppStateDatabase();
@@ -1350,13 +1353,13 @@ export const initializeAppStateStorage = async (): Promise<void> => {
 };
 
 const seedAppStateIfEmpty = async (): Promise<void> => {
-  const currentState = await loadAppStateFromIndexedDb();
+  const currentState = await loadAppStateFromLocalIndexedDb();
 
   if (currentState) {
     return;
   }
 
-  await saveAppStateToIndexedDb(GOLDEN_DATASET);
+  await saveAppStateToLocalIndexedDb(GOLDEN_DATASET);
 };
 
 export const createEmptyAppState = (currentState: AppState | null): AppState => ({
@@ -1453,13 +1456,18 @@ const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
 
 export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
   if (getDataExecutionMode() === 'backend') {
-    const backendState = await loadAppStateFromBackendApi();
+    try {
+      const backendState = await loadAppStateFromBackendApi();
 
-    if (backendState) {
-      await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+      if (backendState) {
+        await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+      }
+
+      return backendState;
+    } catch (error) {
+      console.warn('Backend app-state load failed; using local IndexedDB state.', error);
+      return loadAppStateFromLocalIndexedDb();
     }
-
-    return backendState;
   }
 
   return loadAppStateFromLocalIndexedDb();
@@ -1651,9 +1659,8 @@ export const saveAppStateToIndexedDb = async (
         body: JSON.stringify(stateToPersist),
       });
     } catch (error) {
-      throw new AppStateStorageError(
-        `Failed to reach backend API while saving app state: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.warn('Backend app-state save failed; saving to local IndexedDB only.', error);
+      return saveAppStateToLocalIndexedDb(stateToPersist, { mode: 'replace' });
     }
 
     if (!response.ok) {
