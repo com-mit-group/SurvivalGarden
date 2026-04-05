@@ -1,0 +1,86 @@
+[
+  {
+    "kind": "upsertBed",
+    "payload": {
+      "bedId": "bed_parity_001",
+      "gardenId": "garden_parity",
+      "type": "vegetable_bed",
+      "name": "Parity Bed Alpha",
+      "widthM": 2,
+      "lengthM": 4,
+      "x": 1,
+      "y": 1,
+      "createdAt": "2026-02-01T00:00:00Z",
+      "updatedAt": "2026-02-01T00:00:00Z"
+    }
+  },
+  {
+    "kind": "upsertBed",
+    "payload": {
+      "bedId": "bed_parity_002",
+      "gardenId": "garden_parity",
+      "type": "vegetable_bed",
+      "name": "Parity Bed Beta",
+      "widthM": 1.5,
+      "lengthM": 3,
+      "x": 4,
+      "y": 2,
+      "createdAt": "2026-02-01T00:00:00Z",
+      "updatedAt": "2026-02-01T00:00:00Z"
+    }
+  },
+  {
+    "kind": "upsertCrop",
+    "payload": {
+      "cropId": "crop_parity_001",
+      "name": "Parity Tomato",
+      "speciesId": "species_parity_001",
+      "createdAt": "2026-02-01T00:00:00Z",
+      "updatedAt": "2026-02-01T00:00:00Z"
+    }
+  },
+  {
+    "kind": "upsertSeedInventoryItem",
+    "payload": {
+      "seedInventoryItemId": "seed_parity_001",
+      "cropId": "crop_parity_001",
+      "variety": "Parity Tomato",
+      "quantity": 128,
+      "unit": "seeds",
+      "status": "available",
+      "createdAt": "2026-02-01T00:00:00Z",
+      "updatedAt": "2026-02-01T00:00:00Z"
+    }
+  },
+  {
+    "kind": "upsertCropPlan",
+    "payload": {
+      "planId": "plan_parity_001",
+      "cropId": "crop_parity_001",
+      "bedId": "bed_parity_001",
+      "seasonYear": 2026,
+      "plannedWindows": {
+        "sowing": [
+          {
+            "startMonth": 2,
+            "startWeek": 1,
+            "endMonth": 2,
+            "endWeek": 2
+          }
+        ],
+        "harvest": [
+          {
+            "startMonth": 7,
+            "startWeek": 2,
+            "endMonth": 8,
+            "endWeek": 1
+          }
+        ]
+      },
+      "expectedYield": {
+        "amount": 15,
+        "unit": "kg"
+      }
+    }
+  }
+]

@@ -100,7 +100,8 @@ export {
   upsertTaskInAppState,
 } from './repos/taskRepository';
 
-const APP_STATE_DB_NAME = 'survival-garden';
+const DEFAULT_APP_STATE_DB_NAME = 'survival-garden';
+const APP_STATE_DB_NAME_OVERRIDE_KEY = '__SURVIVAL_GARDEN_TEST_DB_NAME__';
 const APP_STATE_DB_VERSION = 6;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
@@ -116,6 +117,22 @@ const DEFAULT_SEGMENT_NAME = 'Main Segment';
 const DEFAULT_SEGMENT_ORIGIN = 'default_bootstrap';
 type AppSegment = NonNullable<AppState['segments']>[number];
 const LEGACY_BED_TYPE = 'vegetable_bed';
+
+const resolveAppStateDbName = (): string => {
+  const globalOverride = (globalThis as Record<string, unknown>)[APP_STATE_DB_NAME_OVERRIDE_KEY];
+  if (typeof globalOverride === 'string' && globalOverride.trim().length > 0) {
+    return globalOverride;
+  }
+
+  const envOverride = import.meta.env?.VITE_APP_STATE_DB_NAME;
+  if (typeof envOverride === 'string' && envOverride.trim().length > 0) {
+    return envOverride;
+  }
+
+  return DEFAULT_APP_STATE_DB_NAME;
+};
+
+export const getAppStateDbNameForTesting = (): string => resolveAppStateDbName();
 
 type LayoutMigrationWarningCode =
   | 'legacy_layout_segment_created'
@@ -1277,7 +1294,7 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   }
 
   return new Promise((resolve, reject) => {
-    const openRequest = indexedDB.open(APP_STATE_DB_NAME, APP_STATE_DB_VERSION);
+    const openRequest = indexedDB.open(resolveAppStateDbName(), APP_STATE_DB_VERSION);
 
     openRequest.onupgradeneeded = (event) => {
       const database = openRequest.result;
@@ -1406,7 +1423,7 @@ export const resetToGoldenDataset = async (): Promise<void> => {
   }
 
   await new Promise<void>((resolve, reject) => {
-    const deleteRequest = indexedDB.deleteDatabase(APP_STATE_DB_NAME);
+    const deleteRequest = indexedDB.deleteDatabase(resolveAppStateDbName());
 
     deleteRequest.onsuccess = () => resolve();
     deleteRequest.onerror = () => reject(new AppStateStorageError('Failed to reset local data storage.'));
