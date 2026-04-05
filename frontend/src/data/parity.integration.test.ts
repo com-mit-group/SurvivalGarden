@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
+import { summarizeParityDiffs } from './parityTestUtils';
+
 type DataModule = typeof import('./index');
 
 type ParityOperation =
@@ -17,7 +19,7 @@ type BatchMutationOperation =
   | { kind: 'mutateBatchAssignment'; operation: 'assign' | 'move' | 'remove'; at: string; bedId?: string };
 
 const PRODUCTION_DB_NAME = 'survival-garden';
-const MAX_DIFFS = 8;
+const MAX_DIFFS = 20;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, '../../..');
@@ -192,50 +194,6 @@ const canonicalizeState = (data: DataModule, appState: unknown): unknown =>
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
-const summarizeDiffs = (left: unknown, right: unknown, maxDiffs: number): string[] => {
-  const diffs: string[] = [];
-
-  const visit = (leftValue: unknown, rightValue: unknown, path: string): void => {
-    if (diffs.length >= maxDiffs) {
-      return;
-    }
-
-    if (Object.is(leftValue, rightValue)) {
-      return;
-    }
-
-    if (Array.isArray(leftValue) && Array.isArray(rightValue)) {
-      if (leftValue.length !== rightValue.length) {
-        diffs.push(`${path} length mismatch (${leftValue.length} vs ${rightValue.length})`);
-      }
-
-      const maxLength = Math.max(leftValue.length, rightValue.length);
-      for (let index = 0; index < maxLength; index += 1) {
-        visit(leftValue[index], rightValue[index], `${path}[${index}]`);
-        if (diffs.length >= maxDiffs) {
-          return;
-        }
-      }
-      return;
-    }
-
-    if (isPlainObject(leftValue) && isPlainObject(rightValue)) {
-      const keys = [...new Set([...Object.keys(leftValue), ...Object.keys(rightValue)])].sort();
-      for (const key of keys) {
-        visit(leftValue[key], rightValue[key], path === '$' ? `$.${key}` : `${path}.${key}`);
-        if (diffs.length >= maxDiffs) {
-          return;
-        }
-      }
-      return;
-    }
-
-    diffs.push(`${path} differs (${JSON.stringify(leftValue)} vs ${JSON.stringify(rightValue)})`);
-  };
-
-  visit(left, right, '$');
-  return diffs;
-};
 
 const toTaskKey = (task: Record<string, unknown>): string => {
   const sourceKey = task.sourceKey;
@@ -572,7 +530,7 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
     const frontendState = await runTsWorkflow(data, trierSeed, operations);
     const backendState = await runBackendWorkflow(data, backendBaseUrl, paritySeed, operations);
 
-    const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
+    const diffSummary = summarizeParityDiffs(frontendState as Record<string, unknown>, backendState as Record<string, unknown>, MAX_DIFFS);
     expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
   });
 
@@ -703,7 +661,7 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
       expect(backendBatch.currentStage).toBe('harvest');
       expect(backendBatch.stage).toBe('harvest');
 
-      const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
+      const diffSummary = summarizeParityDiffs(frontendState as Record<string, unknown>, backendState as Record<string, unknown>, MAX_DIFFS);
       expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
     },
   );
@@ -820,7 +778,7 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
         const taskMismatches = collectTaskParityMismatches(frontendState, backendState);
         expect(taskMismatches, `Task parity mismatches:\n${taskMismatches.join('\n')}`).toStrictEqual([]);
 
-        const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
+        const diffSummary = summarizeParityDiffs(frontendState as Record<string, unknown>, backendState as Record<string, unknown>, MAX_DIFFS);
         expect(frontendState, `AppState parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
       } finally {
         if (previousMode === undefined) {
