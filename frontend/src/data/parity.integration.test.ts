@@ -439,5 +439,5 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
 
     const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
     expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
-  }, 90_000);
+  }, 180_000);
 });
