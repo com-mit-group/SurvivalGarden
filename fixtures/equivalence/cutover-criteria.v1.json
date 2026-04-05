@@ -26,5 +26,12 @@
       "maxMismatchRate": 0,
       "maxValidationMismatches": 0
     }
+  },
+  "cutoverCompleteCondition": {
+    "requiresParityAcceptedWorkflow": true,
+    "requiresMinSuccessfulGatedRuns": true,
+    "minSuccessfulRunSource": "workflows.<feature>.minRuns",
+    "maxMismatchRateSource": "workflows.<feature>.maxMismatchRate",
+    "maxValidationMismatchesSource": "workflows.<feature>.maxValidationMismatches"
   }
 }
