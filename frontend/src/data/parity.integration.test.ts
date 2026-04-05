@@ -12,6 +12,9 @@ type ParityOperation =
   | { kind: 'upsertCrop'; payload: unknown }
   | { kind: 'upsertSeedInventoryItem'; payload: unknown }
   | { kind: 'upsertCropPlan'; payload: unknown };
+type BatchMutationOperation =
+  | { kind: 'transitionBatchStage'; nextStage: string; occurredAt: string }
+  | { kind: 'mutateBatchAssignment'; operation: 'assign' | 'move' | 'remove'; at: string; bedId?: string };
 
 const PRODUCTION_DB_NAME = 'survival-garden';
 const MAX_DIFFS = 8;
@@ -234,6 +237,19 @@ const summarizeDiffs = (left: unknown, right: unknown, maxDiffs: number): string
   return diffs;
 };
 
+const getBatchFromCanonicalState = (state: unknown, batchId: string): Record<string, unknown> => {
+  if (!isPlainObject(state) || !Array.isArray(state.batches)) {
+    throw new Error('Canonical state is missing batches collection.');
+  }
+
+  const batch = state.batches.find((candidate) => isPlainObject(candidate) && candidate.batchId === batchId);
+  if (!isPlainObject(batch)) {
+    throw new Error(`Batch '${batchId}' not found in canonical state.`);
+  }
+
+  return batch;
+};
+
 const runTsWorkflow = async (
   data: DataModule,
   seed: unknown,
@@ -341,6 +357,49 @@ const runBackendWorkflow = async (
   return canonicalizeState(data, await stateResponse.json());
 };
 
+const applyTsBatchMutationSequence = async (
+  data: DataModule,
+  batchId: string,
+  operations: BatchMutationOperation[],
+): Promise<void> => {
+  for (const operation of operations) {
+    if (operation.kind === 'transitionBatchStage') {
+      await data.transitionBatchStage(batchId, operation.nextStage, operation.occurredAt);
+      continue;
+    }
+
+    await data.mutateBatchAssignment(operation.operation, { batchId, bedId: operation.bedId, at: operation.at });
+  }
+};
+
+const applyBackendBatchMutationSequence = async (
+  backendBaseUrl: string,
+  batchId: string,
+  operations: BatchMutationOperation[],
+): Promise<void> => {
+  for (const operation of operations) {
+    const endpoint =
+      operation.kind === 'transitionBatchStage'
+        ? `${backendBaseUrl}/api/domain/batches/${batchId}/stage-events`
+        : `${backendBaseUrl}/api/domain/batches/${batchId}/assignment`;
+    const payload =
+      operation.kind === 'transitionBatchStage'
+        ? { stage: operation.nextStage, occurredAt: operation.occurredAt }
+        : { operation: operation.operation, bedId: operation.bedId, at: operation.at };
+
+    const response = await request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Backend batch mutation '${operation.kind}' failed: ${response.status} ${response.statusText}.`,
+      );
+    }
+  }
+};
+
 const describeParity = shouldRunParityIntegration ? describe.sequential : describe.skip;
 
 describeParity('parity integration (frontend IndexedDB vs backend persistence)', () => {
@@ -441,4 +500,136 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
     const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
     expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
   });
+
+  it(
+    'keeps TS and backend batch mutation flows in deterministic canonical parity',
+    { timeout: 180_000 },
+    async () => {
+      const data = (await import('./index')) as DataModule;
+      const paritySeedRaw = await readFile(resolve(repoRoot, 'fixtures/equivalence/parity-seed.v1.json'), 'utf8');
+      const paritySeed = JSON.parse(paritySeedRaw) as Record<string, unknown>;
+
+      const batchId = 'batch_parity_mutations_001';
+      const bedAlphaId = 'bed_parity_alpha';
+      const bedBetaId = 'bed_parity_beta';
+      const cropId = 'crop_type_potato';
+      const startedAt = '2026-02-01T08:00:00Z';
+
+      const deterministicSeed = {
+        ...paritySeed,
+        beds: [
+          {
+            bedId: bedAlphaId,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            gardenId: 'garden_parity',
+            name: 'Parity Bed Alpha',
+            type: 'vegetable_bed',
+            notes: 'Deterministic parity bed A.',
+          },
+          {
+            bedId: bedBetaId,
+            createdAt: '2026-01-02T00:00:00Z',
+            updatedAt: '2026-01-02T00:00:00Z',
+            gardenId: 'garden_parity',
+            name: 'Parity Bed Beta',
+            type: 'vegetable_bed',
+            notes: 'Deterministic parity bed B.',
+          },
+        ],
+        batches: [
+          {
+            batchId,
+            cropId,
+            variety: 'Deterministic Yukon Gold',
+            startedAt,
+            propagationType: 'seed',
+            stage: 'sowing',
+            currentStage: 'sowing',
+            stageEvents: [
+              {
+                stage: 'sowing',
+                occurredAt: startedAt,
+              },
+            ],
+            bedAssignments: [],
+            assignments: [],
+            notes: 'Deterministic parity integration batch.',
+          },
+        ],
+      };
+
+      const operations: BatchMutationOperation[] = [
+        { kind: 'transitionBatchStage', nextStage: 'transplant', occurredAt: '2026-02-10T08:00:00Z' },
+        { kind: 'mutateBatchAssignment', operation: 'assign', bedId: bedAlphaId, at: '2026-02-11T08:00:00Z' },
+        { kind: 'mutateBatchAssignment', operation: 'move', bedId: bedBetaId, at: '2026-02-20T08:00:00Z' },
+        { kind: 'transitionBatchStage', nextStage: 'harvest', occurredAt: '2026-03-15T08:00:00Z' },
+        { kind: 'mutateBatchAssignment', operation: 'remove', at: '2026-03-20T08:00:00Z' },
+      ];
+
+      await data.saveAppStateToIndexedDb(deterministicSeed, { mode: 'replace' });
+      await applyTsBatchMutationSequence(data, batchId, operations);
+      const persistedTsState = await data.loadAppStateFromIndexedDb();
+      if (!persistedTsState) {
+        throw new Error('TS workflow produced no app state after deterministic batch mutations.');
+      }
+      const frontendState = canonicalizeState(data, persistedTsState);
+
+      const backendSeedResponse = await request(`${backendBaseUrl}/api/app-state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(deterministicSeed),
+      });
+      if (!backendSeedResponse.ok) {
+        throw new Error(`Failed to seed backend app state: ${backendSeedResponse.status} ${backendSeedResponse.statusText}.`);
+      }
+      await applyBackendBatchMutationSequence(backendBaseUrl, batchId, operations);
+      const backendStateResponse = await request(`${backendBaseUrl}/api/app-state`);
+      if (!backendStateResponse.ok) {
+        throw new Error(
+          `Failed to load backend app state: ${backendStateResponse.status} ${backendStateResponse.statusText}.`,
+        );
+      }
+      const backendState = canonicalizeState(data, await backendStateResponse.json());
+      const backendPersistedRaw = await readFile(backendFilePath, 'utf8');
+      const backendPersistedState = canonicalizeState(data, JSON.parse(backendPersistedRaw));
+
+      expect(backendPersistedState).toStrictEqual(backendState);
+
+      const expectedStageEvents = [
+        { stage: 'sowing', occurredAt: '2026-02-01T08:00:00Z' },
+        { stage: 'transplant', occurredAt: '2026-02-10T08:00:00Z' },
+        { stage: 'harvest', occurredAt: '2026-03-15T08:00:00Z' },
+      ];
+      const expectedAssignments = [
+        {
+          bedId: bedAlphaId,
+          assignedAt: '2026-02-11T08:00:00Z',
+          fromDate: '2026-02-11T08:00:00Z',
+          toDate: '2026-02-20T08:00:00Z',
+        },
+        {
+          bedId: bedBetaId,
+          assignedAt: '2026-02-20T08:00:00Z',
+          fromDate: '2026-02-20T08:00:00Z',
+          toDate: '2026-03-20T08:00:00Z',
+        },
+      ];
+
+      const frontendBatch = getBatchFromCanonicalState(frontendState, batchId);
+      const backendBatch = getBatchFromCanonicalState(backendState, batchId);
+
+      expect(frontendBatch.stageEvents).toStrictEqual(expectedStageEvents);
+      expect(backendBatch.stageEvents).toStrictEqual(expectedStageEvents);
+      expect(frontendBatch.bedAssignments).toStrictEqual(expectedAssignments);
+      expect(backendBatch.bedAssignments).toStrictEqual(expectedAssignments);
+      expect(frontendBatch.currentStage).toBe('harvest');
+      expect(frontendBatch.stage).toBe('harvest');
+      expect(backendBatch.currentStage).toBe('harvest');
+      expect(backendBatch.stage).toBe('harvest');
+
+      const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
+      expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
+    },
+  );
 });
