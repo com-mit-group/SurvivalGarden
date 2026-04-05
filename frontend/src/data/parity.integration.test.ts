@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +27,7 @@ const installIndexedDbMockIfMissing = (): void => {
   }
 
   type StoreRecord = {
-    keyPath?: string;
+    keyPath?: string | undefined;
     values: Map<IDBValidKey, unknown>;
   };
   type DatabaseRecord = {
@@ -39,12 +38,13 @@ const installIndexedDbMockIfMissing = (): void => {
 
   const makeRequest = <T>(executor: () => T): IDBRequest<T> => {
     const request = {} as IDBRequest<T>;
+    const mutableRequest = request as unknown as { result: T; error: DOMException | null };
     setTimeout(() => {
       try {
-        request.result = executor();
+        mutableRequest.result = executor();
         request.onsuccess?.(new Event('success'));
       } catch (error) {
-        request.error = error as DOMException;
+        mutableRequest.error = error as DOMException;
         request.onerror?.(new Event('error'));
       }
     }, 0);
@@ -78,7 +78,7 @@ const installIndexedDbMockIfMissing = (): void => {
           return undefined as never;
         }),
       getAllKeys: () => makeRequest(() => [...store.values.keys()] as never),
-    }) as IDBObjectStore;
+    }) as unknown as IDBObjectStore;
 
   const makeTransaction = (database: DatabaseRecord): IDBTransaction => {
     const transaction = {
@@ -140,7 +140,7 @@ const installIndexedDbMockIfMissing = (): void => {
       makeRequest(() => {
         databases.delete(name);
         return undefined as never;
-      }) as IDBOpenDBRequest,
+      }) as unknown as IDBOpenDBRequest,
     cmp: (first: IDBValidKey, second: IDBValidKey) => (first === second ? 0 : String(first) < String(second) ? -1 : 1),
   } as IDBFactory;
 
@@ -368,8 +368,8 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
     }
 
     const normalizedTmpRoot = `${parityTmpRoot}/`;
-    const normalizedBackendPath = backendFilePath.replaceAll('\\', '/');
-    const normalizedTmp = normalizedTmpRoot.replaceAll('\\', '/');
+    const normalizedBackendPath = backendFilePath.split('\\').join('/');
+    const normalizedTmp = normalizedTmpRoot.split('\\').join('/');
     if (!normalizedBackendPath.startsWith(normalizedTmp)) {
       throw new Error(`Safety guard failed: backend path '${backendFilePath}' is outside '${parityTmpRoot}'.`);
     }
