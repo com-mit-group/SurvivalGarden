@@ -79,7 +79,7 @@ const installIndexedDbMockIfMissing = (): void => {
       getAllKeys: () => makeRequest(() => [...store.values.keys()] as never),
     }) as IDBObjectStore;
 
-  const makeTransaction = (database: DatabaseRecord, storeNames: string[]): IDBTransaction => {
+  const makeTransaction = (database: DatabaseRecord): IDBTransaction => {
     const transaction = {
       objectStore: (name: string) => {
         const store = database.stores.get(name);
@@ -112,7 +112,10 @@ const installIndexedDbMockIfMissing = (): void => {
             }
             return makeObjectStore(dbRecord.stores.get(storeName)!);
           },
-          transaction: (stores: string | string[]) => makeTransaction(dbRecord, Array.isArray(stores) ? stores : [stores]),
+          transaction: (stores: string | string[]) => {
+            void stores;
+            return makeTransaction(dbRecord);
+          },
           objectStoreNames: {
             contains: (storeName: string) => dbRecord.stores.has(storeName),
           } as DOMStringList,
@@ -121,7 +124,7 @@ const installIndexedDbMockIfMissing = (): void => {
         } as unknown as IDBDatabase;
 
         (request as { result: IDBDatabase }).result = database;
-        (request as { transaction: IDBTransaction }).transaction = makeTransaction(dbRecord, []);
+        (request as { transaction: IDBTransaction }).transaction = makeTransaction(dbRecord);
         databases.set(name, dbRecord);
 
         if (needsUpgrade) {
