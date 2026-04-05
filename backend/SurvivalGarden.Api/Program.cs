@@ -5,7 +5,10 @@ using SurvivalGarden.Persistence;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddPersistence(builder.Configuration["Persistence:AppStatePath"]);
+var appStatePath =
+    builder.Configuration["APP_STATE_FILE_PATH"] ??
+    builder.Configuration["Persistence:AppStatePath"];
+builder.Services.AddPersistence(appStatePath);
 builder.Services.AddApplication();
 
 var app = builder.Build();

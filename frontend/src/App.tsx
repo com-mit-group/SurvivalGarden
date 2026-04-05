@@ -6140,17 +6140,20 @@ export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: R
 }
 
 function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps) {
-  const importValidationSettings: AppState['settings'] = {
-    settingsId: 'settings-default',
-    locale: 'en-US',
-    timezone: 'Europe/Berlin',
-    units: {
-      temperature: 'celsius',
-      yield: 'metric',
-    },
-    createdAt: '1970-01-01T00:00:00Z',
-    updatedAt: '1970-01-01T00:00:00Z',
-  };
+  const importValidationSettings: AppState['settings'] = useMemo(
+    () => ({
+      settingsId: 'settings-default',
+      locale: 'en-US',
+      timezone: 'Europe/Berlin',
+      units: {
+        temperature: 'celsius',
+        yield: 'metric',
+      },
+      createdAt: '1970-01-01T00:00:00Z',
+      updatedAt: '1970-01-01T00:00:00Z',
+    }),
+    [],
+  );
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -6445,7 +6448,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     } finally {
       setIsImporting(false);
     }
-  }, [buildBatchValidationMessages, isImporting, mapImportError]);
+  }, [buildBatchValidationMessages, importValidationSettings, isImporting, mapImportError]);
 
   const handleImportCropJson = useCallback(async (event: FormEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -6798,7 +6801,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, mapImportError]);
+  }, [importValidationSettings, isImporting, mapImportError]);
 
 
   const handleConfirmReplace = useCallback(async () => {
@@ -7504,7 +7507,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         navigate('/data', { replace: true });
       }
     })();
-  }, [buildBatchValidationMessages, location.search, mapImportError, navigate]);
+  }, [buildBatchValidationMessages, importValidationSettings, location.search, mapImportError, navigate]);
 
   return (
     <>
