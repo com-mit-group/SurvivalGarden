@@ -83,9 +83,10 @@ const installIndexedDbMockIfMissing = (): void => {
   const makeTransaction = (database: DatabaseRecord): IDBTransaction => {
     const transaction = {
       objectStore: (name: string) => {
-        const store = database.stores.get(name);
-        if (!store) {
-          throw new Error(`Object store '${name}' not found.`);
+        const existingStore = database.stores.get(name);
+        const store = existingStore ?? { values: new Map<IDBValidKey, unknown>() };
+        if (!existingStore) {
+          database.stores.set(name, store);
         }
         return makeObjectStore(store);
       },
