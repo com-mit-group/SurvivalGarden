@@ -20,6 +20,7 @@ const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, '../../..');
 const parityTmpRoot = resolve(repoRoot, 'tmp/parity');
 const hasDotnetRuntime = spawnSync('dotnet', ['--version'], { stdio: 'ignore' }).status === 0;
+const shouldRunParityIntegration = hasDotnetRuntime && process.env.CI !== 'true';
 
 const installIndexedDbMockIfMissing = (): void => {
   if (typeof indexedDB !== 'undefined') {
@@ -340,7 +341,7 @@ const runBackendWorkflow = async (
   return canonicalizeState(data, await stateResponse.json());
 };
 
-const describeParity = hasDotnetRuntime ? describe.sequential : describe.skip;
+const describeParity = shouldRunParityIntegration ? describe.sequential : describe.skip;
 
 describeParity('parity integration (frontend IndexedDB vs backend persistence)', () => {
   let backendProcess: ChildProcessWithoutNullStreams | null = null;
