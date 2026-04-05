@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 type DataModule = typeof import('./index');
@@ -235,6 +235,77 @@ const summarizeDiffs = (left: unknown, right: unknown, maxDiffs: number): string
 
   visit(left, right, '$');
   return diffs;
+};
+
+const toTaskKey = (task: Record<string, unknown>): string => {
+  const sourceKey = task.sourceKey;
+  if (typeof sourceKey === 'string' && sourceKey.length > 0) {
+    return sourceKey;
+  }
+
+  const id = task.id;
+  if (typeof id === 'string' && id.length > 0) {
+    return id;
+  }
+
+  return '<missing-task-key>';
+};
+
+const collectTaskParityMismatches = (leftState: unknown, rightState: unknown): string[] => {
+  if (!isPlainObject(leftState) || !isPlainObject(rightState)) {
+    return ['$.<root>: app state payload is not an object on one or both sides.'];
+  }
+  if (!Array.isArray(leftState.tasks) || !Array.isArray(rightState.tasks)) {
+    return ['$.tasks: tasks collection is missing on one or both states.'];
+  }
+
+  const fieldsToValidate = ['id', 'sourceKey', 'date', 'type', 'cropId', 'bedId', 'batchId', 'status', 'checklist'];
+  const leftByKey = new Map<string, Record<string, unknown>>();
+  const rightByKey = new Map<string, Record<string, unknown>>();
+  const mismatches: string[] = [];
+
+  for (const candidate of leftState.tasks) {
+    if (!isPlainObject(candidate)) {
+      mismatches.push('$.tasks: left task entry is not an object.');
+      continue;
+    }
+    leftByKey.set(toTaskKey(candidate), candidate);
+  }
+
+  for (const candidate of rightState.tasks) {
+    if (!isPlainObject(candidate)) {
+      mismatches.push('$.tasks: right task entry is not an object.');
+      continue;
+    }
+    rightByKey.set(toTaskKey(candidate), candidate);
+  }
+
+  const allKeys = [...new Set([...leftByKey.keys(), ...rightByKey.keys()])].sort();
+  for (const taskKey of allKeys) {
+    const leftTask = leftByKey.get(taskKey);
+    const rightTask = rightByKey.get(taskKey);
+
+    if (!leftTask) {
+      mismatches.push(`tasks[${taskKey}]: missing in TS local output.`);
+      continue;
+    }
+    if (!rightTask) {
+      mismatches.push(`tasks[${taskKey}]: missing in backend output.`);
+      continue;
+    }
+
+    for (const field of fieldsToValidate) {
+      const leftValue = leftTask[field];
+      const rightValue = rightTask[field];
+      if (JSON.stringify(leftValue) !== JSON.stringify(rightValue)) {
+        mismatches.push(
+          `tasks[${taskKey}].${field}: ${JSON.stringify(leftValue)} !== ${JSON.stringify(rightValue)}`,
+        );
+      }
+    }
+  }
+
+  return mismatches.sort();
 };
 
 const getBatchFromCanonicalState = (state: unknown, batchId: string): Record<string, unknown> => {
@@ -634,6 +705,142 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
 
       const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
       expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
+    },
+  );
+
+  it(
+    'keeps calendar task derivation in parity across TS local and backend regenerateCalendarTasks paths',
+    { timeout: 180_000 },
+    async () => {
+      const data = (await import('./index')) as DataModule;
+      const paritySeedRaw = await readFile(resolve(repoRoot, 'fixtures/equivalence/parity-seed.v1.json'), 'utf8');
+      const paritySeed = JSON.parse(paritySeedRaw) as Record<string, unknown>;
+      const knownYear = 2026;
+      const bedId = 'bed_parity_tasks_001';
+      const cropId = 'crop_type_potato';
+      const batchId = 'batch_parity_tasks_001';
+      const startedAt = '2026-03-20T08:00:00Z';
+      const transplantAt = '2026-04-14T08:00:00Z';
+
+      const deterministicSeed = {
+        ...paritySeed,
+        tasks: [],
+        beds: [
+          {
+            bedId,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            gardenId: 'garden_parity',
+            name: 'Parity Task Bed',
+            type: 'vegetable_bed',
+            notes: 'Task parity integration bed.',
+          },
+        ],
+        cropPlans: [
+          {
+            planId: 'plan_parity_tasks_001',
+            cropId,
+            bedId,
+            seasonYear: knownYear,
+            plannedWindows: {
+              sowing: [{ startMonth: 3, startWeek: 2, endMonth: 4, endWeek: 4 }],
+              harvest: [{ startMonth: 7, startWeek: 1, endMonth: 9, endWeek: 4 }],
+            },
+            expectedYield: { amount: 22, unit: 'kg' },
+            notes: 'Deterministic parity plan for calendar generation.',
+          },
+        ],
+        batches: [
+          {
+            batchId,
+            cropId,
+            variety: 'Deterministic Yukon Gold',
+            startedAt,
+            propagationType: 'seed',
+            stage: 'transplant',
+            currentStage: 'transplant',
+            stageEvents: [
+              { stage: 'sowing', occurredAt: startedAt },
+              { stage: 'germinated', occurredAt: '2026-03-30T08:00:00Z' },
+              { stage: 'transplant', occurredAt: transplantAt },
+            ],
+            bedAssignments: [{ bedId, assignedAt: transplantAt, fromDate: transplantAt }],
+            assignments: [{ bedId, assignedAt: transplantAt, fromDate: transplantAt }],
+            notes: 'Deterministic parity integration batch for task derivation.',
+          },
+        ],
+      };
+
+      const previousMode = process.env.VITE_FRONTEND_MODE;
+      const previousTasksRouteFlag = process.env.VITE_ROUTE_TASKS_TO_BACKEND;
+      const previousBackendBaseUrl = process.env.VITE_BACKEND_API_BASE_URL;
+
+      try {
+        process.env.VITE_FRONTEND_MODE = 'typescript';
+        delete process.env.VITE_ROUTE_TASKS_TO_BACKEND;
+        process.env.VITE_BACKEND_API_BASE_URL = backendBaseUrl;
+        await data.saveAppStateToIndexedDb(deterministicSeed, { mode: 'replace' });
+        await data.regenerateCalendarTasks(knownYear);
+        const tsPersistedState = await data.loadAppStateFromIndexedDb();
+        if (!tsPersistedState) {
+          throw new Error('TS local regenerateCalendarTasks path produced no app state.');
+        }
+        const frontendState = canonicalizeState(data, tsPersistedState);
+
+        const backendSeedResponse = await request(`${backendBaseUrl}/api/app-state`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(deterministicSeed),
+        });
+        if (!backendSeedResponse.ok) {
+          throw new Error(`Failed to seed backend app state: ${backendSeedResponse.status} ${backendSeedResponse.statusText}.`);
+        }
+
+        process.env.VITE_FRONTEND_MODE = 'backend';
+        process.env.VITE_ROUTE_TASKS_TO_BACKEND = 'true';
+        process.env.VITE_BACKEND_API_BASE_URL = backendBaseUrl;
+        await data.regenerateCalendarTasks(knownYear);
+        const backendStateResponse = await request(`${backendBaseUrl}/api/app-state`);
+        if (!backendStateResponse.ok) {
+          throw new Error(
+            `Failed to load backend app state: ${backendStateResponse.status} ${backendStateResponse.statusText}.`,
+          );
+        }
+        const backendState = canonicalizeState(data, await backendStateResponse.json());
+        const backendPersistedRaw = await readFile(backendFilePath, 'utf8');
+        const backendPersistedState = canonicalizeState(data, JSON.parse(backendPersistedRaw));
+
+        const tsPersistedPath = join(tmpDir!, 'ts-regenerated-appstate.canonical.json');
+        const backendPersistedPath = join(tmpDir!, 'backend-regenerated-appstate.canonical.json');
+        await writeFile(tsPersistedPath, JSON.stringify(frontendState, null, 2), 'utf8');
+        await writeFile(backendPersistedPath, JSON.stringify(backendPersistedState, null, 2), 'utf8');
+
+        expect(backendPersistedState).toStrictEqual(backendState);
+
+        const taskMismatches = collectTaskParityMismatches(frontendState, backendState);
+        expect(taskMismatches, `Task parity mismatches:\n${taskMismatches.join('\n')}`).toStrictEqual([]);
+
+        const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
+        expect(frontendState, `AppState parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
+      } finally {
+        if (previousMode === undefined) {
+          delete process.env.VITE_FRONTEND_MODE;
+        } else {
+          process.env.VITE_FRONTEND_MODE = previousMode;
+        }
+
+        if (previousTasksRouteFlag === undefined) {
+          delete process.env.VITE_ROUTE_TASKS_TO_BACKEND;
+        } else {
+          process.env.VITE_ROUTE_TASKS_TO_BACKEND = previousTasksRouteFlag;
+        }
+
+        if (previousBackendBaseUrl === undefined) {
+          delete process.env.VITE_BACKEND_API_BASE_URL;
+        } else {
+          process.env.VITE_BACKEND_API_BASE_URL = previousBackendBaseUrl;
+        }
+      }
     },
   );
 });
