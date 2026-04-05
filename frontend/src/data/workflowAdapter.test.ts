@@ -26,17 +26,29 @@ describe('workflow routing flags', () => {
     vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
     vi.stubEnv('VITE_ROUTE_BATCHES_TO_BACKEND', 'true');
     vi.stubEnv('VITE_ROUTE_TASKS_TO_BACKEND', 'false');
+    vi.stubEnv('VITE_ROUTE_BEDS_SEGMENTS_TO_BACKEND', 'true');
+    vi.stubEnv('VITE_ROUTE_TAXONOMY_TO_BACKEND', 'false');
+    vi.stubEnv('VITE_ROUTE_INVENTORY_TO_BACKEND', 'true');
 
     expect(isWorkflowRoutedToBackend('batches')).toBe(true);
     expect(isWorkflowRoutedToBackend('tasks')).toBe(false);
+    expect(isWorkflowRoutedToBackend('bedsSegments')).toBe(true);
+    expect(isWorkflowRoutedToBackend('taxonomy')).toBe(false);
+    expect(isWorkflowRoutedToBackend('inventory')).toBe(true);
   });
 
   it('treats parity-accepted workflows as canonical backend paths', () => {
     vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
-    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks,bedsSegments,taxonomy,inventory');
     vi.stubEnv('VITE_ROUTE_BATCHES_TO_BACKEND', 'false');
+    vi.stubEnv('VITE_ROUTE_BEDS_SEGMENTS_TO_BACKEND', 'false');
+    vi.stubEnv('VITE_ROUTE_TAXONOMY_TO_BACKEND', 'false');
+    vi.stubEnv('VITE_ROUTE_INVENTORY_TO_BACKEND', 'false');
 
     expect(shouldUseCanonicalBackendPath('batches')).toBe(true);
+    expect(shouldUseCanonicalBackendPath('bedsSegments')).toBe(true);
+    expect(shouldUseCanonicalBackendPath('taxonomy')).toBe(true);
+    expect(shouldUseCanonicalBackendPath('inventory')).toBe(true);
   });
 
   it('keeps rollback shim disabled unless explicitly enabled', () => {
@@ -48,12 +60,13 @@ describe('workflow routing flags', () => {
 
   it('re-enables rollback shim for accepted workflows when rollback flags are enabled', () => {
     vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
-    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks,taxonomy');
     vi.stubEnv('VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS', 'true');
-    vi.stubEnv('VITE_TYPESCRIPT_ROLLBACK_WORKFLOWS', 'batches');
+    vi.stubEnv('VITE_TYPESCRIPT_ROLLBACK_WORKFLOWS', 'batches,taxonomy');
 
     expect(shouldUseTypescriptRollbackShim('batches')).toBe(true);
     expect(shouldUseTypescriptRollbackShim('tasks')).toBe(false);
+    expect(shouldUseTypescriptRollbackShim('taxonomy')).toBe(true);
   });
 });
 
@@ -73,6 +86,29 @@ describe('workflow adapter transport', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:5142/api/domain/batches/batch-1/stage-events',
       expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('uses explicit CRUD endpoints for beds/segments, taxonomy, and inventory adapters', async () => {
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [] } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => [] } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => [] } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await workflowAdapter.bedsSegments.listBeds();
+    await workflowAdapter.taxonomy.listCrops();
+    await workflowAdapter.inventory.listSeedInventoryItems();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:5142/api/beds', expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:5142/api/crops', expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:5142/api/seedInventoryItems',
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 });
