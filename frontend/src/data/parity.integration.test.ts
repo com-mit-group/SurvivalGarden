@@ -368,7 +368,11 @@ const applyTsBatchMutationSequence = async (
       continue;
     }
 
-    await data.mutateBatchAssignment(operation.operation, { batchId, bedId: operation.bedId, at: operation.at });
+    const payload =
+      operation.bedId === undefined
+        ? { batchId, at: operation.at }
+        : { batchId, bedId: operation.bedId, at: operation.at };
+    await data.mutateBatchAssignment(operation.operation, payload);
   }
 };
 
