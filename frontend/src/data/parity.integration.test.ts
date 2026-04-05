@@ -422,7 +422,7 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
     }
   });
 
-  it('applies deterministic parity operations and compares canonical app-state JSON output', async () => {
+  it('applies deterministic parity operations and compares canonical app-state JSON output', { timeout: 180_000 }, async () => {
     const data = (await import('./index')) as DataModule;
     const trierFixtureRaw = await readFile(resolve(repoRoot, 'fixtures/golden/trier-v1.json'), 'utf8');
     const paritySeedRaw = await readFile(resolve(repoRoot, 'fixtures/equivalence/parity-seed.v1.json'), 'utf8');
@@ -439,5 +439,5 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
 
     const diffSummary = summarizeDiffs(frontendState, backendState, MAX_DIFFS);
     expect(frontendState, `Parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
-  }, 180_000);
+  });
 });
