@@ -124,7 +124,7 @@ const resolveAppStateDbName = (): string => {
     return globalOverride;
   }
 
-  const envOverride = import.meta.env?.VITE_APP_STATE_DB_NAME;
+  const envOverride = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.VITE_APP_STATE_DB_NAME;
   if (typeof envOverride === 'string' && envOverride.trim().length > 0) {
     return envOverride;
   }
