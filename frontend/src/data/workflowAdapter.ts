@@ -1,4 +1,4 @@
-import type { AppState, Batch } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment } from '../contracts';
 
 export type WorkflowFeature = 'batches' | 'tasks' | 'bedsSegments' | 'taxonomy' | 'inventory';
 
@@ -151,6 +151,149 @@ export const workflowAdapter = {
         diagnostics: payload.diagnostics ?? [],
         stateAfter: payload.stateAfter,
       };
+    },
+  },
+  bedsSegments: {
+    listBeds: async (): Promise<Bed[]> => fetchJson<Bed[]>('/api/beds', { method: 'GET' }),
+    getBed: async (bedId: string): Promise<Bed | null> => {
+      const response = await fetch(toBackendApiUrl(`/api/beds/${encodeURIComponent(bedId)}`), { method: 'GET' });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return response.json() as Promise<Bed>;
+    },
+    upsertBed: async (bed: Bed): Promise<Bed> =>
+      fetchJson<Bed>(`/api/beds/${encodeURIComponent(bed.bedId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bed),
+      }),
+    removeBed: async (bedId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/beds/${encodeURIComponent(bedId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+    listSegments: async (): Promise<Segment[]> => fetchJson<Segment[]>('/api/segments', { method: 'GET' }),
+    getSegment: async (segmentId: string): Promise<Segment | null> => {
+      const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'GET' });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return response.json() as Promise<Segment>;
+    },
+    upsertSegment: async (segment: Segment): Promise<Segment> =>
+      fetchJson<Segment>(`/api/segments/${encodeURIComponent(segment.segmentId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(segment),
+      }),
+    removeSegment: async (segmentId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+  },
+  taxonomy: {
+    listCrops: async (): Promise<Crop[]> => fetchJson<Crop[]>('/api/crops', { method: 'GET' }),
+    getCrop: async (cropId: string): Promise<Crop | null> => {
+      const response = await fetch(toBackendApiUrl(`/api/crops/${encodeURIComponent(cropId)}`), { method: 'GET' });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return response.json() as Promise<Crop>;
+    },
+    upsertCrop: async (crop: Crop): Promise<Crop> =>
+      fetchJson<Crop>(`/api/crops/${encodeURIComponent(crop.cropId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(crop),
+      }),
+    removeCrop: async (cropId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/crops/${encodeURIComponent(cropId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+    listCropPlans: async (): Promise<CropPlan[]> => fetchJson<CropPlan[]>('/api/cropPlans', { method: 'GET' }),
+    getCropPlan: async (planId: string): Promise<CropPlan | null> => {
+      const response = await fetch(toBackendApiUrl(`/api/cropPlans/${encodeURIComponent(planId)}`), { method: 'GET' });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return response.json() as Promise<CropPlan>;
+    },
+    upsertCropPlan: async (cropPlan: CropPlan): Promise<CropPlan> =>
+      fetchJson<CropPlan>(`/api/cropPlans/${encodeURIComponent(cropPlan.planId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cropPlan),
+      }),
+    removeCropPlan: async (planId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/cropPlans/${encodeURIComponent(planId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+  },
+  inventory: {
+    listSeedInventoryItems: async (): Promise<SeedInventoryItem[]> =>
+      fetchJson<SeedInventoryItem[]>('/api/seedInventoryItems', { method: 'GET' }),
+    getSeedInventoryItem: async (seedInventoryItemId: string): Promise<SeedInventoryItem | null> => {
+      const response = await fetch(
+        toBackendApiUrl(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItemId)}`),
+        { method: 'GET' },
+      );
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return response.json() as Promise<SeedInventoryItem>;
+    },
+    upsertSeedInventoryItem: async (seedInventoryItem: SeedInventoryItem): Promise<SeedInventoryItem> =>
+      fetchJson<SeedInventoryItem>(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItem.seedInventoryItemId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(seedInventoryItem),
+      }),
+    removeSeedInventoryItem: async (seedInventoryItemId: string): Promise<void> => {
+      const response = await fetch(
+        toBackendApiUrl(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItemId)}`),
+        { method: 'DELETE' },
+      );
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
     },
   },
 };
