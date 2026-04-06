@@ -23,7 +23,22 @@ export const getBackendApiBaseUrl = (): string => {
   return (env.VITE_BACKEND_API_BASE_URL ?? DEFAULT_BACKEND_API_BASE_URL).trim().replace(/\/$/, '');
 };
 
-export const toBackendApiUrl = (path: string): string => `${getBackendApiBaseUrl()}${path}`;
+const validateBackendApiPath = (path: string, baseUrl: string): void => {
+  if (getFrontendMode() === 'backend' && path.startsWith('/') && baseUrl.length === 0) {
+    throw new Error('VITE_BACKEND_API_BASE_URL must be set in backend mode');
+  }
+};
+
+export const toBackendApiUrl = (path: string): string => {
+  const baseUrl = getBackendApiBaseUrl();
+  validateBackendApiPath(path, baseUrl);
+
+  if (baseUrl.length === 0) {
+    return path;
+  }
+
+  return new URL(path, `${baseUrl}/`).toString();
+};
 
 const isFeatureFlagEnabled = (value: string | undefined): boolean => value?.trim().toLowerCase() === 'true';
 const parseWorkflowList = (value: string | undefined): WorkflowFeature[] =>
