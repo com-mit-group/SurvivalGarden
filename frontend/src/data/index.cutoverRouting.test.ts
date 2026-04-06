@@ -22,7 +22,7 @@ const failingBackendResponse = {
   json: async () => {
     throw new Error('no-json');
   },
-} as Response;
+} as unknown as Response;
 
 describe('cutover-complete workflow mutation routing', () => {
   it('never executes local batch stage mutation shims for cutover-complete workflows', async () => {
