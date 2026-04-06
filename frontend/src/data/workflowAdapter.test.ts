@@ -3,6 +3,7 @@ import {
   isWorkflowRoutedToBackend,
   shouldUseCanonicalBackendPath,
   shouldUseTypescriptRollbackShim,
+  toBackendApiUrl,
   workflowAdapter,
 } from './workflowAdapter';
 
@@ -71,6 +72,27 @@ describe('workflow routing flags', () => {
 });
 
 describe('workflow adapter transport', () => {
+  it('throws an explicit configuration error in backend mode when backend base URL is missing', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', undefined as unknown as string);
+
+    expect(() => toBackendApiUrl('/api/beds')).toThrowError('VITE_BACKEND_API_BASE_URL must be set in backend mode');
+  });
+
+  it('returns an absolute backend URL in backend mode when backend base URL is configured', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
+
+    expect(toBackendApiUrl('/api/beds')).toBe('http://localhost:5142/api/beds');
+  });
+
+  it('leaves typescript mode paths unchanged when backend base URL is missing', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'typescript');
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', undefined as unknown as string);
+
+    expect(toBackendApiUrl('/api/beds')).toBe('/api/beds');
+  });
+
   it('posts stage transitions to the backend domain endpoint', async () => {
     vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
 
