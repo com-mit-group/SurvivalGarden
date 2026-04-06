@@ -441,8 +441,13 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
   let testDbName = '';
   let backendFilePath = '';
   let backendBaseUrl = '';
+  let previousFrontendMode: string | undefined;
+  let previousBackendApiBaseUrl: string | undefined;
 
   beforeEach(async () => {
+    previousFrontendMode = process.env.VITE_FRONTEND_MODE;
+    previousBackendApiBaseUrl = process.env.VITE_BACKEND_API_BASE_URL;
+
     installIndexedDbMockIfMissing();
     const testId = `${Date.now()}-${randomUUID().slice(0, 8)}`;
     testDbName = `survival-garden-parity-${testId}`;
@@ -454,6 +459,8 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
     (globalThis as Record<string, unknown>).__SURVIVAL_GARDEN_TEST_DB_NAME__ = testDbName;
 
     vi.resetModules();
+    process.env.VITE_FRONTEND_MODE = 'typescript';
+    process.env.VITE_BACKEND_API_BASE_URL = backendBaseUrl;
 
     const data = (await import('./index')) as DataModule;
 
@@ -512,6 +519,18 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
 
     if (tmpDir) {
       await rm(tmpDir, { recursive: true, force: true });
+    }
+
+    if (previousFrontendMode === undefined) {
+      delete process.env.VITE_FRONTEND_MODE;
+    } else {
+      process.env.VITE_FRONTEND_MODE = previousFrontendMode;
+    }
+
+    if (previousBackendApiBaseUrl === undefined) {
+      delete process.env.VITE_BACKEND_API_BASE_URL;
+    } else {
+      process.env.VITE_BACKEND_API_BASE_URL = previousBackendApiBaseUrl;
     }
   });
 
@@ -729,14 +748,11 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
         ],
       };
 
-      const previousMode = process.env.VITE_FRONTEND_MODE;
       const previousTasksRouteFlag = process.env.VITE_ROUTE_TASKS_TO_BACKEND;
-      const previousBackendBaseUrl = process.env.VITE_BACKEND_API_BASE_URL;
 
       try {
         process.env.VITE_FRONTEND_MODE = 'typescript';
         delete process.env.VITE_ROUTE_TASKS_TO_BACKEND;
-        process.env.VITE_BACKEND_API_BASE_URL = backendBaseUrl;
         await data.saveAppStateToIndexedDb(deterministicSeed, { mode: 'replace' });
         await data.regenerateCalendarTasks(knownYear);
         const tsPersistedState = await data.loadAppStateFromIndexedDb();
@@ -756,7 +772,6 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
 
         process.env.VITE_FRONTEND_MODE = 'backend';
         process.env.VITE_ROUTE_TASKS_TO_BACKEND = 'true';
-        process.env.VITE_BACKEND_API_BASE_URL = backendBaseUrl;
         await data.regenerateCalendarTasks(knownYear);
         const backendStateResponse = await request(`${backendBaseUrl}/api/app-state`);
         if (!backendStateResponse.ok) {
@@ -781,22 +796,10 @@ describeParity('parity integration (frontend IndexedDB vs backend persistence)',
         const diffSummary = summarizeParityDiffs(frontendState as Record<string, unknown>, backendState as Record<string, unknown>, MAX_DIFFS);
         expect(frontendState, `AppState parity mismatch summary:\n${diffSummary.join('\n')}`).toStrictEqual(backendState);
       } finally {
-        if (previousMode === undefined) {
-          delete process.env.VITE_FRONTEND_MODE;
-        } else {
-          process.env.VITE_FRONTEND_MODE = previousMode;
-        }
-
         if (previousTasksRouteFlag === undefined) {
           delete process.env.VITE_ROUTE_TASKS_TO_BACKEND;
         } else {
           process.env.VITE_ROUTE_TASKS_TO_BACKEND = previousTasksRouteFlag;
-        }
-
-        if (previousBackendBaseUrl === undefined) {
-          delete process.env.VITE_BACKEND_API_BASE_URL;
-        } else {
-          process.env.VITE_BACKEND_API_BASE_URL = previousBackendBaseUrl;
         }
       }
     },
