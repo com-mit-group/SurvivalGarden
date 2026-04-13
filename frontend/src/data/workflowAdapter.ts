@@ -172,6 +172,15 @@ export const workflowAdapter = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operation, bedId: payload.bedId, at: payload.at }),
       }),
+    removeBatch: async (batchId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/batches/${encodeURIComponent(batchId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
   },
   tasks: {
     regenerateCalendar: async (year: number): Promise<{

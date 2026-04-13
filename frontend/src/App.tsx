@@ -13,7 +13,7 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
-  removeBatchFromAppState,
+  removeBatch,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
@@ -3965,20 +3965,9 @@ function BatchesPage({
 
     setIsDeletingBatchId(batch.batchId);
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        setBatchDeleteMessage('Unable to delete because local app state is unavailable.');
-        return;
-      }
-
-      if (!appState.batches.some((candidate) => candidate.batchId === batch.batchId)) {
-        setBatchDeleteMessage('Batch was not found.');
-        return;
-      }
-
-      const nextState = removeBatchFromAppState(appState, batch.batchId);
-      await saveAppStateToIndexedDb(nextState);
-      setBatches(listBatchesFromAppState(nextState));
+      await removeBatch(batch.batchId);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      setBatches(refreshedState ? listBatchesFromAppState(refreshedState) : []);
       if (editingBatchId === batch.batchId) {
         resetForm();
       }
