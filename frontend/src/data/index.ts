@@ -1,7 +1,51 @@
-import type { AppState, Batch } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem } from '../contracts';
 import { assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
+import {
+  assignBatchToBed as assignBatchToBedLocal,
+  getBatchFromAppState as getBatchFromAppStateLocal,
+  moveBatch as moveBatchLocal,
+  removeBatchFromBed as removeBatchFromBedLocal,
+  upsertBatchInAppState as upsertBatchInAppStateLocal,
+} from './repos/batchRepository';
+import {
+  getBedFromAppState as getBedFromAppStateLocal,
+  listBedsFromAppState as listBedsFromAppStateLocal,
+  removeBedFromAppState as removeBedFromAppStateLocal,
+  upsertBedInAppState as upsertBedInAppStateLocal,
+} from './repos/bedRepository';
+import {
+  getCropFromAppState as getCropFromAppStateLocal,
+  listCropsFromAppState as listCropsFromAppStateLocal,
+  removeCropFromAppState as removeCropFromAppStateLocal,
+  upsertCropInAppState as upsertCropInAppStateLocal,
+} from './repos/cropRepository';
+import {
+  getCropPlanFromAppState as getCropPlanFromAppStateLocal,
+  listCropPlansFromAppState as listCropPlansFromAppStateLocal,
+  removeCropPlanFromAppState as removeCropPlanFromAppStateLocal,
+  upsertCropPlanInAppState as upsertCropPlanInAppStateLocal,
+} from './repos/cropPlanRepository';
+import {
+  getSeedInventoryItemFromAppState as getSeedInventoryItemFromAppStateLocal,
+  listSeedInventoryItemsFromAppState as listSeedInventoryItemsFromAppStateLocal,
+  removeSeedInventoryItemFromAppState as removeSeedInventoryItemFromAppStateLocal,
+  upsertSeedInventoryItemInAppState as upsertSeedInventoryItemInAppStateLocal,
+} from './repos/seedInventoryRepository';
+import type { ListQuery } from './repos/interfaces';
+import {
+  generateCalendarTasksWithDiagnostics as generateCalendarTasksWithDiagnosticsLocal,
+  upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
+} from './repos/taskRepository';
+import { applyStageEvent } from '../domain';
+import {
+  getFrontendMode,
+  shouldUseCanonicalBackendPath,
+  shouldUseTypescriptRollbackShim,
+  toBackendApiUrl,
+  workflowAdapter,
+} from './workflowAdapter';
 import goldenDatasetFixture from '../../../fixtures/golden/trier-v1.json';
 
 export {
@@ -56,7 +100,8 @@ export {
   upsertTaskInAppState,
 } from './repos/taskRepository';
 
-const APP_STATE_DB_NAME = 'survival-garden';
+const DEFAULT_APP_STATE_DB_NAME = 'survival-garden';
+const APP_STATE_DB_NAME_OVERRIDE_KEY = '__SURVIVAL_GARDEN_TEST_DB_NAME__';
 const APP_STATE_DB_VERSION = 6;
 const APP_STATE_STORE = 'appState';
 const APP_STATE_RECORD_KEY = 'current';
@@ -71,8 +116,23 @@ const DEFAULT_SEGMENT_ID = 'segment_default_main';
 const DEFAULT_SEGMENT_NAME = 'Main Segment';
 const DEFAULT_SEGMENT_ORIGIN = 'default_bootstrap';
 type AppSegment = NonNullable<AppState['segments']>[number];
-
 const LEGACY_BED_TYPE = 'vegetable_bed';
+
+const resolveAppStateDbName = (): string => {
+  const globalOverride = (globalThis as Record<string, unknown>)[APP_STATE_DB_NAME_OVERRIDE_KEY];
+  if (typeof globalOverride === 'string' && globalOverride.trim().length > 0) {
+    return globalOverride;
+  }
+
+  const envOverride = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.VITE_APP_STATE_DB_NAME;
+  if (typeof envOverride === 'string' && envOverride.trim().length > 0) {
+    return envOverride;
+  }
+
+  return DEFAULT_APP_STATE_DB_NAME;
+};
+
+export const getAppStateDbNameForTesting = (): string => resolveAppStateDbName();
 
 type LayoutMigrationWarningCode =
   | 'legacy_layout_segment_created'
@@ -93,6 +153,8 @@ type LayoutMigrationReport = {
   migrated: boolean;
   warnings: LayoutMigrationWarning[];
 };
+
+const isBackendModeEnabled = (): boolean => getFrontendMode() === 'backend';
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
@@ -1232,7 +1294,7 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
   }
 
   return new Promise((resolve, reject) => {
-    const openRequest = indexedDB.open(APP_STATE_DB_NAME, APP_STATE_DB_VERSION);
+    const openRequest = indexedDB.open(resolveAppStateDbName(), APP_STATE_DB_VERSION);
 
     openRequest.onupgradeneeded = (event) => {
       const database = openRequest.result;
@@ -1286,6 +1348,34 @@ const openAppStateDatabase = async (): Promise<IDBDatabase> => {
 };
 
 export const initializeAppStateStorage = async (): Promise<void> => {
+  if (isBackendModeEnabled()) {
+    try {
+      const backendState = await loadAppStateFromBackendApi();
+      const localState = await loadAppStateFromLocalIndexedDb();
+
+      if (backendState && localState) {
+        const mergedState = mergeAppStates(backendState, localState).state;
+        await saveAppStateToIndexedDb(mergedState, { mode: 'replace', mirrorToLocal: true });
+        return;
+      }
+
+      if (backendState) {
+        await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+        return;
+      }
+
+      if (localState) {
+        await saveAppStateToIndexedDb(localState, { mode: 'replace', mirrorToLocal: true });
+        return;
+      }
+
+      await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace', mirrorToLocal: true });
+      return;
+    } catch (error) {
+      console.warn('Backend mode initialization failed; falling back to local IndexedDB.', error);
+    }
+  }
+
   const database = await openAppStateDatabase();
 
   try {
@@ -1300,13 +1390,13 @@ export const initializeAppStateStorage = async (): Promise<void> => {
 };
 
 const seedAppStateIfEmpty = async (): Promise<void> => {
-  const currentState = await loadAppStateFromIndexedDb();
+  const currentState = await loadAppStateFromLocalIndexedDb();
 
   if (currentState) {
     return;
   }
 
-  await saveAppStateToIndexedDb(GOLDEN_DATASET);
+  await saveAppStateToLocalIndexedDb(GOLDEN_DATASET);
 };
 
 export const createEmptyAppState = (currentState: AppState | null): AppState => ({
@@ -1323,12 +1413,17 @@ export const createEmptyAppState = (currentState: AppState | null): AppState => 
 });
 
 export const resetToGoldenDataset = async (): Promise<void> => {
+  if (isBackendModeEnabled()) {
+    await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace' });
+    return;
+  }
+
   if (typeof indexedDB === 'undefined') {
     throw new AppStateStorageError('IndexedDB is not available in this environment.');
   }
 
   await new Promise<void>((resolve, reject) => {
-    const deleteRequest = indexedDB.deleteDatabase(APP_STATE_DB_NAME);
+    const deleteRequest = indexedDB.deleteDatabase(resolveAppStateDbName());
 
     deleteRequest.onsuccess = () => resolve();
     deleteRequest.onerror = () => reject(new AppStateStorageError('Failed to reset local data storage.'));
@@ -1339,7 +1434,36 @@ export const resetToGoldenDataset = async (): Promise<void> => {
   await initializeAppStateStorage();
 };
 
-export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
+const loadAppStateFromBackendApi = async (): Promise<AppState | null> => {
+  let response: Response;
+
+  try {
+    response = await fetch(toBackendApiUrl('/api/app-state'));
+  } catch (error) {
+    throw new AppStateStorageError(
+      `Failed to reach backend API while loading app state: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new AppStateStorageError(`Failed to load app state from backend API: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = await response.json();
+  const migrationResult = migrateLegacyLayoutModel(migrateLegacyBedTypes(payload));
+
+  if (migrationResult.report.warnings.length > 0) {
+    console.warn('AppState backend load migration warnings', migrationResult.report.warnings);
+  }
+
+  return canonicalizeForExport(assertValid('appState', migrationResult.payload));
+};
+
+const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
   const database = await openAppStateDatabase();
 
   try {
@@ -1367,10 +1491,68 @@ export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
   }
 };
 
-export const saveAppStateToIndexedDb = async (
+export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
+  if (isBackendModeEnabled()) {
+    try {
+      const backendState = await loadAppStateFromBackendApi();
+
+      if (backendState) {
+        await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+      }
+
+      return backendState;
+    } catch (error) {
+      console.warn('Backend app-state load failed; using local IndexedDB state.', error);
+      return loadAppStateFromLocalIndexedDb();
+    }
+  }
+
+  return loadAppStateFromLocalIndexedDb();
+};
+
+const saveAppStateToLocalIndexedDb = async (
   appState: unknown,
   options: SaveAppStateOptions = {},
 ): Promise<MergeReport | null> => {
+  if (isBackendModeEnabled()) {
+    const candidateState =
+      appState && typeof appState === 'object'
+        ? {
+            ...(appState as Record<string, unknown>),
+            settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+          }
+        : appState;
+    const validState = assertValid('appState', candidateState);
+    const isReplaceMode = options.mode === 'replace';
+    let report: MergeReport | null = null;
+    let stateToPersist = canonicalizeForExport(validState);
+
+    if (!isReplaceMode) {
+      const existingState = await loadAppStateFromIndexedDb();
+
+      if (existingState) {
+        const merged = mergeAppStates(existingState, stateToPersist);
+        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        report = merged.report;
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        report.warnings.push(...hierarchyValidation.warnings);
+        report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
+      }
+    }
+
+    const response = await fetch(toBackendApiUrl('/api/app-state'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stateToPersist),
+    });
+
+    if (!response.ok) {
+      throw new AppStateStorageError(`Failed to save app state to backend API: ${response.status} ${response.statusText}`);
+    }
+
+    return report;
+  }
+
   const database = await openAppStateDatabase();
 
   try {
@@ -1473,6 +1655,336 @@ export const saveAppStateToIndexedDb = async (
   } finally {
     database.close();
   }
+};
+
+export const saveAppStateToIndexedDb = async (
+  appState: unknown,
+  options: SaveAppStateOptions & { mirrorToLocal?: boolean } = {},
+): Promise<MergeReport | null> => {
+  if (isBackendModeEnabled()) {
+    const candidateState =
+      appState && typeof appState === 'object'
+        ? {
+            ...(appState as Record<string, unknown>),
+            settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+          }
+        : appState;
+    const validState = assertValid('appState', candidateState);
+    const isReplaceMode = options.mode === 'replace';
+    let report: MergeReport | null = null;
+    let stateToPersist = canonicalizeForExport(validState);
+
+    if (!isReplaceMode) {
+      const existingState = await loadAppStateFromBackendApi();
+
+      if (existingState) {
+        const merged = mergeAppStates(existingState, stateToPersist);
+        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        report = merged.report;
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        report.warnings.push(...hierarchyValidation.warnings);
+        report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
+      }
+    }
+
+    let response: Response;
+
+    try {
+      response = await fetch(toBackendApiUrl('/api/app-state'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stateToPersist),
+      });
+    } catch (error) {
+      console.warn('Backend app-state save failed; saving to local IndexedDB only.', error);
+      return saveAppStateToLocalIndexedDb(stateToPersist, { mode: 'replace' });
+    }
+
+    if (!response.ok) {
+      throw new AppStateStorageError(`Failed to save app state to backend API: ${response.status} ${response.statusText}`);
+    }
+
+    if (options.mirrorToLocal !== false) {
+      await saveAppStateToLocalIndexedDb(stateToPersist, { mode: 'replace' });
+    }
+
+    return report;
+  }
+
+  return saveAppStateToLocalIndexedDb(appState, options);
+};
+
+const shouldUseCanonicalWorkflowWithoutRollback = (
+  feature: 'bedsSegments' | 'taxonomy' | 'inventory' | 'batches' | 'tasks',
+): boolean => shouldUseCanonicalBackendPath(feature) && !shouldUseTypescriptRollbackShim(feature);
+
+export const getBed = async (bedId: Bed['bedId']): Promise<Bed | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return workflowAdapter.bedsSegments.getBed(bedId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? getBedFromAppStateLocal(appState, bedId) : null;
+};
+
+export const listBeds = async (): Promise<Bed[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return workflowAdapter.bedsSegments.listBeds();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? listBedsFromAppStateLocal(appState) : [];
+};
+
+export const upsertBed = async (bed: unknown): Promise<Bed> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return assertValid('bed', await workflowAdapter.bedsSegments.upsertBed(assertValid('bed', bed)));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertBedInAppStateLocal(appState ?? createEmptyAppState(appState), bed);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid('bed', getBedFromAppStateLocal(nextState, assertValid('bed', bed).bedId));
+};
+
+export const removeBed = async (bedId: Bed['bedId']): Promise<void> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    await workflowAdapter.bedsSegments.removeBed(bedId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+  await saveAppStateToIndexedDb(removeBedFromAppStateLocal(appState, bedId));
+};
+
+export const getCrop = async (cropId: Crop['cropId']): Promise<Crop | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.getCrop(cropId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? getCropFromAppStateLocal(appState, cropId) : null;
+};
+
+export const listCrops = async (): Promise<Crop[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listCrops();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? listCropsFromAppStateLocal(appState) : [];
+};
+
+export const upsertCrop = async (crop: unknown): Promise<Crop> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return assertValid('crop', await workflowAdapter.taxonomy.upsertCrop(assertValid('crop', crop)));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertCropInAppStateLocal(appState ?? createEmptyAppState(appState), crop);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid('crop', getCropFromAppStateLocal(nextState, assertValid('crop', crop).cropId));
+};
+
+export const removeCrop = async (cropId: Crop['cropId']): Promise<void> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    await workflowAdapter.taxonomy.removeCrop(cropId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+  await saveAppStateToIndexedDb(removeCropFromAppStateLocal(appState, cropId));
+};
+
+export const getCropPlan = async (planId: CropPlan['planId']): Promise<CropPlan | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.getCropPlan(planId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? getCropPlanFromAppStateLocal(appState, planId) : null;
+};
+
+export const listCropPlans = async (): Promise<CropPlan[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listCropPlans();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? listCropPlansFromAppStateLocal(appState) : [];
+};
+
+export const upsertCropPlan = async (cropPlan: unknown): Promise<CropPlan> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return assertValid('cropPlan', await workflowAdapter.taxonomy.upsertCropPlan(assertValid('cropPlan', cropPlan)));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertCropPlanInAppStateLocal(appState ?? createEmptyAppState(appState), cropPlan);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid('cropPlan', getCropPlanFromAppStateLocal(nextState, assertValid('cropPlan', cropPlan).planId));
+};
+
+export const removeCropPlan = async (planId: CropPlan['planId']): Promise<void> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    await workflowAdapter.taxonomy.removeCropPlan(planId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+  await saveAppStateToIndexedDb(removeCropPlanFromAppStateLocal(appState, planId));
+};
+
+export const getSeedInventoryItem = async (
+  seedInventoryItemId: SeedInventoryItem['seedInventoryItemId'],
+): Promise<SeedInventoryItem | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
+    return workflowAdapter.inventory.getSeedInventoryItem(seedInventoryItemId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? getSeedInventoryItemFromAppStateLocal(appState, seedInventoryItemId) : null;
+};
+
+export const listSeedInventoryItems = async (
+  query: ListQuery<Pick<SeedInventoryItem, 'cultivarId' | 'status'>> = {},
+): Promise<SeedInventoryItem[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
+    return workflowAdapter.inventory.listSeedInventoryItems();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState ? listSeedInventoryItemsFromAppStateLocal(appState, query) : [];
+};
+
+export const upsertSeedInventoryItem = async (seedInventoryItem: unknown): Promise<SeedInventoryItem> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
+    return assertValid(
+      'seedInventoryItem',
+      await workflowAdapter.inventory.upsertSeedInventoryItem(assertValid('seedInventoryItem', seedInventoryItem)),
+    );
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertSeedInventoryItemInAppStateLocal(appState ?? createEmptyAppState(appState), seedInventoryItem);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid(
+    'seedInventoryItem',
+    getSeedInventoryItemFromAppStateLocal(nextState, assertValid('seedInventoryItem', seedInventoryItem).seedInventoryItemId),
+  );
+};
+
+export const removeSeedInventoryItem = async (
+  seedInventoryItemId: SeedInventoryItem['seedInventoryItemId'],
+): Promise<void> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
+    await workflowAdapter.inventory.removeSeedInventoryItem(seedInventoryItemId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+  await saveAppStateToIndexedDb(removeSeedInventoryItemFromAppStateLocal(appState, seedInventoryItemId));
+};
+
+export const transitionBatchStage = async (
+  batchId: string,
+  nextStage: string,
+  occurredAt: string,
+): Promise<Batch> => {
+  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
+    return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
+  }
+
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
+  console.warn('[DEPRECATED] Using TypeScript batch stage transition rollback shim.');
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const existingBatch = getBatchFromAppStateLocal(appState, batchId);
+  if (!existingBatch) {
+    throw new Error('Batch not found.');
+  }
+
+  const transition = applyStageEvent(existingBatch, { stage: nextStage, occurredAt });
+  if (!transition.ok) {
+    throw new Error(transition.reason);
+  }
+
+  const nextState = upsertBatchInAppStateLocal(appState, transition.batch);
+  await saveAppStateToIndexedDb(nextState);
+  return transition.batch;
+};
+
+export const mutateBatchAssignment = async (
+  operation: 'assign' | 'move' | 'remove',
+  payload: { batchId: string; bedId?: string; at: string },
+): Promise<Batch> => {
+  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
+    return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
+  }
+
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
+  console.warn('[DEPRECATED] Using TypeScript batch assignment rollback shim.');
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const existingBatch = getBatchFromAppStateLocal(appState, payload.batchId);
+  if (!existingBatch) {
+    throw new Error('Batch not found.');
+  }
+
+  const nextBatch =
+    operation === 'assign'
+      ? assignBatchToBedLocal(existingBatch, payload.bedId ?? '', payload.at)
+      : operation === 'move'
+        ? moveBatchLocal(existingBatch, payload.bedId ?? '', payload.at)
+        : removeBatchFromBedLocal(existingBatch, payload.at);
+  const nextState = upsertBatchInAppStateLocal(appState, nextBatch);
+  await saveAppStateToIndexedDb(nextState);
+  return nextBatch;
+};
+
+export const regenerateCalendarTasks = async (year: number) => {
+  if (shouldUseCanonicalBackendPath('tasks') && !shouldUseTypescriptRollbackShim('tasks')) {
+    const payload = await workflowAdapter.tasks.regenerateCalendar(year);
+    return {
+      generatedTasks: payload.generatedTasks,
+      diagnostics: payload.diagnostics,
+      stateAfter: assertValid('appState', payload.stateAfter),
+    };
+  }
+
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
+  console.warn('[DEPRECATED] Using TypeScript task regeneration rollback shim.');
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    throw new Error('App state unavailable.');
+  }
+
+  const generationResult = generateCalendarTasksWithDiagnosticsLocal(appState, year);
+  const nextState = upsertGeneratedTasksInAppStateLocal(appState, generationResult.tasks);
+  await saveAppStateToIndexedDb(nextState);
+  return {
+    generatedTasks: generationResult.tasks,
+    diagnostics: generationResult.diagnostics,
+    stateAfter: nextState,
+  };
 };
 
 export const savePhotoBlobToIndexedDb = async (photoId: string, blob: Blob): Promise<void> => {

@@ -213,6 +213,11 @@ Mirror critical business rules in C# domain services while preserving behavior f
 - Treat `fixtures/golden/trier-v1.json` as a versioned shared dataset consumed by both TS and .NET tests.
 - Add expected outputs for deterministic rule evaluations (e.g., derived task sets, filtered results, validation outcomes).
 - Both runtimes must pass against the same fixture version before release.
+- Run the shared harness `node scripts/equivalence/run-equivalence.mjs --tsBaseUrl=<ts> --dotnetBaseUrl=<dotnet>` with `fixtures/equivalence/equivalence-scenarios.v1.json`; block cutover on non-zero exit.
+- Require workflow-level cutover checks before flipping backend-only mode: run with `--cutoverCriteria=fixtures/equivalence/cutover-criteria.v1.json --flipWorkflows=<workflow,...>` and block on any unmet mismatch-rate/min-run threshold.
+- Define **cutover-complete** as: parity accepted (`VITE_PARITY_ACCEPTED_WORKFLOWS`) + successful gated runs meeting `fixtures/equivalence/cutover-criteria.v1.json` thresholds.
+- After a workflow is cutover-complete, add it to `VITE_CUTOVER_COMPLETE_WORKFLOWS` so frontend mutation/derivation paths remain backend-owned by default.
+- `VITE_ENABLE_EMERGENCY_TYPESCRIPT_ROLLBACK=true` (optionally scoped by `VITE_EMERGENCY_TYPESCRIPT_ROLLBACK_WORKFLOWS`) is reserved for emergency rollback only and should be removed after the confidence window.
 
 ### Contract tests as release gate
 
