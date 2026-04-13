@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  isCutoverCompleteWorkflow,
   isWorkflowRoutedToBackend,
   shouldUseCanonicalBackendPath,
   shouldUseTypescriptRollbackShim,
@@ -69,6 +70,28 @@ describe('workflow routing flags', () => {
     expect(shouldUseTypescriptRollbackShim('tasks')).toBe(false);
     expect(shouldUseTypescriptRollbackShim('taxonomy')).toBe(true);
   });
+  it('treats workflows as cutover-complete only when parity accepted and marked complete', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
+    vi.stubEnv('VITE_CUTOVER_COMPLETE_WORKFLOWS', 'batches');
+
+    expect(isCutoverCompleteWorkflow('batches')).toBe(true);
+    expect(isCutoverCompleteWorkflow('tasks')).toBe(false);
+  });
+
+  it('keeps rollback shims disabled for cutover-complete workflows unless emergency kill switch is enabled', () => {
+    vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+    vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches');
+    vi.stubEnv('VITE_CUTOVER_COMPLETE_WORKFLOWS', 'batches');
+    vi.stubEnv('VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS', 'true');
+    vi.stubEnv('VITE_TYPESCRIPT_ROLLBACK_WORKFLOWS', 'batches');
+
+    expect(shouldUseTypescriptRollbackShim('batches')).toBe(false);
+
+    vi.stubEnv('VITE_ENABLE_EMERGENCY_TYPESCRIPT_ROLLBACK', 'true');
+    expect(shouldUseTypescriptRollbackShim('batches')).toBe(true);
+  });
+
 });
 
 describe('workflow adapter transport', () => {

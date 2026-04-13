@@ -1907,7 +1907,7 @@ export const transitionBatchStage = async (
     return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
   }
 
-  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
   console.warn('[DEPRECATED] Using TypeScript batch stage transition rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {
@@ -1937,7 +1937,7 @@ export const mutateBatchAssignment = async (
     return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
   }
 
-  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
   console.warn('[DEPRECATED] Using TypeScript batch assignment rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {
@@ -1970,7 +1970,7 @@ export const regenerateCalendarTasks = async (year: number) => {
     };
   }
 
-  // Deprecated rollback shim. Remove once TypeScript rollback window is retired.
+  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
   console.warn('[DEPRECATED] Using TypeScript task regeneration rollback shim.');
   const appState = await loadAppStateFromIndexedDb();
   if (!appState) {

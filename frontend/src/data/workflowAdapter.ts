@@ -86,6 +86,25 @@ const isTypescriptRollbackShimEnabled = (feature: WorkflowFeature): boolean => {
   return rollbackFeatures.length === 0 || rollbackFeatures.includes(feature);
 };
 
+const isEmergencyTypescriptRollbackEnabled = (feature: WorkflowFeature): boolean => {
+  const env = resolveRuntimeEnv();
+  if (!isFeatureFlagEnabled(env.VITE_ENABLE_EMERGENCY_TYPESCRIPT_ROLLBACK)) {
+    return false;
+  }
+
+  const rollbackFeatures = parseWorkflowList(env.VITE_EMERGENCY_TYPESCRIPT_ROLLBACK_WORKFLOWS);
+  return rollbackFeatures.length === 0 || rollbackFeatures.includes(feature);
+};
+
+export const isCutoverCompleteWorkflow = (feature: WorkflowFeature): boolean => {
+  if (!isParityAcceptedWorkflow(feature)) {
+    return false;
+  }
+
+  const env = resolveRuntimeEnv();
+  return parseWorkflowList(env.VITE_CUTOVER_COMPLETE_WORKFLOWS).includes(feature);
+};
+
 export const shouldUseCanonicalBackendPath = (feature: WorkflowFeature): boolean => {
   if (getFrontendMode() !== 'backend') {
     return false;
@@ -99,10 +118,19 @@ export const shouldUseCanonicalBackendPath = (feature: WorkflowFeature): boolean
 };
 
 /**
- * @deprecated Rollback-only helper. Remove alongside VITE_ENABLE_TYPESCRIPT_ROLLBACK_SHIMS retirement.
+ * @deprecated Rollback-only helper. Remove alongside rollback retirement target (2026-07-31).
  */
-export const shouldUseTypescriptRollbackShim = (feature: WorkflowFeature): boolean =>
-  !shouldUseCanonicalBackendPath(feature) || isTypescriptRollbackShimEnabled(feature);
+export const shouldUseTypescriptRollbackShim = (feature: WorkflowFeature): boolean => {
+  if (isEmergencyTypescriptRollbackEnabled(feature)) {
+    return true;
+  }
+
+  if (isCutoverCompleteWorkflow(feature)) {
+    return false;
+  }
+
+  return !shouldUseCanonicalBackendPath(feature) || isTypescriptRollbackShimEnabled(feature);
+};
 
 export const parseBackendError = async (response: Response): Promise<string> => {
   try {
