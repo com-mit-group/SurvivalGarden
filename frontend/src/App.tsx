@@ -3166,6 +3166,10 @@ function BatchesPage({
       });
 
       return sorted.sort((left, right) => {
+        const leftUpdatedAt =
+          left.stageEvents.reduce((latest, event) => (event.occurredAt > latest ? event.occurredAt : latest), left.startedAt);
+        const rightUpdatedAt =
+          right.stageEvents.reduce((latest, event) => (event.occurredAt > latest ? event.occurredAt : latest), right.startedAt);
         const leftCultivar = cultivarsById[getBatchCultivarLookupId(left) ?? '']?.name ?? '';
         const rightCultivar = cultivarsById[getBatchCultivarLookupId(right) ?? '']?.name ?? '';
         const leftCropId = left.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(left) ?? '']?.cropTypeId ?? '';
@@ -3200,7 +3204,7 @@ function BatchesPage({
               return compareString(leftCrop, rightCrop);
             case 'updatedAt':
             default:
-              return compareDate(left.updatedAt, right.updatedAt);
+              return compareDate(leftUpdatedAt, rightUpdatedAt);
           }
         })();
 
