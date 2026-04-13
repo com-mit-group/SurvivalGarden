@@ -2988,9 +2988,14 @@ function BatchesPage({
     () => ({
       crop: searchParams.get('crop') ?? '',
       stage: searchParams.get('stage') ?? '',
+      cultivar: searchParams.get('cultivar') ?? '',
+      assignment: searchParams.get('assignment') ?? '',
       bed: searchParams.get('bed') ?? '',
       from: searchParams.get('from') ?? '',
       to: searchParams.get('to') ?? '',
+      query: searchParams.get('query') ?? '',
+      sort: searchParams.get('sort') ?? 'updatedAt',
+      direction: searchParams.get('direction') ?? 'desc',
     }),
     [searchParams],
   );
@@ -3038,6 +3043,23 @@ function BatchesPage({
     [batches],
   );
 
+  const cultivarOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          batches
+            .map((batch) => getBatchCultivarLookupId(batch))
+            .filter((cultivarId): cultivarId is string => Boolean(cultivarId && cultivarsById[cultivarId])),
+        ),
+      )
+        .map((cultivarId) => ({
+          value: cultivarId,
+          label: cultivarsById[cultivarId]?.name ?? cultivarId,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [batches, cultivarsById],
+  );
+
   const cultivarInputOptions = useMemo(
     () =>
       cultivars
@@ -3072,10 +3094,21 @@ function BatchesPage({
   );
 
   const filteredBatches = useMemo(
-    () =>
-      batches.filter((batch) => {
+    () => {
+      const normalizedQuery = filters.query.trim().toLowerCase();
+      const directionMultiplier = filters.direction === 'asc' ? 1 : -1;
+      const sorted = batches
+        .filter((batch) => {
         const derivedBedId = getDerivedBedId(batch);
         const batchDate = batch.startedAt.slice(0, 10);
+        const cultivarId = getBatchCultivarLookupId(batch);
+        const cultivarName = cultivarId ? (cultivarsById[cultivarId]?.name ?? '') : '';
+        const batchDisplay = getBatchCultivarDisplay({
+          batch,
+          cultivarsById,
+          cropNames,
+          cropScientificNames,
+        });
 
         const batchCropTypeId = batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId;
         if (filters.crop && batchCropTypeId !== filters.crop) {
@@ -3083,6 +3116,18 @@ function BatchesPage({
         }
 
         if (filters.stage && batch.stage !== filters.stage) {
+          return false;
+        }
+
+        if (filters.cultivar && cultivarId !== filters.cultivar) {
+          return false;
+        }
+
+        if (filters.assignment === 'assigned' && !derivedBedId) {
+          return false;
+        }
+
+        if (filters.assignment === 'unassigned' && derivedBedId) {
           return false;
         }
 
@@ -3098,9 +3143,79 @@ function BatchesPage({
           return false;
         }
 
+        if (normalizedQuery) {
+          const searchable = [
+            batch.batchId,
+            batch.stage,
+            batch.variety ?? '',
+            cultivarName,
+            batchDisplay.cropTypeName ?? '',
+            batchDisplay.name ?? '',
+            batchDisplay.scientificName ?? '',
+            derivedBedId ?? 'unassigned',
+          ]
+            .join(' ')
+            .toLowerCase();
+
+          if (!searchable.includes(normalizedQuery)) {
+            return false;
+          }
+        }
+
         return true;
-      }),
-    [batches, cultivarsById, filters],
+      });
+
+      return sorted.sort((left, right) => {
+        const leftUpdatedAt =
+          left.stageEvents.reduce((latest, event) => (event.occurredAt > latest ? event.occurredAt : latest), left.startedAt);
+        const rightUpdatedAt =
+          right.stageEvents.reduce((latest, event) => (event.occurredAt > latest ? event.occurredAt : latest), right.startedAt);
+        const leftCultivar = cultivarsById[getBatchCultivarLookupId(left) ?? '']?.name ?? '';
+        const rightCultivar = cultivarsById[getBatchCultivarLookupId(right) ?? '']?.name ?? '';
+        const leftCropId = left.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(left) ?? '']?.cropTypeId ?? '';
+        const rightCropId = right.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(right) ?? '']?.cropTypeId ?? '';
+        const leftCrop = cropNames[leftCropId] ?? leftCropId;
+        const rightCrop = cropNames[rightCropId] ?? rightCropId;
+        const byBatchId = left.batchId.localeCompare(right.batchId);
+
+        const compareString = (l: string, r: string) => l.localeCompare(r, undefined, { sensitivity: 'base' });
+        const compareDate = (l?: string, r?: string) => {
+          if (!l && !r) {
+            return 0;
+          }
+          if (!l) {
+            return -1;
+          }
+          if (!r) {
+            return 1;
+          }
+          return l.localeCompare(r);
+        };
+
+        const keyResult = (() => {
+          switch (filters.sort) {
+            case 'startedAt':
+              return compareDate(left.startedAt, right.startedAt);
+            case 'stage':
+              return compareString(left.stage ?? '', right.stage ?? '');
+            case 'cultivar':
+              return compareString(leftCultivar, rightCultivar);
+            case 'crop':
+              return compareString(leftCrop, rightCrop);
+            case 'updatedAt':
+            default:
+              return compareDate(leftUpdatedAt, rightUpdatedAt);
+          }
+        })();
+
+        if (keyResult !== 0) {
+          return keyResult * directionMultiplier;
+        }
+
+        return byBatchId;
+      });
+    },
+    [batches, cultivarsById, cropNames, cropScientificNames, filters],
   );
 
   const updateFilter = (name: string, value: string) => {
@@ -3112,6 +3227,12 @@ function BatchesPage({
       next.delete(name);
     }
 
+    setSearchParams(next, { replace: true });
+  };
+
+  const resetBatchFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    ['crop', 'stage', 'cultivar', 'assignment', 'bed', 'from', 'to', 'query', 'sort', 'direction'].forEach((name) => next.delete(name));
     setSearchParams(next, { replace: true });
   };
 
@@ -4147,6 +4268,16 @@ function BatchesPage({
         <>
           <div className="batch-filters">
             <label>
+              Search
+              <input
+                type="search"
+                value={filters.query}
+                onChange={(event) => updateFilter('query', event.target.value)}
+                placeholder="Batch, cultivar, crop, stage, bed"
+              />
+            </label>
+
+            <label>
               Crop Type
               <select value={filters.crop} onChange={(event) => updateFilter('crop', event.target.value)}>
                 <option value="">All</option>
@@ -4171,6 +4302,27 @@ function BatchesPage({
             </label>
 
             <label>
+              Cultivar
+              <select value={filters.cultivar} onChange={(event) => updateFilter('cultivar', event.target.value)}>
+                <option value="">All</option>
+                {cultivarOptions.map((cultivar) => (
+                  <option key={cultivar.value} value={cultivar.value}>
+                    {cultivar.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Assignment
+              <select value={filters.assignment} onChange={(event) => updateFilter('assignment', event.target.value)}>
+                <option value="">All</option>
+                <option value="assigned">Assigned</option>
+                <option value="unassigned">Unassigned</option>
+              </select>
+            </label>
+
+            <label>
               Bed
               <select value={filters.bed} onChange={(event) => updateFilter('bed', event.target.value)}>
                 <option value="">All</option>
@@ -4191,7 +4343,33 @@ function BatchesPage({
               To
               <input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
             </label>
+
+            <label>
+              Sort by
+              <select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)}>
+                <option value="updatedAt">Updated date</option>
+                <option value="startedAt">Started date</option>
+                <option value="stage">Stage</option>
+                <option value="cultivar">Cultivar name</option>
+                <option value="crop">Crop name</option>
+              </select>
+            </label>
+
+            <label>
+              Direction
+              <select value={filters.direction} onChange={(event) => updateFilter('direction', event.target.value)}>
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </label>
+
+            <button type="button" onClick={resetBatchFilters}>
+              Reset filters
+            </button>
           </div>
+          <p className="batch-form-note">
+            Showing {filteredBatches.length} of {batches.length} batches.
+          </p>
 
           <nav className="batch-form-actions" aria-label="Batch and admin flows">
             <Link to="/batches#create-batch">Batch form</Link>
