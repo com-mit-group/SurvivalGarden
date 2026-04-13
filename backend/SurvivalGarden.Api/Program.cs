@@ -5,15 +5,24 @@ using SurvivalGarden.Persistence;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddCors(options =>
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+if (builder.Environment.IsDevelopment() && corsOrigins.Length == 0)
 {
-    options.AddPolicy("FrontendDev", policy =>
+    corsOrigins = ["http://localhost:5173"];
+}
+
+if (corsOrigins.Length > 0)
+{
+    builder.Services.AddCors(options =>
     {
-        policy.WithOrigins("http://localhost:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        options.AddPolicy("Frontend", policy =>
+        {
+            policy.WithOrigins(corsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
     });
-});
+}
 var appStatePath =
     builder.Configuration["APP_STATE_FILE_PATH"] ??
     builder.Configuration["Persistence:AppStatePath"];
@@ -25,7 +34,11 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.UseCors("FrontendDev");
+}
+
+if (corsOrigins.Length > 0)
+{
+    app.UseCors("Frontend");
 }
 
 app.MapCoreEndpoints();
