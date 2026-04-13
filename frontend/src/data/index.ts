@@ -1,5 +1,5 @@
 import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem } from '../contracts';
-import { assertValid } from './validation';
+import { SchemaValidationError, assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
 import {
@@ -1228,6 +1228,15 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
     transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted.'));
   });
 
+const toValidationDebugPayload = (error: unknown): unknown =>
+  error instanceof SchemaValidationError
+    ? {
+        message: error.message,
+        schema: error.schemaName,
+        issues: error.issues,
+      }
+    : error;
+
 const migrateV1ToV2 = (database: IDBDatabase, transaction: IDBTransaction): void => {
   if (!database.objectStoreNames.contains(META_STORE)) {
     database.createObjectStore(META_STORE);
@@ -1373,7 +1382,7 @@ export const initializeAppStateStorage = async (): Promise<void> => {
       await saveAppStateToIndexedDb(GOLDEN_DATASET, { mode: 'replace', mirrorToLocal: true });
       return;
     } catch (error) {
-      console.warn('Backend mode initialization failed; falling back to local IndexedDB.', error);
+      console.warn('Backend mode initialization failed; falling back to local IndexedDB.', toValidationDebugPayload(error));
     }
   }
 
@@ -1461,7 +1470,14 @@ const loadAppStateFromBackendApi = async (): Promise<AppState | null> => {
     console.warn('AppState backend load migration warnings', migrationResult.report.warnings);
   }
 
-  return canonicalizeForExport(assertValid('appState', migrationResult.payload));
+  try {
+    return canonicalizeForExport(assertValid('appState', migrationResult.payload));
+  } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      console.warn('AppState backend load schema issues', toValidationDebugPayload(error));
+    }
+    throw error;
+  }
 };
 
 const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
@@ -1484,6 +1500,11 @@ const loadAppStateFromLocalIndexedDb = async (): Promise<AppState | null> => {
 
     return canonicalizeForExport(assertValid('appState', migrationResult.payload));
   } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      console.warn('AppState local load schema issues', toValidationDebugPayload(error));
+      throw error;
+    }
+
     throw new AppStateStorageError(
       `Failed to load app state from local data storage: ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -1503,7 +1524,7 @@ export const loadAppStateFromIndexedDb = async (): Promise<AppState | null> => {
 
       return backendState;
     } catch (error) {
-      console.warn('Backend app-state load failed; using local IndexedDB state.', error);
+      console.warn('Backend app-state load failed; using local IndexedDB state.', toValidationDebugPayload(error));
       return loadAppStateFromLocalIndexedDb();
     }
   }

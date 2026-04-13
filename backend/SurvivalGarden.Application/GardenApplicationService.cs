@@ -12,8 +12,6 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         "cultivars",
         "batches",
         "segments",
-        "beds",
-        "paths",
         "seedInventoryItems",
         "cropPlans",
         "tasks"
