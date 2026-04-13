@@ -11,6 +11,7 @@ afterEach(() => {
 
 const stubCutoverCompleteEnv = () => {
   vi.stubEnv('VITE_FRONTEND_MODE', 'backend');
+  vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
   vi.stubEnv('VITE_PARITY_ACCEPTED_WORKFLOWS', 'batches,tasks');
   vi.stubEnv('VITE_CUTOVER_COMPLETE_WORKFLOWS', 'batches,tasks');
 };
