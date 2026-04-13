@@ -13,6 +13,7 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
+  removeBatch,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
@@ -2854,6 +2855,8 @@ function BatchesPage({
   const [speciesById, setSpeciesById] = useState<Record<string, Species>>({});
   const [editingSpeciesId, setEditingSpeciesId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeletingBatchId, setIsDeletingBatchId] = useState<string | null>(null);
+  const [batchDeleteMessage, setBatchDeleteMessage] = useState<string | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cropInput: '',
@@ -3941,6 +3944,39 @@ function BatchesPage({
     });
     setFormErrors({});
     setSaveMessage(null);
+    setBatchDeleteMessage(null);
+  };
+
+  const handleDeleteBatch = async (batch: Batch) => {
+    if (isDeletingBatchId) {
+      return;
+    }
+
+    setBatchDeleteMessage(null);
+
+    const assignmentCount = (batch.assignments ?? []).length;
+    const stageEventCount = (batch.stageEvents ?? []).length;
+    const confirmation = window.confirm(
+      `Delete batch ${batch.batchId}? This permanently removes the batch and its ${assignmentCount} assignment${assignmentCount === 1 ? '' : 's'} and ${stageEventCount} stage event${stageEventCount === 1 ? '' : 's'}. This action cannot be undone.`,
+    );
+    if (!confirmation) {
+      return;
+    }
+
+    setIsDeletingBatchId(batch.batchId);
+    try {
+      await removeBatch(batch.batchId);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      setBatches(refreshedState ? listBatchesFromAppState(refreshedState) : []);
+      if (editingBatchId === batch.batchId) {
+        resetForm();
+      }
+      setBatchDeleteMessage(`Deleted batch ${batch.batchId}.`);
+    } catch (error) {
+      setBatchDeleteMessage(error instanceof Error ? error.message : 'Failed to delete batch.');
+    } finally {
+      setIsDeletingBatchId(null);
+    }
   };
 
   const resetForm = () => {
@@ -4370,6 +4406,7 @@ function BatchesPage({
           <p className="batch-form-note">
             Showing {filteredBatches.length} of {batches.length} batches.
           </p>
+          {batchDeleteMessage ? <p className="batch-form-message">{batchDeleteMessage}</p> : null}
 
           <nav className="batch-form-actions" aria-label="Batch and admin flows">
             <Link to="/batches#create-batch">Batch form</Link>
@@ -4983,6 +5020,9 @@ function BatchesPage({
                 </Link>
                 <button type="button" className="batch-edit-button" onClick={() => startEdit(batch)}>
                   Edit
+                </button>
+                <button type="button" className="batch-edit-button" onClick={() => void handleDeleteBatch(batch)} disabled={isDeletingBatchId !== null}>
+                  {isDeletingBatchId === batch.batchId ? 'Deleting…' : 'Delete'}
                 </button>
               </li>
             );

@@ -7,6 +7,7 @@ import {
   getBatchFromAppState as getBatchFromAppStateLocal,
   moveBatch as moveBatchLocal,
   removeBatchFromBed as removeBatchFromBedLocal,
+  removeBatchFromAppState as removeBatchFromAppStateLocal,
   upsertBatchInAppState as upsertBatchInAppStateLocal,
 } from './repos/batchRepository';
 import {
@@ -1958,6 +1959,20 @@ export const mutateBatchAssignment = async (
   const nextState = upsertBatchInAppStateLocal(appState, nextBatch);
   await saveAppStateToIndexedDb(nextState);
   return nextBatch;
+};
+
+export const removeBatch = async (batchId: Batch['batchId']): Promise<void> => {
+  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
+    await workflowAdapter.batches.removeBatch(batchId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+
+  await saveAppStateToIndexedDb(removeBatchFromAppStateLocal(appState, batchId));
 };
 
 export const regenerateCalendarTasks = async (year: number) => {
