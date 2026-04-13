@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Globalization;
 
 namespace SurvivalGarden.Application;
 
@@ -14,10 +15,21 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         "beds",
         "paths",
         "seedInventoryItems",
-        "cropPlans"
+        "cropPlans",
+        "tasks"
     ];
 
-    public Task<JsonObject?> LoadAppStateAsync(CancellationToken cancellationToken = default) => store.LoadAsync(cancellationToken);
+    public async Task<JsonObject?> LoadAppStateAsync(CancellationToken cancellationToken = default)
+    {
+        var state = await store.LoadAsync(cancellationToken);
+        if (state is null)
+        {
+            return null;
+        }
+
+        EnsureRootCollections(state);
+        return state;
+    }
 
     public async Task SaveAppStateAsync(JsonObject appState, CancellationToken cancellationToken = default)
     {
@@ -166,9 +178,35 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
 
     private static void EnsureRootCollections(JsonObject state)
     {
+        if (state["schemaVersion"] is null)
+        {
+            state["schemaVersion"] = 1;
+        }
+
+        if (state["settings"] is not JsonObject)
+        {
+            state["settings"] = new JsonObject
+            {
+                ["settingsId"] = "settings-default",
+                ["locale"] = "de-DE",
+                ["timezone"] = "Europe/Berlin",
+                ["weekStartsOn"] = "monday",
+                ["units"] = new JsonObject
+                {
+                    ["temperature"] = "celsius",
+                    ["yield"] = "metric"
+                },
+                ["createdAt"] = UtcNowIso(),
+                ["updatedAt"] = UtcNowIso()
+            };
+        }
+
         foreach (var name in RootCollections)
         {
             _ = GardenJsonCollectionHelpers.GetCollection(state, name);
         }
     }
+
+    private static string UtcNowIso() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 }
