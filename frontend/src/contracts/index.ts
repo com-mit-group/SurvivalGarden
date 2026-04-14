@@ -1,3 +1,10 @@
+/**
+ * MIGRATION-ONLY CONTRACTS
+ *
+ * Canonical contract authority is backend `SurvivalGarden.Domain/Contracts` published via OpenAPI.
+ * Files in this folder are transitional compatibility artifacts and are not canonical sources.
+ */
+
 import appStateSchema from './app-state.schema.json';
 import batchSchema from './batch.schema.json';
 import bedSchema from './bed.schema.json';
