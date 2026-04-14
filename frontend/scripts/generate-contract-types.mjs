@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import openapiTS from 'openapi-typescript';
@@ -9,9 +9,17 @@ const contractsOutputFile = path.join(outputDir, 'contracts.ts');
 const clientOutputFile = path.join(outputDir, 'api-client.ts');
 const openApiUrl = process.env.BACKEND_OPENAPI_URL ?? 'http://localhost:5142/openapi/v1.json';
 
-const response = await fetch(openApiUrl);
-if (!response.ok) {
-  throw new Error(`Failed to fetch backend OpenAPI document (${response.status}): ${openApiUrl}`);
+const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
+const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
+
+const response = await fetch(openApiUrl).catch(() => null);
+if (!response || !response.ok) {
+  if (fallbackContracts && fallbackClient) {
+    process.exit(0);
+  }
+
+  const status = response ? response.status : 'unreachable';
+  throw new Error(`Failed to fetch backend OpenAPI document (${status}): ${openApiUrl}`);
 }
 
 const openApiDocument = await response.json();

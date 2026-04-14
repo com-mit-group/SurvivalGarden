@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using SurvivalGarden.Application;
+using Contracts = SurvivalGarden.Domain.Contracts;
 
 namespace SurvivalGarden.Api.Endpoints;
 
@@ -21,6 +22,22 @@ internal static class CoreEndpoints
             contracts = "backend-canonical",
             frontendSchemas = "migration-only"
         }));
+
+
+        app.MapGet("/api/contracts/catalog", () => TypedResults.Ok(new Contracts.ContractCatalog(
+            Segments: [],
+            Beds: [],
+            Paths: [],
+            Species: [],
+            Crops: [],
+            Cultivars: [],
+            CropPlans: [],
+            Batches: [],
+            Tasks: [],
+            SeedInventoryItems: [],
+            Settings: [],
+            AppStates: []
+        )));
 
         app.MapGet("/api/app-state", async (IGardenApplicationService service, CancellationToken ct) =>
         {
