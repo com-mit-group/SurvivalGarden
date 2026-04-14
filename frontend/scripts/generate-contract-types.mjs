@@ -14,7 +14,31 @@ const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null
 
 const response = await fetch(openApiUrl).catch(() => null);
 if (!response || !response.ok) {
-  if (fallbackContracts && fallbackClient) {
+  if (fallbackContracts) {
+    if (!fallbackClient) {
+      await mkdir(outputDir, { recursive: true });
+      await writeFile(
+        clientOutputFile,
+        `/**
+ * GENERATED FILE - DO NOT EDIT.
+ * Backend OpenAPI unavailable; generated fallback client shim.
+ */
+
+export type BackendApiPath = string;
+
+export const backendApiFetch = async <T>(path: BackendApiPath, init?: RequestInit): Promise<T> => {
+  const response = await fetch(path, init);
+  if (!response.ok) {
+    throw new Error(\`Backend API request failed: \${response.status} \${response.statusText}\`);
+  }
+
+  return (await response.json()) as T;
+};
+`,
+        'utf8',
+      );
+    }
+
     process.exit(0);
   }
 
