@@ -13,7 +13,7 @@ import {
   settingsSchema,
   speciesSchema,
   taskSchema,
-} from '../../generated/openapi-schemas';
+} from '../../contracts';
 import type {
   AppState,
   Batch,
