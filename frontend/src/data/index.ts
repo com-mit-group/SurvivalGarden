@@ -1563,7 +1563,7 @@ const saveAppStateToLocalIndexedDb = async (
         const merged = mergeAppStates(existingState, stateToPersist as AppState);
         stateToPersist = canonicalizeForExport(merged.state);
         report = merged.report;
-        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist as AppState);
         report.warnings.push(...hierarchyValidation.warnings);
         report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }
@@ -1613,7 +1613,7 @@ const saveAppStateToLocalIndexedDb = async (
         const merged = mergeAppStates(existingState, stateToPersist);
         stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
         report = merged.report;
-        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist as AppState);
         report.warnings.push(...hierarchyValidation.warnings);
         report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }
