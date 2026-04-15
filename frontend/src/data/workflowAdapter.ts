@@ -134,9 +134,25 @@ export const shouldUseTypescriptRollbackShim = (feature: WorkflowFeature): boole
 
 export const parseBackendError = async (response: Response): Promise<string> => {
   try {
-    const payload = await response.json();
+    const payload = await response.json() as {
+      error?: unknown;
+      errors?: Array<{ path?: unknown; message?: unknown }>;
+    };
+
     if (payload && typeof payload.error === 'string') {
       return payload.error;
+    }
+
+    if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
+      const summary = payload.errors
+        .slice(0, 5)
+        .map((issue) => {
+          const path = typeof issue.path === 'string' ? issue.path : '/';
+          const message = typeof issue.message === 'string' ? issue.message : 'invalid';
+          return `${path}: ${message}`;
+        })
+        .join('; ');
+      return `validation_failed: ${summary}`;
     }
   } catch {
     // ignore parse issues; fall back to status text

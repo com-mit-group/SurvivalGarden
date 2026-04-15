@@ -31,6 +31,12 @@ internal static class CoreEndpoints
 
         app.MapPut("/api/app-state", async (IGardenApplicationService service, JsonObject payload, CancellationToken ct) =>
         {
+            var validation = service.ValidateAppState(payload);
+            if (!validation.Ok)
+            {
+                return Results.BadRequest(new { errors = validation.Issues });
+            }
+
             await service.SaveAppStateAsync(payload, ct);
             return Results.Ok(payload);
         });
