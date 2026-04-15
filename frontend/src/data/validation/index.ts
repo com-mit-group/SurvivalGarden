@@ -1,19 +1,17 @@
 import Ajv2020 from 'ajv/dist/2020';
 import type { ErrorObject, ValidateFunction } from 'ajv';
-import {
-  appStateSchema,
-  batchSchema,
-  bedSchema,
-  cropPlanSchema,
-  cultivarSchema,
-  cropSchema,
-  pathSchema,
-  seedInventoryItemSchema,
-  segmentSchema,
-  settingsSchema,
-  speciesSchema,
-  taskSchema,
-} from '../../contracts';
+import appStateSchema from '../../contracts/app-state.schema.json';
+import batchSchema from '../../contracts/batch.schema.json';
+import bedSchema from '../../contracts/bed.schema.json';
+import cropPlanSchema from '../../contracts/crop-plan.schema.json';
+import cultivarSchema from '../../contracts/cultivar.schema.json';
+import cropSchema from '../../contracts/crop.schema.json';
+import pathSchema from '../../contracts/path.schema.json';
+import seedInventoryItemSchema from '../../contracts/seed-inventory-item.schema.json';
+import segmentSchema from '../../contracts/segment.schema.json';
+import settingsSchema from '../../contracts/settings.schema.json';
+import speciesSchema from '../../contracts/species.schema.json';
+import taskSchema from '../../contracts/task.schema.json';
 import type {
   AppState,
   Batch,

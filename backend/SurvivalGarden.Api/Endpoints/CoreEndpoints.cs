@@ -18,8 +18,10 @@ internal static class CoreEndpoints
         {
             name = "SurvivalGarden.Api",
             mode = "parallel",
-            contracts = "mirrored"
+            contracts = "backend-canonical",
+            frontendSchemas = "migration-only"
         }));
+
 
         app.MapGet("/api/app-state", async (IGardenApplicationService service, CancellationToken ct) =>
         {

@@ -2,18 +2,18 @@
 
 ## Decision statement
 
-**JSON Schema is the canonical contract for now.**
+**Backend .NET contracts are canonical.**
 
-Until backend boundaries and transport shape stabilize, we keep `frontend/src/contracts/*.schema.json` as the single source of truth for shared models and validation, and continue generating language bindings (TypeScript today, C# next) from the same schema set.
+Contract ownership lives in `backend/SurvivalGarden.Domain/Contracts`.
 
-OpenAPI is a **later optimization**, not the current source of truth. We should only consider generating/maintaining OpenAPI after backend endpoints settle and we can prove it does not create duplicate contract ownership.
+`frontend/src/contracts/*.schema.json` are migration-only artifacts while generated consumers move to backend-published contracts (OpenAPI + generated TypeScript client/types).
 
-## Why JSON Schema first (current phase)
+## Why JSON Schema still exists (migration phase)
 
-- Contracts already exist and are actively used for generated TS types (`frontend/src/generated/contracts.ts`).
-- Core entities (`AppState`, `Bed`, `Crop`, `CropPlan`, `Batch`, `Task`, `SeedInventoryItem`, `Settings`) are represented consistently in the schema set.
-- The golden fixture (`fixtures/golden/trier-v1.json`) already exercises realistic data shape and edge-case notes.
-- Moving too early to OpenAPI risks contract drift across TS and .NET while backend is still forming.
+- Existing frontend schema files remain useful as transitional validation/export artifacts during migration.
+- Core entities (`AppState`, `Bed`, `Crop`, `CropPlan`, `Batch`, `Task`, `SeedInventoryItem`, `Settings`) are already represented there, reducing migration risk.
+- The golden fixture (`fixtures/golden/trier-v1.json`) still exercises realistic data shape and edge-case notes while generated clients are rolled out.
+- Ownership is backend-first; schema files are retained only until backend-published contracts fully replace manual frontend maintenance.
 
 ## Review criteria for when to consider OpenAPI generation
 
@@ -235,9 +235,9 @@ If either language fails parity, block release.
 
 ### Phase 1: Contract generation pipeline
 
-- Keep JSON Schema authoritative.
-- Generate C# records from schema in CI and fail on diff.
-- Continue TS generation unchanged.
+- Keep backend `SurvivalGarden.Domain/Contracts` authoritative.
+- Publish OpenAPI from backend contracts.
+- Generate frontend TypeScript client/types from backend publication during migration.
 
 ### Phase 2: Repository parity
 

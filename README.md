@@ -2,7 +2,9 @@
 
 ## Contracts
 
-`frontend/src/contracts/app-state.schema.json` defines the import/export `AppState` envelope and requires a numeric `schemaVersion` (integer, minimum `1`) for migration gating between persisted schema revisions.
+Backend contract records under `backend/SurvivalGarden.Domain/Contracts` are the canonical source of truth.
+
+`frontend/src/contracts/*.schema.json` (including `app-state.schema.json`) are migration-only artifacts and must not be treated as canonical ownership.
 
 
 ## Import/export contract docs & canonical payload samples
