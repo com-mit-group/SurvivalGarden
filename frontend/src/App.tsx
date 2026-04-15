@@ -6627,18 +6627,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
       });
 
-      if (validBatches.length === 0) {
-        setImportMessage('Batch import precheck warning: no batches passed local schema checks. Server validation is authoritative.');
-        setImportErrors(validationErrors);
-        return;
-      }
+      const candidateBatches = validBatches.length > 0 ? validBatches : (rawParsed.batches as Batch[]);
 
       const validatedBatchImportState = {
         schemaVersion: 1,
         beds: [],
         crops: [],
         cropPlans: [],
-        batches: validBatches,
+        batches: candidateBatches,
         seedInventoryItems: [],
         tasks: [],
         settings: importValidationSettings,
@@ -6656,7 +6652,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setPendingBatchImportState(validatedBatchImportState);
       setPendingBatchImportPreview(previewItems);
       setImportMessage(
-        `Batch import precheck ready: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}, flagged ${invalidCount}.`
+        `${validBatches.length === 0 ? 'Batch import precheck warning' : 'Batch import precheck ready'}: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}, flagged ${invalidCount}.`
         + (previewSummary.length > 0 ? ` Preview: ${previewSummary}.` : ''),
       );
       setImportErrors(validationErrors);
@@ -6726,14 +6722,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
       });
 
-      if (validCrops.length === 0) {
-        setImportMessage('Crop import precheck warning: no crops passed local schema checks. Server validation is authoritative.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingCropImportCrops(validCrops);
-      setImportMessage(`Cultivar taxonomy repair ready: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length}. Confirm to import.`);
+      const candidateCrops = validCrops.length > 0 ? validCrops : (rawParsed.crops as Crop[]);
+      setPendingCropImportCrops(candidateCrops);
+      setImportMessage(
+        `${validCrops.length === 0 ? 'Crop import precheck warning' : 'Cultivar taxonomy repair ready'}: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length}. Confirm to import.`,
+      );
       setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
@@ -6801,14 +6794,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
       });
 
-      if (validSpecies.length === 0) {
-        setImportMessage('Species import precheck warning: no records passed local schema checks. Server validation is authoritative.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingSpeciesImportSpecies(validSpecies);
-      setImportMessage(`Species import ready: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length}. Confirm to import.`);
+      const candidateSpecies = validSpecies.length > 0 ? validSpecies : (rawParsed.species as Species[]);
+      setPendingSpeciesImportSpecies(candidateSpecies);
+      setImportMessage(
+        `${validSpecies.length === 0 ? 'Species import precheck warning' : 'Species import ready'}: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length}. Confirm to import.`,
+      );
       setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
@@ -6876,15 +6866,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
       });
 
-      if (validCropPlans.length === 0) {
-        setImportMessage('Crop plan import precheck warning: no plans passed local schema checks. Server validation is authoritative.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingCropPlanImportPlans(validCropPlans);
+      const candidateCropPlans = validCropPlans.length > 0 ? validCropPlans : (rawParsed.cropPlans as CropPlan[]);
+      setPendingCropPlanImportPlans(candidateCropPlans);
       setImportErrors(validationErrors);
-      setImportMessage(`Crop plan import ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length}. Confirm to import.`);
+      setImportMessage(
+        `${validCropPlans.length === 0 ? 'Crop plan import precheck warning' : 'Crop plan import ready'}: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length}. Confirm to import.`,
+      );
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
@@ -7522,31 +7509,29 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           }
         });
 
-        if (validBatches.length === 0) {
-          setImportMessage('Batch import precheck warning: no batches passed local schema checks. Server validation is authoritative.');
-          setImportErrors(validationErrors);
-        } else {
-          const validatedBatchImportState = {
-            schemaVersion: 1,
-            beds: [],
-            crops: [],
-            cropPlans: [],
-            batches: validBatches,
-            seedInventoryItems: [],
-            tasks: [],
-            settings: importValidationSettings,
-          };
-          const previewBatchIds = validatedBatchImportState.batches
-            .map((batch) => ({
-              batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
-              seedCount: batch.seedCountPlanned ?? 0,
-              eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
-            }));
-          setPendingBatchImportState(validatedBatchImportState);
-          setPendingBatchImportPreview(previewBatchIds);
-          setImportMessage(`Deep link precheck ready: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}. Confirm to import.`);
-          setImportErrors(validationErrors);
-        }
+        const candidateBatches = validBatches.length > 0 ? validBatches : (rawParsed.batches as Batch[]);
+        const validatedBatchImportState = {
+          schemaVersion: 1,
+          beds: [],
+          crops: [],
+          cropPlans: [],
+          batches: candidateBatches,
+          seedInventoryItems: [],
+          tasks: [],
+          settings: importValidationSettings,
+        };
+        const previewBatchIds = validatedBatchImportState.batches
+          .map((batch) => ({
+            batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
+            seedCount: batch.seedCountPlanned ?? 0,
+            eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
+          }));
+        setPendingBatchImportState(validatedBatchImportState);
+        setPendingBatchImportPreview(previewBatchIds);
+        setImportMessage(
+          `${validBatches.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}. Confirm to import.`,
+        );
+        setImportErrors(validationErrors);
       } else if (importType === 'crops') {
         const rawParsed = JSON.parse(decodedPayload) as { crops?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.crops)) {
@@ -7565,14 +7550,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             });
           }
         });
-        if (validCrops.length === 0) {
-          setImportMessage('Crop import precheck warning: no crops passed local schema checks. Server validation is authoritative.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingCropImportCrops(validCrops);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link precheck ready: ${validCrops.length} crop record(s) passed local checks out of ${rawParsed.crops.length}. Confirm to import.`);
-        }
+        setPendingCropImportCrops(validCrops.length > 0 ? validCrops : (rawParsed.crops as Crop[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validCrops.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validCrops.length} crop record(s) passed local checks out of ${rawParsed.crops.length}. Confirm to import.`,
+        );
       } else if (importType === 'species') {
         const rawParsed = JSON.parse(decodedPayload) as { species?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.species)) {
@@ -7591,14 +7573,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             });
           }
         });
-        if (validSpecies.length === 0) {
-          setImportMessage('Species import precheck warning: no records passed local schema checks. Server validation is authoritative.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingSpeciesImportSpecies(validSpecies);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link precheck ready: ${validSpecies.length} species record(s) passed local checks out of ${rawParsed.species.length}. Confirm to import.`);
-        }
+        setPendingSpeciesImportSpecies(validSpecies.length > 0 ? validSpecies : (rawParsed.species as Species[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validSpecies.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validSpecies.length} species record(s) passed local checks out of ${rawParsed.species.length}. Confirm to import.`,
+        );
       } else if (importType === 'crop-plans') {
         const rawParsed = JSON.parse(decodedPayload) as { cropPlans?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.cropPlans)) {
@@ -7617,14 +7596,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             });
           }
         });
-        if (validCropPlans.length === 0) {
-          setImportMessage('Crop plan import precheck warning: no plans passed local schema checks. Server validation is authoritative.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingCropPlanImportPlans(validCropPlans);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link precheck ready: ${validCropPlans.length} crop plan(s) passed local checks out of ${rawParsed.cropPlans.length}. Confirm to import.`);
-        }
+        setPendingCropPlanImportPlans(validCropPlans.length > 0 ? validCropPlans : (rawParsed.cropPlans as CropPlan[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validCropPlans.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validCropPlans.length} crop plan(s) passed local checks out of ${rawParsed.cropPlans.length}. Confirm to import.`,
+        );
       } else if (importType === 'segments') {
         const rawParsed = JSON.parse(decodedPayload) as { segments?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.segments)) {
