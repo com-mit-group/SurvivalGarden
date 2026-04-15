@@ -6628,7 +6628,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
 
       if (validBatches.length === 0) {
-        setImportMessage('Batch import blocked by local precheck. No batches passed advisory schema checks. Server validation is authoritative.');
+        setImportMessage('Batch import precheck warning: no batches passed local schema checks. Server validation is authoritative.');
         setImportErrors(validationErrors);
         return;
       }
@@ -6727,7 +6727,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
 
       if (validCrops.length === 0) {
-        setImportMessage('Crop import blocked by local precheck. No crops passed advisory schema checks. Server validation is authoritative.');
+        setImportMessage('Crop import precheck warning: no crops passed local schema checks. Server validation is authoritative.');
         setImportErrors(validationErrors);
         return;
       }
@@ -6802,7 +6802,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
 
       if (validSpecies.length === 0) {
-        setImportMessage('Species import blocked by local precheck. No records passed advisory schema checks. Server validation is authoritative.');
+        setImportMessage('Species import precheck warning: no records passed local schema checks. Server validation is authoritative.');
         setImportErrors(validationErrors);
         return;
       }
@@ -6877,7 +6877,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
 
       if (validCropPlans.length === 0) {
-        setImportMessage('Crop plan import blocked by local precheck. No plans passed advisory schema checks. Server validation is authoritative.');
+        setImportMessage('Crop plan import precheck warning: no plans passed local schema checks. Server validation is authoritative.');
         setImportErrors(validationErrors);
         return;
       }
@@ -7523,7 +7523,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         });
 
         if (validBatches.length === 0) {
-          setImportMessage('Batch import blocked by local precheck. No batches passed advisory schema checks. Server validation is authoritative.');
+          setImportMessage('Batch import precheck warning: no batches passed local schema checks. Server validation is authoritative.');
           setImportErrors(validationErrors);
         } else {
           const validatedBatchImportState = {
@@ -7566,7 +7566,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           }
         });
         if (validCrops.length === 0) {
-          setImportMessage('Crop import blocked by local precheck. No crops passed advisory schema checks. Server validation is authoritative.');
+          setImportMessage('Crop import precheck warning: no crops passed local schema checks. Server validation is authoritative.');
           setImportErrors(validationErrors);
         } else {
           setPendingCropImportCrops(validCrops);
@@ -7592,7 +7592,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           }
         });
         if (validSpecies.length === 0) {
-          setImportMessage('Species import blocked by local precheck. No records passed advisory schema checks. Server validation is authoritative.');
+          setImportMessage('Species import precheck warning: no records passed local schema checks. Server validation is authoritative.');
           setImportErrors(validationErrors);
         } else {
           setPendingSpeciesImportSpecies(validSpecies);
@@ -7618,7 +7618,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           }
         });
         if (validCropPlans.length === 0) {
-          setImportMessage('Crop plan import blocked by local precheck. No plans passed advisory schema checks. Server validation is authoritative.');
+          setImportMessage('Crop plan import precheck warning: no plans passed local schema checks. Server validation is authoritative.');
           setImportErrors(validationErrors);
         } else {
           setPendingCropPlanImportPlans(validCropPlans);
