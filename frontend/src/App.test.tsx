@@ -575,7 +575,7 @@ describe('App', () => {
       expect(screen.getByText('Events: 0')).toBeInTheDocument();
       expect(screen.getByLabelText('Auto-rename on ID conflict (presentation preview)')).toBeInTheDocument();
       expect(screen.getByText(/ID collision statuses:/)).toBeInTheDocument();
-      expect(screen.getByText(/schema_validation_failed \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
+      expect(screen.getByText(/local_precheck_warning \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
