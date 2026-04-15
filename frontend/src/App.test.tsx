@@ -511,7 +511,7 @@ describe('App', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText('Import file is valid. Replace existing data?')).toBeInTheDocument();
+      expect(screen.getByText('Local precheck passed. Server validation is authoritative when this data is submitted. Replace existing data?')).toBeInTheDocument();
     });
 
     expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
@@ -568,7 +568,7 @@ describe('App', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText(/Batch import ready: 1 valid batch\(es\) from 2 payload batch\(es\), invalid 1\./)).toBeInTheDocument();
+      expect(screen.getByText(/Batch import precheck ready: 1 batch\(es\) passed local checks out of 2, flagged 1\./)).toBeInTheDocument();
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
       expect(screen.getByText('Batch: Unknown cultivar (Unknown crop type)')).toBeInTheDocument();
       expect(screen.getByText('Seeds: 0')).toBeInTheDocument();
@@ -820,7 +820,7 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Deep link ready: 1 valid batch\(es\) from 1 payload batch\(es\)\./)).toBeInTheDocument();
+      expect(screen.getByText(/Deep link precheck ready: 1 batch\(es\) passed local checks out of 1\./)).toBeInTheDocument();
     });
 
     expect(screen.getByText('Import Preview')).toBeInTheDocument();
@@ -923,7 +923,7 @@ describe('App', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Deep link ready: 1 valid segment\(s\) from 1 payload segment\(s\)\./)).toBeInTheDocument();
+      expect(screen.getByText(/Deep link precheck ready: 1 segment\(s\) passed local checks out of 1\./)).toBeInTheDocument();
     });
 
     expect(screen.getByText('Size: 5.8 m × 4.5 m')).toBeInTheDocument();
