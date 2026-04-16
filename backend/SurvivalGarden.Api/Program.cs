@@ -1,6 +1,8 @@
 using SurvivalGarden.Api.Endpoints;
 using SurvivalGarden.Application;
 using SurvivalGarden.Persistence;
+using Microsoft.OpenApi.Any;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
