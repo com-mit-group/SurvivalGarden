@@ -1,5 +1,8 @@
 /**
  * GENERATED FILE - DO NOT EDIT.
+ * Source: http://127.0.0.1:5178/openapi-v1.json
+ * Contract version: 1.0.0
+ * Persisted schemaVersion baseline: 2
  * Regenerate with `pnpm --filter frontend gen:types`.
  */
 

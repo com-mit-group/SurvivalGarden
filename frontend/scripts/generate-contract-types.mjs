@@ -8,14 +8,17 @@ const outputDir = path.resolve(__dirname, '../src/generated');
 const contractsOutputFile = path.join(outputDir, 'contracts.ts');
 const clientOutputFile = path.join(outputDir, 'api-client.ts');
 const openApiUrl = process.env.BACKEND_OPENAPI_URL ?? 'http://localhost:5142/openapi/v1.json';
+const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1';
+const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 
 const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
 const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
+const shouldWriteClient = process.env.GENERATE_API_CLIENT === '1' || fallbackClient !== null;
 
 const response = await fetch(openApiUrl).catch(() => null);
 if (!response || !response.ok) {
-  if (fallbackContracts) {
-    if (!fallbackClient) {
+  if (!requireBackendOpenApi && fallbackContracts) {
+    if (!fallbackClient && shouldWriteClient) {
       await mkdir(outputDir, { recursive: true });
       await writeFile(
         clientOutputFile,
@@ -47,6 +50,35 @@ export const backendApiFetch = async <T>(path: BackendApiPath, init?: RequestIni
 }
 
 const openApiDocument = await response.json();
+const openApiInfo = openApiDocument?.info ?? {};
+const openApiDescription = typeof openApiInfo.description === 'string' ? openApiInfo.description : '';
+const contractVersion = typeof openApiInfo.version === 'string' ? openApiInfo.version.trim() : '';
+const contractsPublication = openApiDocument?.['x-contracts'] ?? /contracts=([^;\s]+)/.exec(openApiDescription)?.[1];
+const persistedSchemaVersionValue =
+  openApiDocument?.['x-persisted-schema-version'] ?? /persistedSchemaVersion=([0-9]+)/.exec(openApiDescription)?.[1];
+const persistedSchemaVersion = Number(persistedSchemaVersionValue);
+
+if (!contractVersion) {
+  throw new Error(`Backend OpenAPI document missing required info.version: ${openApiUrl}`);
+}
+
+if (contractsPublication !== 'backend-canonical') {
+  throw new Error(
+    `Backend OpenAPI document missing required x-contracts=backend-canonical marker: ${openApiUrl}`,
+  );
+}
+
+if (!Number.isInteger(persistedSchemaVersion)) {
+  throw new Error(
+    `Backend OpenAPI document missing required integer x-persisted-schema-version marker: ${openApiUrl}`,
+  );
+}
+
+if (expectedContractVersion && expectedContractVersion !== contractVersion) {
+  throw new Error(
+    `Backend contract version mismatch. Expected ${expectedContractVersion}, received ${contractVersion}`,
+  );
+}
 
 const contracts = await openapiTS(openApiDocument, {
   alphabetize: true,
@@ -54,6 +86,8 @@ const contracts = await openapiTS(openApiDocument, {
     '/**',
     ' * GENERATED FILE - DO NOT EDIT.',
     ` * Source: ${openApiUrl}`,
+    ` * Contract version: ${contractVersion}`,
+    ` * Persisted schemaVersion baseline: ${persistedSchemaVersion}`,
     ' * Regenerate with `pnpm --filter frontend gen:types`.',
     ' */',
   ].join('\n'),
@@ -65,6 +99,8 @@ const pathUnion = paths.length > 0 ? paths.map((value) => `  | '${value}'`).join
 const client = `/**
  * GENERATED FILE - DO NOT EDIT.
  * Source: ${openApiUrl}
+ * Contract version: ${contractVersion}
+ * Persisted schemaVersion baseline: ${persistedSchemaVersion}
  * Regenerate with \`pnpm --filter frontend gen:types\`.
  */
 
@@ -86,4 +122,6 @@ export const backendApiFetch = async <T>(
 
 await mkdir(outputDir, { recursive: true });
 await writeFile(contractsOutputFile, contracts, 'utf8');
-await writeFile(clientOutputFile, client, 'utf8');
+if (shouldWriteClient) {
+  await writeFile(clientOutputFile, client, 'utf8');
+}

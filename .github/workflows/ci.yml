@@ -172,7 +172,7 @@ jobs:
           echo "VersionPrefix=$new_version" >>"$GITHUB_ENV"
 
   frontend:
-    needs: [gitVersion]
+    needs: [gitVersion, backend]
     runs-on: ubuntu-latest
 
     steps:
@@ -198,8 +198,26 @@ jobs:
       - name: Typecheck
         run: pnpm --filter frontend typecheck
 
+      - name: Download backend OpenAPI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-openapi
+          path: ./.artifacts/openapi
+
       - name: Verify generated contract types
         run: |
+          python3 -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
+          OPENAPI_PID=$!
+
+          cleanup() {
+            kill "$OPENAPI_PID"
+          }
+          trap cleanup EXIT
+
+          export BACKEND_OPENAPI_URL="http://127.0.0.1:5178/openapi-v1.json"
+          export REQUIRE_BACKEND_OPENAPI=1
+          export EXPECTED_CONTRACT_VERSION="1.0.0"
+
           pnpm --filter frontend gen:types
           git diff --exit-code
 
@@ -267,3 +285,51 @@ jobs:
           files: |
             ./**/TestResults/*.trx
           check_name: "Backend Test Results"
+
+      - name: Export backend OpenAPI artifact
+        shell: pwsh
+        env:
+          CONTRACTS__VERSION: "1.0.0"
+          CONTRACTS__PERSISTEDSCHEMAVERSION: "2"
+        run: |
+          New-Item -ItemType Directory -Force -Path .artifacts/openapi | Out-Null
+
+          $process = Start-Process dotnet -ArgumentList @(
+            'run',
+            '--project', 'backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj',
+            '--no-build',
+            '--urls', 'http://127.0.0.1:5142'
+          ) -PassThru
+
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -UseBasicParsing
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+              }
+            }
+
+            if (-not $ready) {
+              throw 'Backend OpenAPI endpoint did not become ready in time.'
+            }
+
+            Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -OutFile '.artifacts/openapi/openapi-v1.json'
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+      - name: Upload backend OpenAPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-openapi
+          path: .artifacts/openapi/openapi-v1.json
