@@ -151,6 +151,33 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         };
     }
 
+    public ValidationResult ValidateAppState(JsonObject appState)
+    {
+        var issues = new List<ValidationIssue>();
+
+        if (appState["schemaVersion"] is not null && appState["schemaVersion"] is not JsonValue)
+        {
+            issues.Add(new ValidationIssue("/schemaVersion", "must be a scalar value"));
+        }
+
+        if (appState["settings"] is not null && appState["settings"] is not JsonObject)
+        {
+            issues.Add(new ValidationIssue("/settings", "must be an object"));
+        }
+
+        foreach (var collection in RootCollections)
+        {
+            if (appState[collection] is not null && appState[collection] is not JsonArray)
+            {
+                issues.Add(new ValidationIssue($"/{collection}", "must be an array"));
+            }
+        }
+
+        return issues.Count == 0
+            ? ValidationResult.Success()
+            : new ValidationResult(false, issues);
+    }
+
     private static ValidationResult RequireAnyId(JsonObject entity, string preferredIdProperty)
     {
         var preferred = entity[preferredIdProperty]?.GetValue<string>();

@@ -1544,19 +1544,26 @@ const saveAppStateToLocalIndexedDb = async (
             settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
           }
         : appState;
-    const validState = assertValid('appState', candidateState);
     const isReplaceMode = options.mode === 'replace';
     let report: MergeReport | null = null;
-    let stateToPersist = canonicalizeForExport(validState);
+    let stateToPersist: unknown = candidateState;
 
-    if (!isReplaceMode) {
+    try {
+      stateToPersist = canonicalizeForExport(assertValid('appState', candidateState));
+    } catch (error) {
+      if (!(error instanceof SchemaValidationError)) {
+        throw error;
+      }
+    }
+
+    if (!isReplaceMode && stateToPersist && typeof stateToPersist === 'object') {
       const existingState = await loadAppStateFromIndexedDb();
 
       if (existingState) {
-        const merged = mergeAppStates(existingState, stateToPersist);
-        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        const merged = mergeAppStates(existingState, stateToPersist as AppState);
+        stateToPersist = canonicalizeForExport(merged.state);
         report = merged.report;
-        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist as AppState);
         report.warnings.push(...hierarchyValidation.warnings);
         report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }
@@ -1606,7 +1613,7 @@ const saveAppStateToLocalIndexedDb = async (
         const merged = mergeAppStates(existingState, stateToPersist);
         stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
         report = merged.report;
-        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist as AppState);
         report.warnings.push(...hierarchyValidation.warnings);
         report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }
@@ -1691,19 +1698,26 @@ export const saveAppStateToIndexedDb = async (
             settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
           }
         : appState;
-    const validState = assertValid('appState', candidateState);
     const isReplaceMode = options.mode === 'replace';
     let report: MergeReport | null = null;
-    let stateToPersist = canonicalizeForExport(validState);
+    let stateToPersist: unknown = candidateState;
 
-    if (!isReplaceMode) {
+    try {
+      stateToPersist = canonicalizeForExport(assertValid('appState', candidateState));
+    } catch (error) {
+      if (!(error instanceof SchemaValidationError)) {
+        throw error;
+      }
+    }
+
+    if (!isReplaceMode && stateToPersist && typeof stateToPersist === 'object') {
       const existingState = await loadAppStateFromBackendApi();
 
       if (existingState) {
-        const merged = mergeAppStates(existingState, stateToPersist);
-        stateToPersist = canonicalizeForExport(assertValid('appState', merged.state));
+        const merged = mergeAppStates(existingState, stateToPersist as AppState);
+        stateToPersist = canonicalizeForExport(merged.state);
         report = merged.report;
-        const hierarchyValidation = validateHierarchyForImport(stateToPersist);
+        const hierarchyValidation = validateHierarchyForImport(stateToPersist as AppState);
         report.warnings.push(...hierarchyValidation.warnings);
         report.warnings.push(...hierarchyValidation.errors.map((entry) => `hierarchy-error: ${entry}`));
       }

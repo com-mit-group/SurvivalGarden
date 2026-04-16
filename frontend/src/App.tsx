@@ -6271,7 +6271,7 @@ export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: R
       const payload = await file.text();
       const parsedState = parseImportedAppState(payload);
       setPendingImportState(parsedState);
-      setImportMessage('Import file is valid. Replace existing data?');
+      setImportMessage('Local precheck passed. Server validation is authoritative when this data is submitted. Replace existing data?');
     } catch (importError) {
       setImportMessage(`Import failed: ${importError instanceof Error ? importError.message : 'Unknown error.'}`);
     } finally {
@@ -6475,12 +6475,12 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         const field = issue.params?.additionalProperty ?? pathParts[pathParts.length - 1] ?? 'unknown';
         return {
           path: fallbackPath,
-          message: `schema_validation_failed (batchId: ${batchId}, field: ${field}) - ${issue.message}`,
+          message: `local_precheck_warning (batchId: ${batchId}, field: ${field}) - ${issue.message}`,
         };
       });
     }
 
-    return [{ path: fallbackPath, message: `schema_validation_failed (batchId: ${batchId}) - ${error instanceof Error ? error.message : 'Unknown import error.'}` }];
+    return [{ path: fallbackPath, message: `local_precheck_warning (batchId: ${batchId}) - ${error instanceof Error ? error.message : 'Unknown import error.'}` }];
   }, []);
 
   const mapImportError = useCallback((error: unknown): Array<{ path: string; message: string }> => {
@@ -6568,7 +6568,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       const payload = await file.text();
       const parsedState = parseImportedAppState(payload);
       setPendingImportState(parsedState);
-      setImportMessage('Import file is valid. Replace existing data?');
+      setImportMessage('Local precheck passed. Server validation is authoritative when this data is submitted. Replace existing data?');
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
@@ -6627,18 +6627,14 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         }
       });
 
-      if (validBatches.length === 0) {
-        setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
-        setImportErrors(validationErrors);
-        return;
-      }
+      const candidateBatches = validBatches.length > 0 ? validBatches : (rawParsed.batches as Batch[]);
 
       const validatedBatchImportState = {
         schemaVersion: 1,
         beds: [],
         crops: [],
         cropPlans: [],
-        batches: validBatches,
+        batches: candidateBatches,
         seedInventoryItems: [],
         tasks: [],
         settings: importValidationSettings,
@@ -6656,7 +6652,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setPendingBatchImportState(validatedBatchImportState);
       setPendingBatchImportPreview(previewItems);
       setImportMessage(
-        `Batch import ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es), invalid ${invalidCount}.`
+        `${validBatches.length === 0 ? 'Batch import precheck warning' : 'Batch import precheck ready'}: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}, flagged ${invalidCount}.`
         + (previewSummary.length > 0 ? ` Preview: ${previewSummary}.` : ''),
       );
       setImportErrors(validationErrors);
@@ -6714,26 +6710,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             validationErrors.push(
               ...validationError.issues.map((issue) => ({
                 path: fallbackPath,
-                message: `schema_validation_failed (field: ${issue.path.split('/').filter(Boolean).pop() ?? 'unknown'}) - ${issue.message}`,
+                message: `local_precheck_warning (field: ${issue.path.split('/').filter(Boolean).pop() ?? 'unknown'}) - ${issue.message}`,
               })),
             );
           } else {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         }
       });
 
-      if (validCrops.length === 0) {
-        setImportMessage('Crop import failed. No valid crops passed validation.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingCropImportCrops(validCrops);
-      setImportMessage(`Cultivar taxonomy repair ready: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length}. Confirm to import.`);
+      const candidateCrops = validCrops.length > 0 ? validCrops : (rawParsed.crops as Crop[]);
+      setPendingCropImportCrops(candidateCrops);
+      setImportMessage(
+        `${validCrops.length === 0 ? 'Crop import precheck warning' : 'Cultivar taxonomy repair ready'}: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length}. Confirm to import.`,
+      );
       setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
@@ -6789,26 +6782,23 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             validationErrors.push(
               ...validationError.issues.map((issue) => ({
                 path: fallbackPath,
-                message: `schema_validation_failed (field: ${issue.path.split('/').filter(Boolean).pop() ?? 'unknown'}) - ${issue.message}`,
+                message: `local_precheck_warning (field: ${issue.path.split('/').filter(Boolean).pop() ?? 'unknown'}) - ${issue.message}`,
               })),
             );
           } else {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         }
       });
 
-      if (validSpecies.length === 0) {
-        setImportMessage('Species import failed. No valid species passed validation.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingSpeciesImportSpecies(validSpecies);
-      setImportMessage(`Species import ready: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length}. Confirm to import.`);
+      const candidateSpecies = validSpecies.length > 0 ? validSpecies : (rawParsed.species as Species[]);
+      setPendingSpeciesImportSpecies(candidateSpecies);
+      setImportMessage(
+        `${validSpecies.length === 0 ? 'Species import precheck warning' : 'Species import ready'}: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length}. Confirm to import.`,
+      );
       setImportErrors(validationErrors);
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
@@ -6864,27 +6854,24 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
             validationErrors.push(
               ...validationError.issues.map((issue) => ({
                 path: fallbackPath,
-                message: `schema_validation_failed - ${issue.message}`,
+                message: `local_precheck_warning - ${issue.message}`,
               })),
             );
           } else {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         }
       });
 
-      if (validCropPlans.length === 0) {
-        setImportMessage('Crop plan import failed. No valid crop plans passed validation.');
-        setImportErrors(validationErrors);
-        return;
-      }
-
-      setPendingCropPlanImportPlans(validCropPlans);
+      const candidateCropPlans = validCropPlans.length > 0 ? validCropPlans : (rawParsed.cropPlans as CropPlan[]);
+      setPendingCropPlanImportPlans(candidateCropPlans);
       setImportErrors(validationErrors);
-      setImportMessage(`Crop plan import ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length}. Confirm to import.`);
+      setImportMessage(
+        `${validCropPlans.length === 0 ? 'Crop plan import precheck warning' : 'Crop plan import ready'}: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length}. Confirm to import.`,
+      );
     } catch (error) {
       setImportMessage('Import failed. Fix the errors below and try again.');
       setImportErrors(mapImportError(error));
@@ -7522,31 +7509,29 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           }
         });
 
-        if (validBatches.length === 0) {
-          setImportMessage('Batch import failed. No valid batches passed validation. Validate JSON schema issues and retry.');
-          setImportErrors(validationErrors);
-        } else {
-          const validatedBatchImportState = {
-            schemaVersion: 1,
-            beds: [],
-            crops: [],
-            cropPlans: [],
-            batches: validBatches,
-            seedInventoryItems: [],
-            tasks: [],
-            settings: importValidationSettings,
-          };
-          const previewBatchIds = validatedBatchImportState.batches
-            .map((batch) => ({
-              batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
-              seedCount: batch.seedCountPlanned ?? 0,
-              eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
-            }));
-          setPendingBatchImportState(validatedBatchImportState);
-          setPendingBatchImportPreview(previewBatchIds);
-          setImportMessage(`Deep link ready: ${validBatches.length} valid batch(es) from ${rawParsed.batches.length} payload batch(es). Confirm to import.`);
-          setImportErrors(validationErrors);
-        }
+        const candidateBatches = validBatches.length > 0 ? validBatches : (rawParsed.batches as Batch[]);
+        const validatedBatchImportState = {
+          schemaVersion: 1,
+          beds: [],
+          crops: [],
+          cropPlans: [],
+          batches: candidateBatches,
+          seedInventoryItems: [],
+          tasks: [],
+          settings: importValidationSettings,
+        };
+        const previewBatchIds = validatedBatchImportState.batches
+          .map((batch) => ({
+            batchLabel: `${batch.variety ?? batch.cultivarId ?? batch.cropId ?? 'Unknown cultivar'} (${batch.cropTypeId ?? 'Unknown crop type'})`,
+            seedCount: batch.seedCountPlanned ?? 0,
+            eventCount: Array.isArray(batch.stageEvents) ? batch.stageEvents.length : 0,
+          }));
+        setPendingBatchImportState(validatedBatchImportState);
+        setPendingBatchImportPreview(previewBatchIds);
+        setImportMessage(
+          `${validBatches.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validBatches.length} batch(es) passed local checks out of ${rawParsed.batches.length}. Confirm to import.`,
+        );
+        setImportErrors(validationErrors);
       } else if (importType === 'crops') {
         const rawParsed = JSON.parse(decodedPayload) as { crops?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.crops)) {
@@ -7561,18 +7546,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           } catch (validationError) {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         });
-        if (validCrops.length === 0) {
-          setImportMessage('Crop import failed. No valid crops passed validation.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingCropImportCrops(validCrops);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link taxonomy repair ready: ${validCrops.length} valid crop record(s) from ${rawParsed.crops.length} payload crop(s). Confirm to import.`);
-        }
+        setPendingCropImportCrops(validCrops.length > 0 ? validCrops : (rawParsed.crops as Crop[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validCrops.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validCrops.length} crop record(s) passed local checks out of ${rawParsed.crops.length}. Confirm to import.`,
+        );
       } else if (importType === 'species') {
         const rawParsed = JSON.parse(decodedPayload) as { species?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.species)) {
@@ -7587,18 +7569,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           } catch (validationError) {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         });
-        if (validSpecies.length === 0) {
-          setImportMessage('Species import failed. No valid species records passed validation.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingSpeciesImportSpecies(validSpecies);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link ready: ${validSpecies.length} valid species record(s) from ${rawParsed.species.length} payload record(s). Confirm to import.`);
-        }
+        setPendingSpeciesImportSpecies(validSpecies.length > 0 ? validSpecies : (rawParsed.species as Species[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validSpecies.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validSpecies.length} species record(s) passed local checks out of ${rawParsed.species.length}. Confirm to import.`,
+        );
       } else if (importType === 'crop-plans') {
         const rawParsed = JSON.parse(decodedPayload) as { cropPlans?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.cropPlans)) {
@@ -7613,18 +7592,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
           } catch (validationError) {
             validationErrors.push({
               path: fallbackPath,
-              message: `schema_validation_failed - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
+              message: `local_precheck_warning - ${validationError instanceof Error ? validationError.message : 'Unknown import error.'}`,
             });
           }
         });
-        if (validCropPlans.length === 0) {
-          setImportMessage('Crop plan import failed. No valid crop plans passed validation.');
-          setImportErrors(validationErrors);
-        } else {
-          setPendingCropPlanImportPlans(validCropPlans);
-          setImportErrors(validationErrors);
-          setImportMessage(`Deep link ready: ${validCropPlans.length} valid crop plan(s) from ${rawParsed.cropPlans.length} payload plan(s). Confirm to import.`);
-        }
+        setPendingCropPlanImportPlans(validCropPlans.length > 0 ? validCropPlans : (rawParsed.cropPlans as CropPlan[]));
+        setImportErrors(validationErrors);
+        setImportMessage(
+          `${validCropPlans.length === 0 ? 'Deep link precheck warning' : 'Deep link precheck ready'}: ${validCropPlans.length} crop plan(s) passed local checks out of ${rawParsed.cropPlans.length}. Confirm to import.`,
+        );
       } else if (importType === 'segments') {
         const rawParsed = JSON.parse(decodedPayload) as { segments?: unknown[] };
         if (!rawParsed || typeof rawParsed !== 'object' || !Array.isArray(rawParsed.segments)) {
@@ -7715,7 +7691,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         setPendingSegmentImportPreview(preview);
         setSegmentImportStatusSummary(summary);
         setImportMessage(
-          `Deep link ready: ${validatedSegments.length} valid segment(s) from ${rawParsed.segments.length} payload segment(s). Confirm to import.`,
+          `Deep link precheck ready: ${validatedSegments.length} segment(s) passed local checks out of ${rawParsed.segments.length}. Confirm to import.`,
         );
       }
     } catch (error) {
@@ -7734,6 +7710,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         {isExporting ? 'Exporting JSON…' : 'Export JSON'}
       </button>
       {exportMessage ? <p>{exportMessage}</p> : null}
+      <p>Local schema checks below are advisory prechecks only. Server validation is authoritative for acceptance or rejection.</p>
       <label>
         Import JSON
         <input type="file" accept="application/json,.json" onChange={(event) => void handleImportJson(event)} disabled={isImporting} />
