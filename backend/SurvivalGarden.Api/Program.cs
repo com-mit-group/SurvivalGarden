@@ -1,10 +1,26 @@
 using SurvivalGarden.Api.Endpoints;
 using SurvivalGarden.Application;
 using SurvivalGarden.Persistence;
+using Microsoft.OpenApi.Any;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+var contractVersion = builder.Configuration["Contracts:Version"] ?? "1.0.0";
+var persistedSchemaVersion = builder.Configuration.GetValue<int?>("Contracts:PersistedSchemaVersion") ?? 2;
+
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info ??= new OpenApiInfo();
+        document.Info.Title = "SurvivalGarden.Api";
+        document.Info.Version = contractVersion;
+        document.Extensions["x-contracts"] = new OpenApiString("backend-canonical");
+        document.Extensions["x-persisted-schema-version"] = new OpenApiInteger(persistedSchemaVersion);
+        return Task.CompletedTask;
+    });
+});
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 if (builder.Environment.IsDevelopment() && corsOrigins.Length == 0)
 {

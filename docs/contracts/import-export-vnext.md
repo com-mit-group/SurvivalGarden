@@ -21,6 +21,20 @@ Canonical samples:
 - `docs/contracts/samples/import-events.request.canonical.json`
 - `fixtures/golden/taxonomy-v1.json` (canonical reference dataset combining default segment-owned layout + Species → Crop Type → Cultivar examples)
 
+## Contract publication + version policy
+
+- Backend OpenAPI publication (`/openapi/v1.json`) is the canonical machine-readable contract artifact.
+- OpenAPI must include:
+  - `info.version` = semantic contract version (`MAJOR.MINOR.PATCH`)
+  - `x-contracts = backend-canonical`
+  - `x-persisted-schema-version` = current persisted `AppState.schemaVersion` baseline
+- Frontend generated contract types must be regenerated from the published backend OpenAPI artifact and committed whenever contract output changes.
+- Version bump rules:
+  - **MAJOR**: breaking API contract change or incompatible persisted-state interpretation.
+  - **MINOR**: additive/backward-compatible contract change (new optional fields/endpoints).
+  - **PATCH**: non-structural contract metadata/docs corrections with no consumer impact.
+- Persisted-state alignment rule: if a change requires data migration, update `AppState.schemaVersion` and migration notes in the same PR as the contract/version bump.
+
 ## Canonical vs accepted legacy input
 
 - **Canonical export shape** is what contributors/backends should produce for new integrations.
