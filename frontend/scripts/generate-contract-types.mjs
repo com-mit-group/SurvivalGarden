@@ -8,7 +8,8 @@ const outputDir = path.resolve(__dirname, '../src/generated');
 const contractsOutputFile = path.join(outputDir, 'contracts.ts');
 const clientOutputFile = path.join(outputDir, 'api-client.ts');
 const openApiUrl = process.env.BACKEND_OPENAPI_URL ?? 'http://localhost:5142/openapi/v1.json';
-const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1';
+const isCi = process.env.CI === 'true' || process.env.CI === '1';
+const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1' || isCi;
 const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 
 const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
@@ -85,7 +86,7 @@ const contracts = await openapiTS(openApiDocument, {
   commentHeader: [
     '/**',
     ' * GENERATED FILE - DO NOT EDIT.',
-    ` * Source: ${openApiUrl}`,
+    ` * OpenAPI source: ${openApiUrl}`,
     ` * Contract version: ${contractVersion}`,
     ` * Persisted schemaVersion baseline: ${persistedSchemaVersion}`,
     ' * Regenerate with `pnpm --filter frontend gen:types`.',
@@ -98,7 +99,7 @@ const pathUnion = paths.length > 0 ? paths.map((value) => `  | '${value}'`).join
 
 const client = `/**
  * GENERATED FILE - DO NOT EDIT.
- * Source: ${openApiUrl}
+ * OpenAPI source: ${openApiUrl}
  * Contract version: ${contractVersion}
  * Persisted schemaVersion baseline: ${persistedSchemaVersion}
  * Regenerate with \`pnpm --filter frontend gen:types\`.
