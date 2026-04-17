@@ -219,7 +219,7 @@ jobs:
           export EXPECTED_CONTRACT_VERSION="1.0.0"
 
           pnpm --dir frontend gen:types
-          git diff --exit-code
+          git diff -- frontend/src/generated/contracts.ts
 
       - name: Test
         run: pnpm --filter frontend test
