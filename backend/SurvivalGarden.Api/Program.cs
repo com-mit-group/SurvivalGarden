@@ -1,8 +1,7 @@
-using SurvivalGarden.Api.Endpoints;
+﻿using SurvivalGarden.Api.Endpoints;
 using SurvivalGarden.Application;
 using SurvivalGarden.Persistence;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,11 +12,10 @@ builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
     {
-        document.Info ??= new OpenApiInfo();
+        document.Info ??= new();
         document.Info.Title = "SurvivalGarden.Api";
         document.Info.Version = contractVersion;
-        document.Extensions["x-contracts"] = new OpenApiString("backend-canonical");
-        document.Extensions["x-persisted-schema-version"] = new OpenApiInteger(persistedSchemaVersion);
+        document.Info.Description = $"contracts=backend-canonical;persistedSchemaVersion={persistedSchemaVersion}";
         return Task.CompletedTask;
     });
 });

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import openapiTS from 'openapi-typescript';
+import openapiTS, { astToString } from 'openapi-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.resolve(__dirname, '../src/generated');
@@ -51,9 +51,12 @@ export const backendApiFetch = async <T>(path: BackendApiPath, init?: RequestIni
 
 const openApiDocument = await response.json();
 const openApiInfo = openApiDocument?.info ?? {};
+const openApiDescription = typeof openApiInfo.description === 'string' ? openApiInfo.description : '';
 const contractVersion = typeof openApiInfo.version === 'string' ? openApiInfo.version.trim() : '';
-const contractsPublication = openApiDocument?.['x-contracts'];
-const persistedSchemaVersion = openApiDocument?.['x-persisted-schema-version'];
+const contractsPublication = openApiDocument?.['x-contracts'] ?? /contracts=([^;\s]+)/.exec(openApiDescription)?.[1];
+const persistedSchemaVersionValue =
+  openApiDocument?.['x-persisted-schema-version'] ?? /persistedSchemaVersion=([0-9]+)/.exec(openApiDescription)?.[1];
+const persistedSchemaVersion = Number(persistedSchemaVersionValue);
 
 if (!contractVersion) {
   throw new Error(`Backend OpenAPI document missing required info.version: ${openApiUrl}`);
@@ -118,7 +121,7 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-await writeFile(contractsOutputFile, contracts, 'utf8');
+await writeFile(contractsOutputFile, astToString(contracts), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
 }
