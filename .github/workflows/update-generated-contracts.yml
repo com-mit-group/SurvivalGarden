@@ -1,0 +1,199 @@
+name: Update Generated Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Branch, tag, or commit SHA to check out and update.
+        required: true
+        default: main
+        type: string
+      expected_contract_version:
+        description: Expected backend contract version used by frontend generation.
+        required: true
+        default: 1.0.0
+        type: string
+      commit_message:
+        description: Optional commit message for generated contract updates.
+        required: false
+        default: "chore(contracts): regenerate generated frontend contracts"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  export-backend-openapi:
+    name: Export Backend OpenAPI
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve solution or project target
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target="$(git ls-files '**/*.sln' | head -n 1)"
+          if [ -z "$target" ]; then
+            target="$(git ls-files '**/*.csproj' | head -n 1)"
+          fi
+
+          if [ -z "$target" ]; then
+            echo "No .sln or .csproj found for backend workflow." >&2
+            exit 1
+          fi
+
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Using backend target: $target"
+
+      - name: Restore Dependencies
+        run: dotnet restore "${{ steps.target.outputs.target }}"
+
+      - name: Build
+        run: dotnet build -c Debug --no-restore "${{ steps.target.outputs.target }}"
+
+      - name: Export backend OpenAPI artifact
+        shell: pwsh
+        env:
+          CONTRACTS__VERSION: ${{ inputs.expected_contract_version }}
+          CONTRACTS__PERSISTEDSCHEMAVERSION: "2"
+        run: |
+          New-Item -ItemType Directory -Force -Path .artifacts/openapi | Out-Null
+
+          $process = Start-Process dotnet -ArgumentList @(
+            'run',
+            '--project', 'backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj',
+            '--no-build',
+            '--urls', 'http://127.0.0.1:5142'
+          ) -PassThru
+
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -UseBasicParsing
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+              }
+            }
+
+            if (-not $ready) {
+              throw 'Backend OpenAPI endpoint did not become ready in time.'
+            }
+
+            Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -OutFile '.artifacts/openapi/openapi-v1.json'
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+      - name: Upload backend OpenAPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-openapi
+          path: .artifacts/openapi/openapi-v1.json
+
+  regenerate-and-commit:
+    name: Regenerate frontend contracts
+    runs-on: ubuntu-latest
+    needs: export-backend-openapi
+
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download backend OpenAPI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-openapi
+          path: ./.artifacts/openapi
+
+      - name: Generate frontend contracts from backend OpenAPI
+        env:
+          EXPECTED_CONTRACT_VERSION: ${{ inputs.expected_contract_version }}
+        run: |
+          set -euo pipefail
+
+          python3 -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
+          OPENAPI_PID=$!
+
+          cleanup() {
+            kill "$OPENAPI_PID"
+          }
+          trap cleanup EXIT
+
+          export BACKEND_OPENAPI_URL="http://127.0.0.1:5178/openapi-v1.json"
+          export REQUIRE_BACKEND_OPENAPI=1
+
+          pnpm install
+          pnpm --filter frontend gen:types
+
+      - name: Commit and push generated artifacts
+        env:
+          EXPECTED_CONTRACT_VERSION: ${{ inputs.expected_contract_version }}
+          INPUT_COMMIT_MESSAGE: ${{ inputs.commit_message }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -f frontend/src/generated/contracts.ts ]; then
+            git add frontend/src/generated/contracts.ts
+          fi
+
+          if [ -f frontend/src/generated/api-client.ts ]; then
+            git add frontend/src/generated/api-client.ts
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No generated contract changes."
+            exit 0
+          fi
+
+          commit_subject="$INPUT_COMMIT_MESSAGE"
+          if [[ "$commit_subject" != *"[skip ci]"* ]]; then
+            commit_subject="$commit_subject [skip ci]"
+          fi
+
+          git commit \
+            -m "$commit_subject" \
+            -m "OpenAPI source URL: http://127.0.0.1:5178/openapi-v1.json" \
+            -m "Expected contract version: $EXPECTED_CONTRACT_VERSION" \
+            -m "Workflow run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          git push origin "HEAD:${{ inputs.target_ref }}"
