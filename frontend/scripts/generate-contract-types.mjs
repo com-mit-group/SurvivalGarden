@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import openapiTS from 'openapi-typescript';
+import openapiTS, { astToString } from 'openapi-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.resolve(__dirname, '../src/generated');
@@ -121,7 +121,7 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-await writeFile(contractsOutputFile, contracts, 'utf8');
+await writeFile(contractsOutputFile, astToString(contracts), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
 }
