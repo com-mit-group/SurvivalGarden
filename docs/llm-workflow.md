@@ -67,7 +67,7 @@ What this manual workflow does:
 - checks out the selected `target_ref`,
 - exports backend OpenAPI (`openapi-v1.json`) using the same backend run/export flow as CI,
 - runs frontend generation with `BACKEND_OPENAPI_URL` and `EXPECTED_CONTRACT_VERSION`,
-- commits only generated artifacts (`frontend/src/generated/contracts.ts` and `frontend/src/generated/api-client.ts` when present),
+- commits only generated artifacts (`frontend/src/generated/contracts.ts` and `frontend/src/generated/api-client.ts`),
 - pushes that commit back to `target_ref`.
 
 This commit becomes the new expected baseline that CI compares against.

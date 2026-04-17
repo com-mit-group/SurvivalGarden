@@ -14,7 +14,7 @@ const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 
 const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
 const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
-const shouldWriteClient = process.env.GENERATE_API_CLIENT === '1' || fallbackClient !== null;
+const shouldWriteClient = true;
 
 const response = await fetch(openApiUrl).catch(() => null);
 if (!response || !response.ok) {
