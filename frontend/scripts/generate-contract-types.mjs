@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
+import { compile } from 'json-schema-to-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const contractsDir = path.resolve(__dirname, '../src/contracts');
