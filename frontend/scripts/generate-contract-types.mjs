@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
@@ -17,12 +17,62 @@ const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 const schemaRefBase = 'https://survivalgarden/contracts/';
 const shouldWriteClient = true;
 
+const componentFileAliases = new Map([
+  ['CropType', 'crop.schema.json'],
+  ['AppStateDto', 'app-state.schema.json'],
+]);
+
 const toTypeName = (fileName) =>
   fileName
     .replace(/\.schema\.json$/, '')
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
+
+const toKebabCase = (value) =>
+  value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+
+const toSchemaFileName = (componentName) => componentFileAliases.get(componentName) ?? `${toKebabCase(componentName)}.schema.json`;
+
+const rewriteOpenApiRef = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  if (value.startsWith('#/components/schemas/')) {
+    const componentName = value.slice('#/components/schemas/'.length);
+    return `${schemaRefBase}${toSchemaFileName(componentName)}`;
+  }
+
+  return value;
+};
+
+const rewriteSchema = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(rewriteSchema);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([key, item]) => {
+        if (key === 'nullable' && item === true) {
+          return [];
+        }
+
+        if (key === '$ref') {
+          return [[key, rewriteOpenApiRef(item)]];
+        }
+
+        return [[key, rewriteSchema(item)]];
+      }),
+    );
+  }
+
+  return value;
+};
 
 const normalizeSchemaUris = (value) => {
   if (Array.isArray(value)) {
@@ -92,19 +142,31 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
   );
 }
 
-const schemaFiles = (await readdir(contractsDir))
-  .filter((file) => file.endsWith('.schema.json'))
-  .sort((a, b) => a.localeCompare(b));
+const componentSchemas = openApiDocument?.components?.schemas ?? {};
+const schemaEntries = Object.entries(componentSchemas)
+  .map(([componentName, schema]) => {
+    const schemaFile = toSchemaFileName(componentName);
+    const schemaDocument = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $id: `${schemaRefBase}${schemaFile}`,
+      ...rewriteSchema(schema),
+    };
 
-if (schemaFiles.length === 0) {
-  throw new Error('No frontend contract schema files found.');
+    return {
+      componentName,
+      schemaFile,
+      schemaDocument,
+    };
+  })
+  .sort((a, b) => a.schemaFile.localeCompare(b.schemaFile));
+
+if (schemaEntries.length === 0) {
+  throw new Error('Backend OpenAPI document did not include components.schemas for contract generation.');
 }
 
 const sections = [];
-for (const schemaFile of schemaFiles) {
-  const schemaPath = path.join(contractsDir, schemaFile);
-  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-  const content = await compile(normalizeSchemaUris(schema), toTypeName(schemaFile), {
+for (const entry of schemaEntries) {
+  const content = await compile(normalizeSchemaUris(entry.schemaDocument), toTypeName(entry.schemaFile), {
     bannerComment: '',
     cwd: contractsDir,
     strictIndexSignatures: true,
@@ -169,8 +231,14 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
+await mkdir(contractsDir, { recursive: true });
 await writeFile(contractsOutputFile, contracts, 'utf8');
 await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
+}
+
+for (const entry of schemaEntries) {
+  const schemaPath = path.join(contractsDir, entry.schemaFile);
+  await writeFile(schemaPath, `${JSON.stringify(entry.schemaDocument, null, 2)}\n`, 'utf8');
 }
