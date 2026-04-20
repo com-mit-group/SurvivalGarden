@@ -14,6 +14,7 @@ const openApiUrl = process.env.BACKEND_OPENAPI_URL ?? 'http://localhost:5142/ope
 const isCi = process.env.CI === 'true' || process.env.CI === '1';
 const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1' || isCi;
 const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
+const schemaRefBase = 'https://survivalgarden/contracts/';
 
 const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
 const fallbackOpenApiPaths = await readFile(openApiPathsOutputFile, 'utf8').catch(() => null);
