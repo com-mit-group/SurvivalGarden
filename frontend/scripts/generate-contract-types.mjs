@@ -15,10 +15,6 @@ const isCi = process.env.CI === 'true' || process.env.CI === '1';
 const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1' || isCi;
 const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 const schemaRefBase = 'https://survivalgarden/contracts/';
-
-const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
-const fallbackOpenApiPaths = await readFile(openApiPathsOutputFile, 'utf8').catch(() => null);
-const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
 const shouldWriteClient = true;
 
 const toTypeName = (fileName) =>
@@ -28,30 +24,46 @@ const toTypeName = (fileName) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
 
-const normalizeRefs = (value) => {
+const normalizeSchemaUris = (value) => {
   if (Array.isArray(value)) {
-    return value.map(normalizeRefs);
+    return value.map(normalizeSchemaUris);
   }
+
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => {
-        if (key === '$ref' && typeof item === 'string' && item.startsWith(schemaRefBase)) {
+        if ((key === '$ref' || key === '$id') && typeof item === 'string' && item.startsWith(schemaRefBase)) {
           return [key, `./${item.slice(schemaRefBase.length)}`];
         }
-        return [key, normalizeRefs(item)];
+
+        return [key, normalizeSchemaUris(item)];
       }),
     );
   }
+
   return value;
 };
 
-const response = await fetch(openApiUrl);
-if (!response.ok) {
-  const status = response ? response.status : 'unreachable';
-  throw new Error(`Failed to fetch backend OpenAPI document (${status}): ${openApiUrl}`);
-}
+const fetchOpenApiDocument = async () => {
+  const response = await fetch(openApiUrl).catch(() => null);
+  if (!response?.ok) {
+    const status = response ? response.status : 'unreachable';
+    throw new Error(`Failed to fetch backend OpenAPI document (${status}): ${openApiUrl}`);
+  }
 
-const openApiDocument = await response.json();
+  return response.json();
+};
+
+const openApiDocument = await fetchOpenApiDocument().catch((error) => {
+  if (requireBackendOpenApi) {
+    throw error;
+  }
+
+  throw new Error(
+    `Backend OpenAPI is required to generate contracts for this repository. Original error: ${error.message}`,
+  );
+});
+
 const openApiInfo = openApiDocument?.info ?? {};
 const openApiDescription = typeof openApiInfo.description === 'string' ? openApiInfo.description : '';
 const contractVersion = typeof openApiInfo.version === 'string' ? openApiInfo.version.trim() : '';
@@ -65,9 +77,7 @@ if (!contractVersion) {
 }
 
 if (contractsPublication !== 'backend-canonical') {
-  throw new Error(
-    `Backend OpenAPI document missing required x-contracts=backend-canonical marker: ${openApiUrl}`,
-  );
+  throw new Error(`Backend OpenAPI document missing required x-contracts=backend-canonical marker: ${openApiUrl}`);
 }
 
 if (!Number.isInteger(persistedSchemaVersion)) {
@@ -85,19 +95,29 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
 const schemaFiles = (await readdir(contractsDir))
   .filter((file) => file.endsWith('.schema.json'))
   .sort((a, b) => a.localeCompare(b));
+
+if (schemaFiles.length === 0) {
+  throw new Error('No frontend contract schema files found.');
+}
+
 const sections = [];
 for (const schemaFile of schemaFiles) {
   const schemaPath = path.join(contractsDir, schemaFile);
   const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-  const content = await compile(normalizeRefs(schema), toTypeName(schemaFile), {
+  const content = await compile(normalizeSchemaUris(schema), toTypeName(schemaFile), {
     bannerComment: '',
     cwd: contractsDir,
     strictIndexSignatures: true,
+    $refOptions: {
+      resolve: {
+        http: false,
+      },
+    },
   });
+
   sections.push(content.trim());
 }
 
-if (sections) {
 const contracts = `/**
  * GENERATED FILE - DO NOT EDIT.
  * OpenAPI source: ${openApiUrl}
@@ -107,12 +127,6 @@ const contracts = `/**
  */
 ${sections.join('\n\n')}
 `;
-}
-else if (!fallbackContracts) {
-  throw new Error(
-    'Missing generated contracts.ts. Generate backend *.schema.json artifacts and regenerate frontend contracts.',
-  );
-}
 
 const openApiPaths = await openapiTS(openApiDocument, {
   alphabetize: true,
@@ -128,7 +142,7 @@ const openApiPaths = await openapiTS(openApiDocument, {
 });
 
 const paths = Object.keys(openApiDocument.paths ?? {});
-const pathUnion = paths.length > 0 ? paths.map((value) => `  | '${value}'`).join('\n') : "  | never";
+const pathUnion = paths.length > 0 ? paths.map((value) => `  | '${value}'`).join('\n') : '  | never';
 
 const client = `/**
  * GENERATED FILE - DO NOT EDIT.
@@ -155,12 +169,7 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-if (fallbackContracts) {
-  await writeFile(contractsOutputFile, fallbackContracts, 'utf8');
-}
-else {
-  await writeFile(contractsOutputFile, contracts, 'utf8');
-}
+await writeFile(contractsOutputFile, contracts, 'utf8');
 await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
