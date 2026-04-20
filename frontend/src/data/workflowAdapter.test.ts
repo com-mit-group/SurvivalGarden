@@ -156,4 +156,56 @@ describe('workflow adapter transport', () => {
       expect.objectContaining({ method: 'GET' }),
     );
   });
+
+  it('calls canonical backend endpoints for dynamic resource operations', async () => {
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ bedId: 'bed%201' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ cropId: 'crop%201' }) } as Response)
+      .mockResolvedValueOnce({ status: 204, ok: true } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await workflowAdapter.bedsSegments.upsertBed({
+      bedId: 'bed 1',
+      name: 'Bed 1',
+      type: 'vegetable_bed',
+      gardenId: 'garden-1',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    await workflowAdapter.taxonomy.upsertCrop({
+      cropId: 'crop 1',
+      name: 'Potato',
+      companionsGood: [],
+      companionsAvoid: [],
+      rules: {
+        sowing: { sequence: 1, windows: [] },
+        transplant: { sequence: 1, windows: [] },
+        harvest: { sequence: 1, windows: [] },
+        storage: { sequence: 1, windows: [] },
+      },
+      nutritionProfile: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    await workflowAdapter.inventory.removeSeedInventoryItem('seed item 1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:5142/api/beds/bed%201',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:5142/api/crops/crop%201',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:5142/api/seedInventoryItems/seed%20item%201',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
 });
