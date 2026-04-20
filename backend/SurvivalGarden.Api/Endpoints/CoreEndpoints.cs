@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using SurvivalGarden.Api.Contracts;
 using SurvivalGarden.Application;
 
 namespace SurvivalGarden.Api.Endpoints;
@@ -56,12 +57,24 @@ internal static class CoreEndpoints
         });
 
         MapEntityCrud(app, "species", "id");
-        MapEntityCrud(app, "crops", "cropId");
+        MapTypedEntityCrud<CropUpsertRequest>(app, "crops", "cropId", (payload, id) =>
+        {
+            payload.CropId = id;
+            return DtoJsonMapper.ToJsonObject(payload);
+        });
         MapEntityCrud(app, "cultivars", "id");
         MapEntityCrud(app, "segments", "segmentId");
-        MapEntityCrud(app, "beds", "bedId");
+        MapTypedEntityCrud<BedUpsertRequest>(app, "beds", "bedId", (payload, id) =>
+        {
+            payload.BedId = id;
+            return DtoJsonMapper.ToJsonObject(payload);
+        });
         MapEntityCrud(app, "paths", "pathId");
-        MapEntityCrud(app, "seedInventoryItems", "seedInventoryItemId");
+        MapTypedEntityCrud<SeedInventoryItemUpsertRequest>(app, "seedInventoryItems", "seedInventoryItemId", (payload, id) =>
+        {
+            payload.SeedInventoryItemId = id;
+            return DtoJsonMapper.ToJsonObject(payload);
+        });
         MapEntityCrud(app, "cropPlans", "planId");
 
         app.MapPost("/api/validate/{collection}", (IGardenApplicationService service, string collection, JsonObject payload) =>
@@ -99,6 +112,46 @@ internal static class CoreEndpoints
             }
 
             var saved = await service.UpsertAsync(collectionName, idProperty, payload, ct);
+            return Results.Ok(saved);
+        });
+
+        app.MapDelete($"/api/{collectionName}/{{id}}", async (IGardenApplicationService service, string id, CancellationToken ct) =>
+        {
+            var removed = await service.RemoveAsync(collectionName, idProperty, id, ct);
+            return removed ? Results.NoContent() : Results.NotFound();
+        });
+    }
+
+    private static void MapTypedEntityCrud<TRequest>(
+        WebApplication app,
+        string collectionName,
+        string idProperty,
+        Func<TRequest, string, JsonObject> mapPayload)
+    {
+        app.MapGet($"/api/{collectionName}", async (IGardenApplicationService service, CancellationToken ct) =>
+        {
+            var rows = await service.ListAsync(collectionName, ct);
+            return Results.Ok(rows);
+        });
+
+        app.MapGet($"/api/{collectionName}/{{id}}", async (IGardenApplicationService service, string id, CancellationToken ct) =>
+        {
+            var row = await service.GetByIdAsync(collectionName, idProperty, id, ct);
+            return row is null ? Results.NotFound() : Results.Ok(row);
+        });
+
+        app.MapPut($"/api/{collectionName}/{{id}}", async (IGardenApplicationService service, string id, TRequest payload, CancellationToken ct) =>
+        {
+            var jsonPayload = mapPayload(payload, id);
+            jsonPayload[idProperty] = id;
+
+            var validation = service.Validate(collectionName, jsonPayload);
+            if (!validation.Ok)
+            {
+                return Results.BadRequest(new { errors = validation.Issues });
+            }
+
+            var saved = await service.UpsertAsync(collectionName, idProperty, jsonPayload, ct);
             return Results.Ok(saved);
         });
 
