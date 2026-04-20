@@ -1,4 +1,5 @@
 import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment } from '../contracts';
+import type { BackendApiPath } from '../generated/api-client';
 
 export type WorkflowFeature = 'batches' | 'tasks' | 'bedsSegments' | 'taxonomy' | 'inventory';
 
@@ -39,6 +40,8 @@ export const toBackendApiUrl = (path: string): string => {
 
   return new URL(path, `${baseUrl}/`).toString();
 };
+
+const backendPath = (path: BackendApiPath): string => path;
 
 const isFeatureFlagEnabled = (value: string | undefined): boolean => value?.trim().toLowerCase() === 'true';
 const parseWorkflowList = (value: string | undefined): WorkflowFeature[] =>
@@ -208,7 +211,7 @@ export const workflowAdapter = {
         generatedTasks: AppState['tasks'];
         diagnostics?: { cropId: string; reason: string; detail: string }[];
         stateAfter: AppState;
-      }>('/api/domain/tasks/regenerate-calendar', {
+      }>(backendPath('/api/domain/tasks/regenerate-calendar'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year }),
@@ -222,7 +225,7 @@ export const workflowAdapter = {
     },
   },
   bedsSegments: {
-    listBeds: async (): Promise<Bed[]> => fetchJson<Bed[]>('/api/beds', { method: 'GET' }),
+    listBeds: async (): Promise<Bed[]> => fetchJson<Bed[]>(backendPath('/api/beds'), { method: 'GET' }),
     getBed: async (bedId: string): Promise<Bed | null> => {
       const response = await fetch(toBackendApiUrl(`/api/beds/${encodeURIComponent(bedId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -248,7 +251,7 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
-    listSegments: async (): Promise<Segment[]> => fetchJson<Segment[]>('/api/segments', { method: 'GET' }),
+    listSegments: async (): Promise<Segment[]> => fetchJson<Segment[]>(backendPath('/api/segments'), { method: 'GET' }),
     getSegment: async (segmentId: string): Promise<Segment | null> => {
       const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -276,7 +279,7 @@ export const workflowAdapter = {
     },
   },
   taxonomy: {
-    listCrops: async (): Promise<Crop[]> => fetchJson<Crop[]>('/api/crops', { method: 'GET' }),
+    listCrops: async (): Promise<Crop[]> => fetchJson<Crop[]>(backendPath('/api/crops'), { method: 'GET' }),
     getCrop: async (cropId: string): Promise<Crop | null> => {
       const response = await fetch(toBackendApiUrl(`/api/crops/${encodeURIComponent(cropId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -302,7 +305,7 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
-    listCropPlans: async (): Promise<CropPlan[]> => fetchJson<CropPlan[]>('/api/cropPlans', { method: 'GET' }),
+    listCropPlans: async (): Promise<CropPlan[]> => fetchJson<CropPlan[]>(backendPath('/api/cropPlans'), { method: 'GET' }),
     getCropPlan: async (planId: string): Promise<CropPlan | null> => {
       const response = await fetch(toBackendApiUrl(`/api/cropPlans/${encodeURIComponent(planId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -331,7 +334,7 @@ export const workflowAdapter = {
   },
   inventory: {
     listSeedInventoryItems: async (): Promise<SeedInventoryItem[]> =>
-      fetchJson<SeedInventoryItem[]>('/api/seedInventoryItems', { method: 'GET' }),
+      fetchJson<SeedInventoryItem[]>(backendPath('/api/seedInventoryItems'), { method: 'GET' }),
     getSeedInventoryItem: async (seedInventoryItemId: string): Promise<SeedInventoryItem | null> => {
       const response = await fetch(
         toBackendApiUrl(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItemId)}`),
