@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const contractsDir = path.resolve(__dirname, '../src/contracts');
 const outputDir = path.resolve(__dirname, '../src/generated');
 const contractsOutputFile = path.join(outputDir, 'contracts.ts');
 const openApiPathsOutputFile = path.join(outputDir, 'openapi-paths.ts');
@@ -55,7 +56,33 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
   );
 }
 
-if (!fallbackContracts) {
+const schemaFiles = (await readdir(contractsDir))
+  .filter((file) => file.endsWith('.schema.json'))
+  .sort((a, b) => a.localeCompare(b));
+const sections = [];
+for (const schemaFile of schemaFiles) {
+  const schemaPath = path.join(contractsDir, schemaFile);
+  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  const content = await compile(normalizeRefs(schema), toTypeName(schemaFile), {
+    bannerComment: '',
+    cwd: contractsDir,
+    strictIndexSignatures: true,
+  });
+  sections.push(content.trim());
+}
+
+if (sections) {
+const contracts = `/**
+ * GENERATED FILE - DO NOT EDIT.
+ * OpenAPI source: ${openApiUrl}
+ * Contract version: ${contractVersion}
+ * Persisted schemaVersion baseline: ${persistedSchemaVersion}
+ * Regenerate with \`pnpm --filter frontend gen:types\`.
+ */
+${sections.join('\n\n')}
+`;
+}
+else if (!fallbackContracts) {
   throw new Error(
     'Missing generated contracts.ts. Generate backend *.schema.json artifacts and regenerate frontend contracts.',
   );
@@ -105,9 +132,10 @@ await mkdir(outputDir, { recursive: true });
 if (fallbackContracts) {
   await writeFile(contractsOutputFile, fallbackContracts, 'utf8');
 }
-if (!fallbackOpenApiPaths) {
-  await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
+else {
+  await writeFile(contractsOutputFile, contracts, 'utf8');
 }
+await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
 }
