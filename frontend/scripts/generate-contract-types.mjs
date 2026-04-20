@@ -20,6 +20,30 @@ const fallbackOpenApiPaths = await readFile(openApiPathsOutputFile, 'utf8').catc
 const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
 const shouldWriteClient = true;
 
+const toTypeName = (fileName) =>
+  fileName
+    .replace(/\.schema\.json$/, '')
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+
+const normalizeRefs = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(normalizeRefs);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => {
+        if (key === '$ref' && typeof item === 'string' && item.startsWith(schemaRefBase)) {
+          return [key, `./${item.slice(schemaRefBase.length)}`];
+        }
+        return [key, normalizeRefs(item)];
+      }),
+    );
+  }
+  return value;
+};
+
 const response = await fetch(openApiUrl);
 if (!response.ok) {
   const status = response ? response.status : 'unreachable';
