@@ -18,55 +18,8 @@ const fallbackOpenApiPaths = await readFile(openApiPathsOutputFile, 'utf8').catc
 const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
 const shouldWriteClient = true;
 
-const response = await fetch(openApiUrl).catch(() => null);
-if (!response || !response.ok) {
-  if (!requireBackendOpenApi && fallbackContracts) {
-    if (!fallbackOpenApiPaths) {
-      await mkdir(outputDir, { recursive: true });
-      await writeFile(
-        openApiPathsOutputFile,
-        `/**
- * GENERATED FILE - DO NOT EDIT.
- * Backend OpenAPI unavailable; generated fallback OpenAPI paths shim.
- */
-
-export type paths = Record<string, never>;
-export type webhooks = Record<string, never>;
-export type components = Record<string, never>;
-export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
-`,
-        'utf8',
-      );
-    }
-
-    if (!fallbackClient && shouldWriteClient) {
-      await mkdir(outputDir, { recursive: true });
-      await writeFile(
-        clientOutputFile,
-        `/**
- * GENERATED FILE - DO NOT EDIT.
- * Backend OpenAPI unavailable; generated fallback client shim.
- */
-
-export type BackendApiPath = string;
-
-export const backendApiFetch = async <T>(path: BackendApiPath, init?: RequestInit): Promise<T> => {
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    throw new Error(\`Backend API request failed: \${response.status} \${response.statusText}\`);
-  }
-
-  return (await response.json()) as T;
-};
-`,
-        'utf8',
-      );
-    }
-
-    process.exit(0);
-  }
-
+const response = await fetch(openApiUrl);
+if (!response.ok) {
   const status = response ? response.status : 'unreachable';
   throw new Error(`Failed to fetch backend OpenAPI document (${status}): ${openApiUrl}`);
 }
@@ -149,6 +102,9 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
+if (fallbackContracts) {
+  await writeFile(contractsOutputFile, fallbackContracts, 'utf8');
+}
 if (!fallbackOpenApiPaths) {
   await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 }
