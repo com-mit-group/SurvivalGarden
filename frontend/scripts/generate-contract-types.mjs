@@ -6,6 +6,7 @@ import openapiTS, { astToString } from 'openapi-typescript';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.resolve(__dirname, '../src/generated');
 const contractsOutputFile = path.join(outputDir, 'contracts.ts');
+const openApiPathsOutputFile = path.join(outputDir, 'openapi-paths.ts');
 const clientOutputFile = path.join(outputDir, 'api-client.ts');
 const openApiUrl = process.env.BACKEND_OPENAPI_URL ?? 'http://localhost:5142/openapi/v1.json';
 const isCi = process.env.CI === 'true' || process.env.CI === '1';
@@ -13,12 +14,32 @@ const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1' || isC
 const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 
 const fallbackContracts = await readFile(contractsOutputFile, 'utf8').catch(() => null);
+const fallbackOpenApiPaths = await readFile(openApiPathsOutputFile, 'utf8').catch(() => null);
 const fallbackClient = await readFile(clientOutputFile, 'utf8').catch(() => null);
-const shouldWriteClient = process.env.GENERATE_API_CLIENT === '1' || fallbackClient !== null;
+const shouldWriteClient = true;
 
 const response = await fetch(openApiUrl).catch(() => null);
 if (!response || !response.ok) {
   if (!requireBackendOpenApi && fallbackContracts) {
+    if (!fallbackOpenApiPaths) {
+      await mkdir(outputDir, { recursive: true });
+      await writeFile(
+        openApiPathsOutputFile,
+        `/**
+ * GENERATED FILE - DO NOT EDIT.
+ * Backend OpenAPI unavailable; generated fallback OpenAPI paths shim.
+ */
+
+export type paths = Record<string, never>;
+export type webhooks = Record<string, never>;
+export type components = Record<string, never>;
+export type $defs = Record<string, never>;
+export type operations = Record<string, never>;
+`,
+        'utf8',
+      );
+    }
+
     if (!fallbackClient && shouldWriteClient) {
       await mkdir(outputDir, { recursive: true });
       await writeFile(
@@ -81,7 +102,13 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
   );
 }
 
-const contracts = await openapiTS(openApiDocument, {
+if (!fallbackContracts) {
+  throw new Error(
+    'Missing generated contracts.ts. Generate backend *.schema.json artifacts and regenerate frontend contracts.',
+  );
+}
+
+const openApiPaths = await openapiTS(openApiDocument, {
   alphabetize: true,
   commentHeader: [
     '/**',
@@ -122,7 +149,9 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-await writeFile(contractsOutputFile, astToString(contracts), 'utf8');
+if (!fallbackOpenApiPaths) {
+  await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
+}
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
 }
