@@ -218,7 +218,7 @@ jobs:
           export REQUIRE_BACKEND_OPENAPI=1
           export EXPECTED_CONTRACT_VERSION="1.0.0"
 
-          pnpm --filter frontend gen:types
+          pnpm --dir frontend gen:types
           git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts
 
       - name: Test
