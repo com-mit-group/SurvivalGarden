@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using SurvivalGarden.Api.Contracts;
 using SurvivalGarden.Application;
 
 namespace SurvivalGarden.Api.Endpoints;
@@ -10,7 +11,7 @@ internal static class DomainOperationEndpoints
         app.MapPost("/api/domain/batches/{id}/stage-events", async (
             IGardenApplicationService service,
             string id,
-            JsonObject payload,
+            StageEventRequest request,
             CancellationToken ct) =>
         {
             var state = await service.LoadAppStateAsync(ct);
@@ -27,6 +28,7 @@ internal static class DomainOperationEndpoints
                 return Results.NotFound(new { error = "batch_not_found" });
             }
 
+            var payload = DtoJsonMapper.ToJsonObject(request);
             var nextStage = payload["stage"]?.GetValue<string>() ?? string.Empty;
             var occurredAt = payload["occurredAt"]?.GetValue<string>() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(nextStage) || string.IsNullOrWhiteSpace(occurredAt))
@@ -47,7 +49,7 @@ internal static class DomainOperationEndpoints
         app.MapPost("/api/domain/batches/{id}/assignment", async (
             IGardenApplicationService service,
             string id,
-            JsonObject payload,
+            BatchAssignmentRequest request,
             CancellationToken ct) =>
         {
             var state = await service.LoadAppStateAsync(ct);
@@ -64,6 +66,7 @@ internal static class DomainOperationEndpoints
                 return Results.NotFound(new { error = "batch_not_found" });
             }
 
+            var payload = DtoJsonMapper.ToJsonObject(request);
             var operation = payload["operation"]?.GetValue<string>() ?? string.Empty;
             var at = payload["at"]?.GetValue<string>() ?? string.Empty;
             var bedId = payload["bedId"]?.GetValue<string>();
@@ -84,9 +87,11 @@ internal static class DomainOperationEndpoints
 
         app.MapPost("/api/domain/tasks/regenerate-calendar", async (
             IGardenApplicationService service,
-            JsonObject _payload,
+            RegenerateCalendarRequest request,
             CancellationToken ct) =>
         {
+            _ = DtoJsonMapper.ToJsonObject(request);
+
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
