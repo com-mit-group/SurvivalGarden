@@ -330,6 +330,7 @@ describe('workflow adapter transport', () => {
     await workflowAdapter.taxonomy.upsertCrop({
       cropId: 'crop 1',
       name: 'Potato',
+      speciesId: 'species_potato',
       companionsGood: [],
       companionsAvoid: [],
       rules: {
