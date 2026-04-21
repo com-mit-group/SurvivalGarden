@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "speciesId",
     "createdAt",
     "updatedAt"
   ],
