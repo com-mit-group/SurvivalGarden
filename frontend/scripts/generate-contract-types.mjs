@@ -1,4 +1,5 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
@@ -150,13 +151,22 @@ if (schemaFiles.length === 0) {
   throw new Error('No frontend contract schema files found.');
 }
 
-const sections = [];
+const normalizedContractsDir = await mkdtemp(path.join(os.tmpdir(), 'survivalgarden-contracts-'));
+const normalizedSchemas = new Map();
 for (const schemaFile of schemaFiles) {
   const schemaPath = path.join(contractsDir, schemaFile);
   const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-  const content = await compile(normalizeSchemaUris(schema), toTypeName(schemaFile), {
+  const normalizedSchema = normalizeSchemaUris(schema);
+  normalizedSchemas.set(schemaFile, normalizedSchema);
+  await writeFile(path.join(normalizedContractsDir, schemaFile), `${JSON.stringify(normalizedSchema, null, 2)}\n`, 'utf8');
+}
+
+const sections = [];
+for (const schemaFile of schemaFiles) {
+  const schema = normalizedSchemas.get(schemaFile);
+  const content = await compile(schema, toTypeName(schemaFile), {
     bannerComment: '',
-    cwd: contractsDir,
+    cwd: normalizedContractsDir,
     strictIndexSignatures: true,
     $refOptions: {
       resolve: {
