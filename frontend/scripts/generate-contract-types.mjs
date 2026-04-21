@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
@@ -142,37 +142,19 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
   );
 }
 
-const componentSchemas = openApiDocument?.components?.schemas ?? {};
-const schemaEntries = Object.entries(componentSchemas)
-  .map(([componentName, schema]) => {
-    const schemaFile = toSchemaFileName(componentName);
-    const schemaDocument = {
-      $schema: 'https://json-schema.org/draft/2020-12/schema',
-      $id: `${schemaRefBase}${schemaFile}`,
-      ...rewriteSchema(schema),
-    };
+const schemaFiles = (await readdir(contractsDir))
+  .filter((file) => file.endsWith('.schema.json'))
+  .sort((a, b) => a.localeCompare(b));
 
-    return {
-      componentName,
-      schemaFile,
-      schemaDocument,
-    };
-  })
-  .sort((a, b) => a.schemaFile.localeCompare(b.schemaFile));
-
-if (schemaEntries.length === 0) {
-  throw new Error('Backend OpenAPI document did not include components.schemas for contract generation.');
-}
-
-await mkdir(contractsDir, { recursive: true });
-for (const entry of schemaEntries) {
-  const schemaPath = path.join(contractsDir, entry.schemaFile);
-  await writeFile(schemaPath, `${JSON.stringify(entry.schemaDocument, null, 2)}\n`, 'utf8');
+if (schemaFiles.length === 0) {
+  throw new Error('No frontend contract schema files found.');
 }
 
 const sections = [];
-for (const entry of schemaEntries) {
-  const content = await compile(normalizeSchemaUris(entry.schemaDocument), toTypeName(entry.schemaFile), {
+for (const schemaFile of schemaFiles) {
+  const schemaPath = path.join(contractsDir, schemaFile);
+  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  const content = await compile(normalizeSchemaUris(schema), toTypeName(schemaFile), {
     bannerComment: '',
     cwd: contractsDir,
     strictIndexSignatures: true,
