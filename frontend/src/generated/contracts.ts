@@ -363,6 +363,7 @@ export interface Task {
 export interface AppState {
   schemaVersion: number;
   segments?: Segment[];
+  beds?: Bed[];
   species?: Species[];
   crops: Crop[];
   cropPlans: CropPlan[];
