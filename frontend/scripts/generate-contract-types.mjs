@@ -17,6 +17,7 @@ const requireBackendOpenApi = process.env.REQUIRE_BACKEND_OPENAPI === '1' || isC
 const expectedContractVersion = process.env.EXPECTED_CONTRACT_VERSION?.trim();
 const schemaRefBase = 'https://survivalgarden/contracts/';
 const shouldWriteClient = true;
+const shouldWriteContracts = false;
 
 const componentFileAliases = new Map([
   ['CropType', 'crop.schema.json'],
@@ -143,42 +144,44 @@ if (expectedContractVersion && expectedContractVersion !== contractVersion) {
   );
 }
 
-const schemaFiles = (await readdir(contractsDir))
-  .filter((file) => file.endsWith('.schema.json'))
-  .sort((a, b) => a.localeCompare(b));
+let contracts = '';
+if (shouldWriteContracts) {
+  const schemaFiles = (await readdir(contractsDir))
+    .filter((file) => file.endsWith('.schema.json'))
+    .sort((a, b) => a.localeCompare(b));
 
-if (schemaFiles.length === 0) {
-  throw new Error('No frontend contract schema files found.');
-}
+  if (schemaFiles.length === 0) {
+    throw new Error('No frontend contract schema files found.');
+  }
 
-const normalizedContractsDir = await mkdtemp(path.join(os.tmpdir(), 'survivalgarden-contracts-'));
-const normalizedSchemas = new Map();
-for (const schemaFile of schemaFiles) {
-  const schemaPath = path.join(contractsDir, schemaFile);
-  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-  const normalizedSchema = normalizeSchemaUris(schema);
-  normalizedSchemas.set(schemaFile, normalizedSchema);
-  await writeFile(path.join(normalizedContractsDir, schemaFile), `${JSON.stringify(normalizedSchema, null, 2)}\n`, 'utf8');
-}
+  const normalizedContractsDir = await mkdtemp(path.join(os.tmpdir(), 'survivalgarden-contracts-'));
+  const normalizedSchemas = new Map();
+  for (const schemaFile of schemaFiles) {
+    const schemaPath = path.join(contractsDir, schemaFile);
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    const normalizedSchema = normalizeSchemaUris(schema);
+    normalizedSchemas.set(schemaFile, normalizedSchema);
+    await writeFile(path.join(normalizedContractsDir, schemaFile), `${JSON.stringify(normalizedSchema, null, 2)}\n`, 'utf8');
+  }
 
-const sections = [];
-for (const schemaFile of schemaFiles) {
-  const schema = normalizedSchemas.get(schemaFile);
-  const content = await compile(schema, toTypeName(schemaFile), {
-    bannerComment: '',
-    cwd: normalizedContractsDir,
-    strictIndexSignatures: true,
-    $refOptions: {
-      resolve: {
-        http: false,
+  const sections = [];
+  for (const schemaFile of schemaFiles) {
+    const schema = normalizedSchemas.get(schemaFile);
+    const content = await compile(schema, toTypeName(schemaFile), {
+      bannerComment: '',
+      cwd: normalizedContractsDir,
+      strictIndexSignatures: true,
+      $refOptions: {
+        resolve: {
+          http: false,
+        },
       },
-    },
-  });
+    });
 
-  sections.push(content.trim());
-}
+    sections.push(content.trim());
+  }
 
-const contracts = `/**
+  contracts = `/**
  * GENERATED FILE - DO NOT EDIT.
  * OpenAPI source: ${openApiUrl}
  * Contract version: ${contractVersion}
@@ -187,6 +190,7 @@ const contracts = `/**
  */
 ${sections.join('\n\n')}
 `;
+}
 
 const openApiPaths = await openapiTS(openApiDocument, {
   alphabetize: true,
@@ -229,7 +233,9 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-await writeFile(contractsOutputFile, contracts, 'utf8');
+if (shouldWriteContracts) {
+  await writeFile(contractsOutputFile, contracts, 'utf8');
+}
 await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
