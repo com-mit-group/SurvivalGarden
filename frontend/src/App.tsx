@@ -7404,7 +7404,6 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         || (validatedEmptyState.species ?? []).length > 0
         || (validatedEmptyState.crops ?? []).length > 0
         || (validatedEmptyState.segments ?? []).length > 0
-        || (validatedEmptyState.beds ?? []).length > 0
         || (validatedEmptyState.cropPlans ?? []).length > 0
         || (validatedEmptyState.batches ?? []).length > 0
         || (validatedEmptyState.tasks ?? []).length > 0

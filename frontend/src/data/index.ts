@@ -168,9 +168,6 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
   }
 
   const state = payload as Record<string, unknown>;
-  const beds = Array.isArray(state.beds)
-    ? state.beds.map((bed) => (bed && typeof bed === 'object' ? addTypeToLegacyBed(bed as Record<string, unknown>) : bed))
-    : state.beds;
 
   const segments = Array.isArray(state.segments)
     ? state.segments.map((segment) => {
@@ -195,7 +192,6 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
 
   return {
     ...state,
-    beds,
     segments,
   };
 };
@@ -446,7 +442,6 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
       payload: withSegments(
         {
           ...state,
-          beds: Array.isArray(state.beds) ? state.beds : [],
           segments: normalizedSegments,
         },
         false,
@@ -455,8 +450,10 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     };
   }
 
-  const legacyBeds = Array.isArray(state.beds)
-    ? state.beds.filter((bed): bed is Record<string, unknown> => Boolean(bed && typeof bed === 'object'))
+  const legacyBeds = Array.isArray((state as { beds?: unknown[] }).beds)
+    ? ((state as { beds?: unknown[] }).beds ?? []).filter(
+        (bed): bed is Record<string, unknown> => Boolean(bed && typeof bed === 'object'),
+      )
     : [];
 
   const migratedBeds = legacyBeds.map((bed, index) => {
@@ -522,7 +519,6 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
 
   const nextState = {
     ...state,
-    beds: Array.isArray(state.beds) ? state.beds : [],
     paths: [],
     segments: [
       {
@@ -964,7 +960,6 @@ const canonicalizeForExport = (appState: AppState): AppState => {
 
   return withCultivars({
     ...appState,
-    beds: sortCollectionByKey(appState.beds, ['bedId', 'gardenId', 'name']),
     ...(appState.species
       ? { species: sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) }
       : {}),
@@ -1202,7 +1197,6 @@ const mergeAppStates = (currentState: AppState, incomingState: AppState): { stat
     ...currentState,
     schemaVersion: incomingState.schemaVersion,
     settings: incomingState.settings,
-    beds: [],
     species: mergeCollectionById('species', currentState.species ?? [], incomingState.species ?? [], report),
     crops: mergeCollectionById('crops', currentState.crops, incomingState.crops, report),
     cropPlans: mergeCollectionById('cropPlans', currentState.cropPlans, incomingState.cropPlans, report),
@@ -1412,7 +1406,6 @@ const seedAppStateIfEmpty = async (): Promise<void> => {
 export const createEmptyAppState = (currentState: AppState | null): AppState => ({
   schemaVersion: currentState?.schemaVersion ?? 1,
   segments: [createDefaultSegment()],
-  beds: [],
   species: [],
   crops: [],
   cropPlans: [],
