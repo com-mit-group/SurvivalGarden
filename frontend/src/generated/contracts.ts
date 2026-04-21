@@ -209,7 +209,7 @@ export interface Crop {
   name: string;
   cultivar?: string;
   cultivarGroup?: string;
-  speciesId: string;
+  speciesId?: string;
   species?: {
     id?: string;
     commonName: string;
