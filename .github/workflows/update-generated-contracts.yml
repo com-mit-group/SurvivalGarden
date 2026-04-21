@@ -172,13 +172,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ -f frontend/src/generated/contracts.ts ]; then
-            git add frontend/src/generated/contracts.ts
-          fi
-
-          if [ -f frontend/src/generated/api-client.ts ]; then
-            git add frontend/src/generated/api-client.ts
-          fi
+          git add frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts
 
           if git diff --cached --quiet; then
             echo "No generated contract changes."

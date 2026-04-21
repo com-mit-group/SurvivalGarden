@@ -1,4 +1,7 @@
 import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment } from '../contracts';
+import { assertValid } from './validation';
+import type { SchemaName, SchemaTypeMap } from './validation';
+import type { BackendApiPath } from '../generated/api-client';
 
 export type WorkflowFeature = 'batches' | 'tasks' | 'bedsSegments' | 'taxonomy' | 'inventory';
 
@@ -39,6 +42,8 @@ export const toBackendApiUrl = (path: string): string => {
 
   return new URL(path, `${baseUrl}/`).toString();
 };
+
+const backendPath = (path: BackendApiPath): string => path;
 
 const isFeatureFlagEnabled = (value: string | undefined): boolean => value?.trim().toLowerCase() === 'true';
 const parseWorkflowList = (value: string | undefined): WorkflowFeature[] =>
@@ -171,6 +176,32 @@ const fetchJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+
+const buildContractMismatchError = (contractName: string, error: unknown): Error => {
+  const details = error instanceof Error ? `: ${error.message}` : '';
+  return new Error(`Backend contract mismatch for ${contractName}${details}`);
+};
+
+const assertContract = <T extends SchemaName>(contractName: string, schemaName: T, payload: unknown): SchemaTypeMap[T] => {
+  try {
+    return assertValid(schemaName, payload);
+  } catch (error) {
+    throw buildContractMismatchError(contractName, error);
+  }
+};
+
+const assertContractList = <T extends SchemaName>(
+  contractName: string,
+  schemaName: T,
+  payload: unknown,
+): SchemaTypeMap[T][] => {
+  if (!Array.isArray(payload)) {
+    throw buildContractMismatchError(contractName, new Error('expected array payload'));
+  }
+
+  return payload.map((item, index) => assertContract(`${contractName}[${index}]`, schemaName, item));
+};
+
 export const workflowAdapter = {
   batches: {
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
@@ -208,7 +239,7 @@ export const workflowAdapter = {
         generatedTasks: AppState['tasks'];
         diagnostics?: { cropId: string; reason: string; detail: string }[];
         stateAfter: AppState;
-      }>('/api/domain/tasks/regenerate-calendar', {
+      }>(backendPath('/api/domain/tasks/regenerate-calendar'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year }),
@@ -222,7 +253,8 @@ export const workflowAdapter = {
     },
   },
   bedsSegments: {
-    listBeds: async (): Promise<Bed[]> => fetchJson<Bed[]>('/api/beds', { method: 'GET' }),
+    listBeds: async (): Promise<Bed[]> =>
+      assertContractList('bedsSegments.listBeds', 'bed', await fetchJson<unknown>(backendPath('/api/beds'), { method: 'GET' })),
     getBed: async (bedId: string): Promise<Bed | null> => {
       const response = await fetch(toBackendApiUrl(`/api/beds/${encodeURIComponent(bedId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -231,7 +263,7 @@ export const workflowAdapter = {
       if (!response.ok) {
         throw new Error(await parseBackendError(response));
       }
-      return response.json() as Promise<Bed>;
+      return assertContract('bedsSegments.getBed', 'bed', await response.json());
     },
     upsertBed: async (bed: Bed): Promise<Bed> =>
       fetchJson<Bed>(`/api/beds/${encodeURIComponent(bed.bedId)}`, {
@@ -248,7 +280,8 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
-    listSegments: async (): Promise<Segment[]> => fetchJson<Segment[]>('/api/segments', { method: 'GET' }),
+    listSegments: async (): Promise<Segment[]> =>
+      assertContractList('bedsSegments.listSegments', 'segment', await fetchJson<unknown>(backendPath('/api/segments'), { method: 'GET' })),
     getSegment: async (segmentId: string): Promise<Segment | null> => {
       const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -257,7 +290,7 @@ export const workflowAdapter = {
       if (!response.ok) {
         throw new Error(await parseBackendError(response));
       }
-      return response.json() as Promise<Segment>;
+      return assertContract('bedsSegments.getSegment', 'segment', await response.json());
     },
     upsertSegment: async (segment: Segment): Promise<Segment> =>
       fetchJson<Segment>(`/api/segments/${encodeURIComponent(segment.segmentId)}`, {
@@ -276,7 +309,8 @@ export const workflowAdapter = {
     },
   },
   taxonomy: {
-    listCrops: async (): Promise<Crop[]> => fetchJson<Crop[]>('/api/crops', { method: 'GET' }),
+    listCrops: async (): Promise<Crop[]> =>
+      assertContractList('taxonomy.listCrops', 'crop', await fetchJson<unknown>(backendPath('/api/crops'), { method: 'GET' })),
     getCrop: async (cropId: string): Promise<Crop | null> => {
       const response = await fetch(toBackendApiUrl(`/api/crops/${encodeURIComponent(cropId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -285,7 +319,7 @@ export const workflowAdapter = {
       if (!response.ok) {
         throw new Error(await parseBackendError(response));
       }
-      return response.json() as Promise<Crop>;
+      return assertContract('taxonomy.getCrop', 'crop', await response.json());
     },
     upsertCrop: async (crop: Crop): Promise<Crop> =>
       fetchJson<Crop>(`/api/crops/${encodeURIComponent(crop.cropId)}`, {
@@ -302,7 +336,8 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
-    listCropPlans: async (): Promise<CropPlan[]> => fetchJson<CropPlan[]>('/api/cropPlans', { method: 'GET' }),
+    listCropPlans: async (): Promise<CropPlan[]> =>
+      assertContractList('taxonomy.listCropPlans', 'cropPlan', await fetchJson<unknown>(backendPath('/api/cropPlans'), { method: 'GET' })),
     getCropPlan: async (planId: string): Promise<CropPlan | null> => {
       const response = await fetch(toBackendApiUrl(`/api/cropPlans/${encodeURIComponent(planId)}`), { method: 'GET' });
       if (response.status === 404) {
@@ -311,7 +346,7 @@ export const workflowAdapter = {
       if (!response.ok) {
         throw new Error(await parseBackendError(response));
       }
-      return response.json() as Promise<CropPlan>;
+      return assertContract('taxonomy.getCropPlan', 'cropPlan', await response.json());
     },
     upsertCropPlan: async (cropPlan: CropPlan): Promise<CropPlan> =>
       fetchJson<CropPlan>(`/api/cropPlans/${encodeURIComponent(cropPlan.planId)}`, {
@@ -331,7 +366,11 @@ export const workflowAdapter = {
   },
   inventory: {
     listSeedInventoryItems: async (): Promise<SeedInventoryItem[]> =>
-      fetchJson<SeedInventoryItem[]>('/api/seedInventoryItems', { method: 'GET' }),
+      assertContractList(
+        'inventory.listSeedInventoryItems',
+        'seedInventoryItem',
+        await fetchJson<unknown>(backendPath('/api/seedInventoryItems'), { method: 'GET' }),
+      ),
     getSeedInventoryItem: async (seedInventoryItemId: string): Promise<SeedInventoryItem | null> => {
       const response = await fetch(
         toBackendApiUrl(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItemId)}`),
@@ -343,7 +382,7 @@ export const workflowAdapter = {
       if (!response.ok) {
         throw new Error(await parseBackendError(response));
       }
-      return response.json() as Promise<SeedInventoryItem>;
+      return assertContract('inventory.getSeedInventoryItem', 'seedInventoryItem', await response.json());
     },
     upsertSeedInventoryItem: async (seedInventoryItem: SeedInventoryItem): Promise<SeedInventoryItem> =>
       fetchJson<SeedInventoryItem>(`/api/seedInventoryItems/${encodeURIComponent(seedInventoryItem.seedInventoryItemId)}`, {
