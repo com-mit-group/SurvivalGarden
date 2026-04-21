@@ -164,6 +164,12 @@ if (schemaEntries.length === 0) {
   throw new Error('Backend OpenAPI document did not include components.schemas for contract generation.');
 }
 
+await mkdir(contractsDir, { recursive: true });
+for (const entry of schemaEntries) {
+  const schemaPath = path.join(contractsDir, entry.schemaFile);
+  await writeFile(schemaPath, `${JSON.stringify(entry.schemaDocument, null, 2)}\n`, 'utf8');
+}
+
 const sections = [];
 for (const entry of schemaEntries) {
   const content = await compile(normalizeSchemaUris(entry.schemaDocument), toTypeName(entry.schemaFile), {
@@ -231,14 +237,8 @@ export const backendApiFetch = async <T>(
 `;
 
 await mkdir(outputDir, { recursive: true });
-await mkdir(contractsDir, { recursive: true });
 await writeFile(contractsOutputFile, contracts, 'utf8');
 await writeFile(openApiPathsOutputFile, astToString(openApiPaths), 'utf8');
 if (shouldWriteClient) {
   await writeFile(clientOutputFile, client, 'utf8');
-}
-
-for (const entry of schemaEntries) {
-  const schemaPath = path.join(contractsDir, entry.schemaFile);
-  await writeFile(schemaPath, `${JSON.stringify(entry.schemaDocument, null, 2)}\n`, 'utf8');
 }
