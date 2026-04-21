@@ -702,9 +702,10 @@ describeIndexedDb('indexeddb photo blob storage', () => {
 
     const report = await saveAppStateToIndexedDb(imported, { mode: 'merge' });
     const loaded = await loadAppStateFromIndexedDb();
+    const loadedBeds = loaded ? listBedsFromAppState(loaded) : [];
 
-    expect(loaded?.beds).toHaveLength(1);
-    expect(loaded?.beds[0]?.name).toBe('Imported Bed Name');
+    expect(loadedBeds).toHaveLength(1);
+    expect(loadedBeds[0]?.name).toBe('Imported Bed Name');
     expect(loaded?.tasks).toHaveLength(1);
     expect(loaded?.tasks[0]?.sourceKey).toBe('shared-source');
     expect(loaded?.tasks[0]?.status).toBe('done');
@@ -724,7 +725,8 @@ describeIndexedDb('indexeddb photo blob storage', () => {
     }, { mode: 'merge' });
 
     const loaded = await loadAppStateFromIndexedDb();
-    expect(loaded?.beds[0]?.name).toBe('Imported Name');
+    const loadedBeds = loaded ? listBedsFromAppState(loaded) : [];
+    expect(loadedBeds[0]?.name).toBe('Imported Name');
     expect(report?.conflicts.some((entry) => entry.includes('beds:bed-conflict'))).toBe(true);
   });
 
@@ -760,7 +762,8 @@ describeIndexedDb('indexeddb photo blob storage', () => {
     await saveAppStateToIndexedDb(replacementState, { mode: 'replace' });
 
     const loaded = await loadAppStateFromIndexedDb();
-    expect(loaded?.beds).toEqual([{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed' }]);
+    const loadedBeds = loaded ? listBedsFromAppState(loaded) : [];
+    expect(loadedBeds).toEqual([{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed' }]);
     expect(loaded?.crops).toEqual([{ ...validCrop, cropId: 'replacement-crop', name: 'Replacement Crop' }]);
     expect(loaded?.cropPlans).toEqual([{ ...validCropPlan, planId: 'replacement-plan', cropId: 'replacement-crop' }]);
     expect(loaded?.batches).toEqual([{ ...validBatch, batchId: 'replacement-batch', bedId: 'replacement-bed', cropId: 'replacement-crop' }]);
