@@ -87,6 +87,7 @@ describe('crop.schema.json', () => {
     const payload = {
       cropId: 'crop_partial',
       name: 'Partial Crop',
+      speciesId: 'species_partial',
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
     };
@@ -99,6 +100,7 @@ describe('crop.schema.json', () => {
     const payload = {
       id: 'crop_garlic_unknown_variety',
       commonName: 'Garlic',
+      speciesId: 'species_garlic',
       createdAt: '2026-01-01T01:00:00+01:00',
       updatedAt: '2026-01-01T01:00:00+01:00',
       rules: {

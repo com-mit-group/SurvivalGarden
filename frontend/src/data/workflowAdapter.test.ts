@@ -33,6 +33,7 @@ const validSegment = {
 const validCrop = {
   cropId: 'crop-1',
   name: 'Carrot',
+  speciesId: 'species_carrot',
   scientificName: 'Daucus carota',
   aliases: ['Garden carrot', 'Nantes carrot'],
   isUserDefined: true,
@@ -330,6 +331,7 @@ describe('workflow adapter transport', () => {
     await workflowAdapter.taxonomy.upsertCrop({
       cropId: 'crop 1',
       name: 'Potato',
+      speciesId: 'species_potato',
       companionsGood: [],
       companionsAvoid: [],
       rules: {

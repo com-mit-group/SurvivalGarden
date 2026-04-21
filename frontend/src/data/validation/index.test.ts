@@ -87,6 +87,7 @@ const validSpecies = {
 const validCrop = {
   cropId: 'crop-1',
   name: 'Carrot',
+  speciesId: 'species_carrot',
   scientificName: 'Daucus carota',
   aliases: ['Garden carrot', 'Nantes carrot'],
   isUserDefined: true,
@@ -159,6 +160,7 @@ const validCrop = {
 const validPartialCrop = {
   cropId: 'crop-partial',
   name: 'Partial Crop',
+  speciesId: 'species_carrot',
   createdAt: '2024-01-03T00:00:00Z',
   updatedAt: '2024-01-03T00:00:00Z',
 };

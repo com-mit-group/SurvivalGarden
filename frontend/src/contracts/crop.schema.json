@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "speciesId",
     "createdAt",
     "updatedAt"
   ],
@@ -26,14 +27,6 @@
           "properties": {
             "commonName": {}
           }
-        },
-        {
-          "required": [
-            "cultivar"
-          ],
-          "properties": {
-            "cultivar": {}
-          }
         }
       ]
     }
@@ -53,13 +46,13 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Legacy migration alias for crop type naming; use name for crop type display labels."
+      "description": "Deprecated migration-only alias for legacy cultivar text that was previously stored on crop records."
     },
     "cultivarGroup": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Optional informational cultivar group label associated with this crop type."
+      "description": "Deprecated migration-only alias for legacy cultivar-group metadata; crop types should not carry cultivar semantics."
     },
     "speciesId": {
       "$ref": "#/$defs/id",
