@@ -13,6 +13,7 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
+  removeBed,
   removeBatch,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
@@ -29,6 +30,7 @@ import {
   mutateBatchAssignment,
   regenerateCalendarTasks,
   transitionBatchStage,
+  upsertBed,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { canTransition, inferBatchStartMethod } from './domain';
@@ -1125,18 +1127,7 @@ function BedDetailPage() {
 
       setIsDeletingBed(true);
 
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
-        return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
-      });
-
-      const nextState = {
-        ...appState,
-        segments: nextSegments,
-        beds: [],
-      };
-
-      await saveAppStateToIndexedDb(nextState);
+      await removeBed(bedId);
       await navigate('/beds');
     } catch (error) {
       setDeleteBedMessage(error instanceof Error ? error.message : 'Failed to delete bed.');
@@ -1166,14 +1157,14 @@ function BedDetailPage() {
           return;
         }
 
-        const nextState = upsertBedInAppState(appState, {
+        const savedBed = await upsertBed({
           ...latestBed,
           notes,
           updatedAt: new Date().toISOString(),
         });
-
-        await saveAppStateToIndexedDb(nextState);
-        setBed((current) => (current && current.bedId === bedId ? { ...current, notes } : current));
+        setBed((current) => (current && current.bedId === bedId ? savedBed : current));
+        const refreshedState = await loadAppStateFromIndexedDb();
+        refreshBedBatches(refreshedState);
       };
 
       void persistNotes();
@@ -1182,7 +1173,7 @@ function BedDetailPage() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [bed, bedId, notes]);
+  }, [bed, bedId, notes, refreshBedBatches]);
 
   if (isLoading) {
     return <p className="beds-empty-state">Loading bed…</p>;
@@ -8228,6 +8219,11 @@ function App() {
         <h1>SurvivalGarden</h1>
         <p className={`app-mode-indicator app-mode-indicator--${frontendMode}`} aria-live="polite">
           Mode: {frontendMode === 'backend' ? '.NET backend' : 'TypeScript local'}
+        </p>
+        <p className="app-mode-authority-note">
+          {frontendMode === 'backend'
+            ? 'Canonical updates are backend-authoritative; UI state reflects server responses.'
+            : 'Local TypeScript mode is enabled for UI-only workflows and development fallback.'}
         </p>
       </header>
 

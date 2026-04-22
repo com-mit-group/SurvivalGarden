@@ -63,6 +63,13 @@ summary:focus-visible {
   background: #d1fae5;
 }
 
+.app-mode-authority-note {
+  margin: 0.5rem auto 0;
+  max-width: 48rem;
+  font-size: 0.825rem;
+  color: #4b5563;
+}
+
 .app-content {
   display: grid;
   padding: 1.5rem 1rem 5.5rem;
