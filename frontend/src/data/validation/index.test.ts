@@ -266,7 +266,6 @@ const validSeedInventoryItem = {
 const validAppState = {
   schemaVersion: 1,
   segments: [validSegment],
-  beds: [validBed],
   species: [validSpecies],
   crops: [validCrop],
   cultivars: [
@@ -553,9 +552,14 @@ describe('data boundary validation', () => {
   it('canonicalizes export ordering and keeps photo data metadata-only', () => {
     const unorderedState = {
       ...validAppState,
-      beds: [
-        { ...validBed, bedId: 'bed-2', name: 'B bed' },
-        { ...validBed, bedId: 'bed-1', name: 'A bed' },
+      segments: [
+        {
+          ...validSegment,
+          beds: [
+            { ...validBed, bedId: 'bed-2', name: 'B bed', x: 2, y: 0, width: 2, height: 1 },
+            { ...validBed, bedId: 'bed-1', name: 'A bed', x: 0, y: 0, width: 2, height: 1 },
+          ],
+        },
       ],
       batches: [
         {
@@ -574,12 +578,12 @@ describe('data boundary validation', () => {
     };
 
     const exported = JSON.parse(serializeAppStateForExport(unorderedState)) as {
-      beds: Array<{ bedId: string }>;
+      segments: Array<{ beds: Array<{ bedId: string }> }>;
       tasks: Array<{ id: string }>;
       batches: Array<{ photos?: Array<{ id: string; filename?: string; blobBase64?: string }> }>;
     };
 
-    expect(exported.beds.map((bed) => bed.bedId)).toEqual(['bed-1', 'bed-2']);
+    expect(exported.segments[0]?.beds.map((bed) => bed.bedId)).toEqual(['bed-1', 'bed-2']);
     expect(exported.tasks.map((task) => task.id)).toEqual(['task-1', 'task-2']);
     expect(exported.batches[0]?.photos?.map((photo) => photo.id)).toEqual(['photo-1', 'photo-2']);
     expect(JSON.stringify(exported)).not.toContain('blobBase64');
@@ -671,7 +675,12 @@ describeIndexedDb('indexeddb photo blob storage', () => {
 
     const imported = {
       ...validAppState,
-      beds: [{ ...validBed, bedId: 'bed-1', name: 'Imported Bed Name', updatedAt: '2024-01-03T00:00:00Z' }],
+      segments: [
+        {
+          ...validSegment,
+          beds: [{ ...validBed, bedId: 'bed-1', name: 'Imported Bed Name', updatedAt: '2024-01-03T00:00:00Z', x: 0, y: 0, width: 2, height: 1 }],
+        },
+      ],
       tasks: [
         {
           ...validTask,
@@ -712,12 +721,22 @@ describeIndexedDb('indexeddb photo blob storage', () => {
   it('merge mode prefers latest updatedAt and records conflict for equal timestamps', async () => {
     await saveAppStateToIndexedDb({
       ...validAppState,
-      beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Current Name', updatedAt: '2024-01-03T00:00:00Z' }],
+      segments: [
+        {
+          ...validSegment,
+          beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Current Name', updatedAt: '2024-01-03T00:00:00Z', x: 0, y: 0, width: 2, height: 1 }],
+        },
+      ],
     }, { mode: 'replace' });
 
     const report = await saveAppStateToIndexedDb({
       ...validAppState,
-      beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Imported Name', updatedAt: '2024-01-03T00:00:00Z' }],
+      segments: [
+        {
+          ...validSegment,
+          beds: [{ ...validBed, bedId: 'bed-conflict', name: 'Imported Name', updatedAt: '2024-01-03T00:00:00Z', x: 0, y: 0, width: 2, height: 1 }],
+        },
+      ],
     }, { mode: 'merge' });
 
     const loaded = await loadAppStateFromIndexedDb();
@@ -748,7 +767,12 @@ describeIndexedDb('indexeddb photo blob storage', () => {
 
     const replacementState = {
       ...validAppState,
-      beds: [{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed' }],
+      segments: [
+        {
+          ...validSegment,
+          beds: [{ ...validBed, bedId: 'replacement-bed', name: 'Replacement Bed', x: 0, y: 0, width: 2, height: 1 }],
+        },
+      ],
       crops: [{ ...validCrop, cropId: 'replacement-crop', name: 'Replacement Crop' }],
       cropPlans: [{ ...validCropPlan, planId: 'replacement-plan', cropId: 'replacement-crop' }],
       batches: [{ ...validBatch, batchId: 'replacement-batch', bedId: 'replacement-bed', cropId: 'replacement-crop' }],

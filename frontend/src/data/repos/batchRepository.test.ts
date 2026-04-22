@@ -409,7 +409,7 @@ describe('batch normalization pipeline', () => {
   it('normalizes legacy batches through repository read paths', () => {
     const appState = {
       schemaVersion: 1,
-      beds: [],
+      segments: [],
       crops: [],
       cropPlans: [],
       tasks: [],

@@ -961,9 +961,6 @@ const canonicalizeForExport = (appState: AppState): AppState => {
 
   return withCultivars({
     ...appState,
-    ...(Array.isArray((appState as { beds?: unknown[] }).beds)
-      ? { beds: sortCollectionByKey((appState as { beds?: unknown[] }).beds ?? [], ['bedId', 'gardenId', 'name']) }
-      : {}),
     ...(appState.species
       ? { species: sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) }
       : {}),
