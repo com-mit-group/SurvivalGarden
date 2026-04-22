@@ -168,7 +168,6 @@ const migrateLegacyBedTypes = (payload: unknown): unknown => {
   }
 
   const state = payload as Record<string, unknown>;
-
   const segments = Array.isArray(state.segments)
     ? state.segments.map((segment) => {
         if (!segment || typeof segment !== 'object') {
@@ -229,6 +228,9 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   }
 
   const state = payload as Record<string, unknown>;
+  const stateWithoutLegacyLayoutFields = { ...state };
+  delete stateWithoutLegacyLayoutFields.beds;
+  delete stateWithoutLegacyLayoutFields.paths;
 
   const cropPlanWarningMeta = (plan: Record<string, unknown>): { entityType: 'cropPlan'; entityId?: string } =>
     typeof plan.planId === 'string' ? { entityType: 'cropPlan', entityId: plan.planId } : { entityType: 'cropPlan' };
@@ -441,7 +443,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
     return {
       payload: withSegments(
         {
-          ...state,
+          ...stateWithoutLegacyLayoutFields,
           segments: normalizedSegments,
         },
         false,
@@ -518,8 +520,7 @@ const migrateLegacyLayoutModel = (payload: unknown): { payload: unknown; report:
   });
 
   const nextState = {
-    ...state,
-    paths: [],
+    ...stateWithoutLegacyLayoutFields,
     segments: [
       {
         ...defaultSegment,
@@ -960,6 +961,9 @@ const canonicalizeForExport = (appState: AppState): AppState => {
 
   return withCultivars({
     ...appState,
+    ...(Array.isArray((appState as { beds?: unknown[] }).beds)
+      ? { beds: sortCollectionByKey((appState as { beds?: unknown[] }).beds ?? [], ['bedId', 'gardenId', 'name']) }
+      : {}),
     ...(appState.species
       ? { species: sortCollectionByKey(appState.species, ['id', 'commonName', 'scientificName']) }
       : {}),

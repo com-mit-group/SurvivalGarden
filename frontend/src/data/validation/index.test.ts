@@ -336,12 +336,6 @@ describe('assertValid', () => {
             path: '/schemaVersion',
             keyword: 'minimum',
           }),
-          expect.objectContaining({
-            schemaName: 'appState',
-            path: '/',
-            keyword: 'required',
-            message: expect.stringContaining("must have required property 'beds'"),
-          }),
         ]),
       );
     }
@@ -472,8 +466,10 @@ describe('data boundary validation', () => {
 
     const imported = parseImportedAppState(exported);
     const reExportedPayload = JSON.parse(serializeAppStateForExport(imported));
+    const canonicalExpected = canonicalizeForComparison(exportedPayload) as Record<string, unknown>;
+    delete canonicalExpected.beds;
 
-    expect(canonicalizeForComparison(reExportedPayload)).toEqual(canonicalizeForComparison(exportedPayload));
+    expect(canonicalizeForComparison(reExportedPayload)).toEqual(canonicalExpected);
 
     const importedCrop = imported.crops.find((crop) => crop.cropId === 'crop-vnext');
     expect(importedCrop).toMatchObject({
