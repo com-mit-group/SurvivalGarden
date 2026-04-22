@@ -1569,7 +1569,10 @@ function CalendarPage() {
       const updatedTask = { ...task, status: isDone ? 'pending' : 'done' };
       const nextState = upsertTaskInAppState(appState, updatedTask);
       await saveAppStateToIndexedDb(nextState);
-      setTasks((current) => current.map((entry) => (entry.id === updatedTask.id ? updatedTask : entry)));
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (refreshedState) {
+        setTasks(listTasksFromAppState(refreshedState));
+      }
     } finally {
       setSavingTaskId(null);
     }
@@ -1630,7 +1633,8 @@ function CalendarPage() {
       }
 
       await saveAppStateToIndexedDb(nextState);
-      setTasks(tasksAfter);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      setTasks(refreshedState ? listTasksFromAppState(refreshedState) : tasksAfter);
       const warnings = generationResult.diagnostics.map((entry) => `${entry.cropId}: ${entry.reason}`);
       setRegenerationSummary({ added, updated, unchanged, warnings });
     } catch (error) {
@@ -4242,12 +4246,14 @@ function BatchesPage({
 
       const nextState = upsertBatchInAppState(appState, nextBatch);
       await saveAppStateToIndexedDb(nextState);
-      setBatches(listBatchesFromAppState(nextState));
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const stateForUi = refreshedState ?? nextState;
+      setBatches(listBatchesFromAppState(stateForUi));
+      setCropIds(stateForUi.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(stateForUi.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          stateForUi.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(stateForUi.species))]),
         ),
       );
       setFormErrors({});
@@ -5350,7 +5356,8 @@ function BatchDetailPage() {
 
       const nextState = upsertBatchInAppState(appState, nextBatch);
       await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = (refreshedState ?? nextState).batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setTimelineMessage(
         latestStageEventAt && occurredAt < latestStageEventAt
@@ -5456,7 +5463,8 @@ function BatchDetailPage() {
     const nextBatch: BatchWithPhotos = { ...(batch as BatchWithPhotos), photos: nextPhotos };
     const nextState = upsertBatchInAppState(appState, nextBatch as Batch);
     await saveAppStateToIndexedDb(nextState);
-    const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+    const refreshedState = await loadAppStateFromIndexedDb();
+    const refreshedBatch = (refreshedState ?? nextState).batches.find((candidate) => candidate.batchId === batchId) ?? null;
     setBatch(refreshedBatch);
   };
 
