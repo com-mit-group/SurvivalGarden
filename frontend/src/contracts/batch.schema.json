@@ -7,9 +7,9 @@
   "required": [
     "batchId",
     "startedAt",
-    "currentStage",
+    "stage",
     "stageEvents",
-    "bedAssignments"
+    "assignments"
   ],
   "anyOf": [
     {

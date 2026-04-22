@@ -186,9 +186,9 @@ export const normalizeBatchCandidate = (value: unknown, options?: { forMigration
   const normalized: Record<string, unknown> = {
     batchId: candidate.batchId ?? candidate.id,
     startedAt: canonicalStart,
-    currentStage: stage,
+    stage,
     stageEvents,
-    bedAssignments: assignments,
+    assignments,
   };
 
   if (candidate.cultivarId !== undefined) {
@@ -203,12 +203,12 @@ export const normalizeBatchCandidate = (value: unknown, options?: { forMigration
     normalized.cropTypeId = candidate.cropTypeId;
   }
 
-  if (candidate.stage !== undefined || forMigrationReport) {
-    normalized.stage = normalizeBatchStage(asString(candidate.stage) ?? stage);
+  if (candidate.currentStage !== undefined || forMigrationReport) {
+    normalized.currentStage = normalizeBatchStage(asString(candidate.currentStage) ?? stage);
   }
 
-  if (candidate.assignments !== undefined) {
-    normalized.assignments = candidate.assignments;
+  if (candidate.bedAssignments !== undefined) {
+    normalized.bedAssignments = candidate.bedAssignments;
   }
 
   if (Array.isArray(candidate.photos) || forMigrationReport) {
@@ -543,11 +543,11 @@ export const listBatchesFromAppState = (
         return true;
       }
 
-      if (filter.stage && batch.currentStage !== filter.stage) {
+      if (filter.stage && batch.stage !== filter.stage) {
         return false;
       }
 
-      if (filter.cropId && batch.cultivarId !== filter.cropId) {
+      if (filter.cropId && batch.cultivarId !== filter.cropId && batch.cropId !== filter.cropId) {
         return false;
       }
 
