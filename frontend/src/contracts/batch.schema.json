@@ -7,9 +7,9 @@
   "required": [
     "batchId",
     "startedAt",
-    "stage",
+    "currentStage",
     "stageEvents",
-    "assignments"
+    "bedAssignments"
   ],
   "anyOf": [
     {
@@ -98,7 +98,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Legacy alias for currentStage during migration."
+      "description": "Legacy alias for currentStage during migration input only."
     },
     "currentStage": {
       "type": "string",
@@ -125,7 +125,7 @@
       "items": {
         "$ref": "#/$defs/bedAssignment"
       },
-      "description": "Legacy alias for bedAssignments during migration."
+      "description": "Legacy alias for bedAssignments during migration input only."
     },
     "notes": {
       "type": "string",

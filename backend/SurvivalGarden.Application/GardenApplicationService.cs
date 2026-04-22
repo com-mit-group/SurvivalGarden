@@ -38,15 +38,34 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
     public async Task<JsonArray> ListAsync(string collectionName, CancellationToken cancellationToken = default)
     {
         var state = await EnsureStateAsync(cancellationToken);
-        return GardenJsonCollectionHelpers.CloneArray(GardenJsonCollectionHelpers.GetCollection(state, collectionName));
+        var rows = GardenJsonCollectionHelpers.CloneArray(GardenJsonCollectionHelpers.GetCollection(state, collectionName));
+        if (collectionName != "batches")
+        {
+            return rows;
+        }
+
+        foreach (var batch in rows.OfType<JsonObject>())
+        {
+            GardenJsonCollectionHelpers.NormalizeBatchForPersistence(batch);
+        }
+
+        return rows;
     }
 
     public async Task<JsonObject?> GetByIdAsync(string collectionName, string idProperty, string id, CancellationToken cancellationToken = default)
     {
         var records = await ListAsync(collectionName, cancellationToken);
-        return records
+        var row = records
             .OfType<JsonObject>()
             .FirstOrDefault(x => string.Equals(x[idProperty]?.GetValue<string>(), id, StringComparison.Ordinal));
+
+        if (row is null || collectionName != "batches")
+        {
+            return row;
+        }
+
+        GardenJsonCollectionHelpers.NormalizeBatchForPersistence(row);
+        return row;
     }
 
     public async Task<JsonObject> UpsertAsync(string collectionName, string idProperty, JsonObject entity, CancellationToken cancellationToken = default)
@@ -59,7 +78,7 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
 
         if (collectionName == "batches")
         {
-            GardenJsonCollectionHelpers.CanonicalizeBatchAliases(entity);
+            GardenJsonCollectionHelpers.NormalizeBatchForPersistence(entity);
         }
 
         var state = await EnsureStateAsync(cancellationToken);
@@ -118,8 +137,8 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
 
         var filtered = records
             .OfType<JsonObject>()
-            .Where(batch => string.IsNullOrWhiteSpace(stage) || string.Equals(batch["stage"]?.GetValue<string>(), stage, StringComparison.OrdinalIgnoreCase))
-            .Where(batch => string.IsNullOrWhiteSpace(cropId) || string.Equals(batch["cropId"]?.GetValue<string>(), cropId, StringComparison.Ordinal))
+            .Where(batch => string.IsNullOrWhiteSpace(stage) || string.Equals(batch["currentStage"]?.GetValue<string>(), stage, StringComparison.OrdinalIgnoreCase))
+            .Where(batch => string.IsNullOrWhiteSpace(cropId) || string.Equals(batch["cultivarId"]?.GetValue<string>(), cropId, StringComparison.Ordinal))
             .Where(batch => string.IsNullOrWhiteSpace(bedId) || GardenJsonCollectionHelpers.HasBedAssignment(batch, bedId))
             .Where(batch =>
             {
