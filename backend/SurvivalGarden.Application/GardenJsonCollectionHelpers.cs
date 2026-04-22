@@ -21,24 +21,21 @@ internal static class GardenJsonCollectionHelpers
         return new JsonArray(source.Select(item => item?.DeepClone()).ToArray());
     }
 
-    internal static void CanonicalizeBatchAliases(JsonObject batch)
+    internal static void NormalizeBatchForPersistence(JsonObject batch)
     {
-        // Keep both canonical and legacy alias fields to mirror current TypeScript contract behavior.
-        // `assignments` is canonical while `bedAssignments` is a compatibility alias still present in fixtures.
+        if (batch["batchId"] is null && batch["id"] is not null)
+        {
+            batch["batchId"] = batch["id"]?.DeepClone();
+        }
+
+        if (batch["cultivarId"] is null && batch["cropId"] is not null)
+        {
+            batch["cultivarId"] = batch["cropId"]?.DeepClone();
+        }
 
         if (batch["currentStage"] is null && batch["stage"] is not null)
         {
             batch["currentStage"] = batch["stage"]?.DeepClone();
-        }
-
-        if (batch["stage"] is null && batch["currentStage"] is not null)
-        {
-            batch["stage"] = batch["currentStage"]?.DeepClone();
-        }
-
-        if (batch["assignments"] is null && batch["bedAssignments"] is not null)
-        {
-            batch["assignments"] = batch["bedAssignments"]?.DeepClone();
         }
 
         if (batch["bedAssignments"] is null && batch["assignments"] is not null)
@@ -46,25 +43,50 @@ internal static class GardenJsonCollectionHelpers
             batch["bedAssignments"] = batch["assignments"]?.DeepClone();
         }
 
+        if (batch["bedAssignments"] is null)
+        {
+            batch["bedAssignments"] = new JsonArray();
+        }
+
         if (batch["stageEvents"] is null)
         {
             batch["stageEvents"] = new JsonArray();
         }
 
-        if (batch["assignments"] is null)
+        if (batch["currentStage"] is null && batch["stageEvents"] is JsonArray stageEvents)
         {
-            batch["assignments"] = new JsonArray();
+            var lastEvent = stageEvents.OfType<JsonObject>().LastOrDefault();
+            if (lastEvent is not null && lastEvent["stage"] is not null)
+            {
+                batch["currentStage"] = lastEvent["stage"]?.DeepClone();
+            }
         }
 
-        if (batch["bedAssignments"] is null)
+        foreach (var eventNode in (batch["stageEvents"] as JsonArray)?.OfType<JsonObject>() ?? Enumerable.Empty<JsonObject>())
         {
-            batch["bedAssignments"] = batch["assignments"]?.DeepClone();
+            if (eventNode["stage"] is null && eventNode["type"] is not null)
+            {
+                eventNode["stage"] = eventNode["type"]?.DeepClone();
+            }
+
+            if (eventNode["occurredAt"] is null && eventNode["date"] is not null)
+            {
+                eventNode["occurredAt"] = eventNode["date"]?.DeepClone();
+            }
+
+            eventNode.Remove("type");
+            eventNode.Remove("date");
         }
+
+        batch.Remove("id");
+        batch.Remove("cropId");
+        batch.Remove("stage");
+        batch.Remove("assignments");
     }
 
     internal static bool HasBedAssignment(JsonObject batch, string bedId)
     {
-        var assignments = batch["assignments"] as JsonArray ?? batch["bedAssignments"] as JsonArray;
+        var assignments = batch["bedAssignments"] as JsonArray ?? batch["assignments"] as JsonArray;
         if (assignments is null)
         {
             return false;

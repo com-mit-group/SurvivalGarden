@@ -59,8 +59,8 @@ export interface BatchStartQuantity {
 
 export interface Batch {
   batchId: string;
-  cultivarId?: string;
-  cropId: string;
+  cultivarId: string;
+  cropId?: string;
   cropTypeId?: string;
   variety?: string;
   startedAt: string;
@@ -71,11 +71,11 @@ export interface Batch {
   seedCountPlanned?: number;
   seedCountGerminated?: number;
   plantCountAlive?: number;
-  currentStage?: string;
-  stage: string;
+  currentStage: string;
+  stage?: string;
   stageEvents: BatchStageEvent[];
-  bedAssignments?: BatchBedAssignment[];
-  assignments: BatchBedAssignment[];
+  bedAssignments: BatchBedAssignment[];
+  assignments?: BatchBedAssignment[];
   notes?: string;
   photos?: BatchPhotoMetadata[] | unknown[] | undefined;
   meta?: {

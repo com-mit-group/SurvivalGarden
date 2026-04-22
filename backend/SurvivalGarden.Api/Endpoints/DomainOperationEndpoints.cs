@@ -154,14 +154,13 @@ internal static class DomainOperationEndpoints
 
     private static (bool Ok, string? Error, JsonObject Batch) ApplyStageEvent(JsonObject batch, string nextStage, string occurredAt)
     {
-        var currentStage = NormalizeStage(batch["stage"]?.GetValue<string>() ?? "unknown");
+        var currentStage = NormalizeStage(batch["currentStage"]?.GetValue<string>() ?? batch["stage"]?.GetValue<string>() ?? "unknown");
         var normalizedNextStage = NormalizeStage(nextStage);
         if (normalizedNextStage != currentStage && !CanTransition(currentStage, normalizedNextStage))
         {
             return (false, "invalid_stage_transition", batch);
         }
 
-        batch["stage"] = normalizedNextStage;
         batch["currentStage"] = normalizedNextStage;
         var stageEvents = batch["stageEvents"] as JsonArray ?? new JsonArray();
         stageEvents.Add(new JsonObject
@@ -192,7 +191,7 @@ internal static class DomainOperationEndpoints
 
     private static JsonObject? GetActiveAssignment(JsonObject batch, string at)
     {
-        var assignments = batch["assignments"] as JsonArray;
+        var assignments = batch["bedAssignments"] as JsonArray ?? batch["assignments"] as JsonArray;
         if (assignments is null)
         {
             return null;
@@ -219,9 +218,8 @@ internal static class DomainOperationEndpoints
 
     private static (bool Ok, string? Error, JsonObject Batch) MutateAssignment(JsonObject batch, string operation, string? bedId, string at)
     {
-        var assignments = batch["assignments"] as JsonArray ?? new JsonArray();
-        batch["assignments"] = assignments;
-        batch["bedAssignments"] = assignments.DeepClone();
+        var assignments = batch["bedAssignments"] as JsonArray ?? batch["assignments"] as JsonArray ?? new JsonArray();
+        batch["bedAssignments"] = assignments;
 
         if (operation == "assign")
         {
