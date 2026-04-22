@@ -15,22 +15,21 @@ import {
   parseImportedAppState,
   removeBed,
   removeBatch,
+  removeSeedInventoryItem,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
-  removeSeedInventoryItemFromAppState,
-  upsertSeedInventoryItemInAppState,
   upsertTaskInAppState,
   upsertBatchInAppState,
-  upsertCropInAppState,
-  upsertBedInAppState,
   getActiveBedAssignment,
   assertValid,
   mutateBatchAssignment,
   regenerateCalendarTasks,
   transitionBatchStage,
   upsertBed,
+  upsertCrop,
+  upsertSeedInventoryItem,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { canTransition, inferBatchStartMethod } from './domain';
@@ -2310,8 +2309,7 @@ function SeedInventoryPage() {
         updatedAt: nowIso,
       };
 
-      const nextState = upsertSeedInventoryItemInAppState(appState, nextItem);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertSeedInventoryItem(nextItem);
       await loadInventory();
       resetForm();
     } finally {
@@ -2328,8 +2326,7 @@ function SeedInventoryPage() {
         return;
       }
 
-      const nextState = removeSeedInventoryItemFromAppState(appState, seedInventoryItemId);
-      await saveAppStateToIndexedDb(nextState);
+      await removeSeedInventoryItem(seedInventoryItemId);
       await loadInventory();
       if (editingId === seedInventoryItemId) {
         resetForm();
@@ -3623,18 +3620,21 @@ function BatchesPage({
         delete nextCrop.cultivarGroup;
       }
 
-      const nextState = upsertCropInAppState(appState, nextCrop);
-      await saveAppStateToIndexedDb(nextState);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      await upsertCrop(nextCrop);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(refreshedState.species))]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
@@ -4032,7 +4032,7 @@ function BatchesPage({
 
       const createdAt = new Date().toISOString();
       const cropId = createUniqueUserCropId(cultivar, appState.crops.map((crop) => crop.cropId));
-      const nextState = upsertCropInAppState(appState, {
+      await upsertCrop({
         cropId,
         name: cultivar,
         cultivar,
@@ -4053,19 +4053,21 @@ function BatchesPage({
         createdAt,
         updatedAt: createdAt,
       });
-
-      await saveAppStateToIndexedDb(nextState);
-      const nextSpeciesById = buildSpeciesLookup(nextState.species);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      const nextSpeciesById = buildSpeciesLookup(refreshedState.species);
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
