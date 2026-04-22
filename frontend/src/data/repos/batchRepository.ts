@@ -187,8 +187,10 @@ export const normalizeBatchCandidate = (value: unknown, options?: { forMigration
     batchId: candidate.batchId ?? candidate.id,
     startedAt: canonicalStart,
     stage,
+    currentStage: stage,
     stageEvents,
     assignments,
+    bedAssignments: assignments,
   };
 
   if (candidate.cultivarId !== undefined) {
@@ -207,8 +209,16 @@ export const normalizeBatchCandidate = (value: unknown, options?: { forMigration
     normalized.currentStage = normalizeBatchStage(asString(candidate.currentStage) ?? stage);
   }
 
+  if (candidate.stage !== undefined) {
+    normalized.stage = normalizeBatchStage(asString(candidate.stage) ?? stage);
+  }
+
   if (candidate.bedAssignments !== undefined) {
     normalized.bedAssignments = candidate.bedAssignments;
+  }
+
+  if (candidate.assignments !== undefined) {
+    normalized.assignments = candidate.assignments;
   }
 
   if (Array.isArray(candidate.photos) || forMigrationReport) {
@@ -543,7 +553,7 @@ export const listBatchesFromAppState = (
         return true;
       }
 
-      if (filter.stage && batch.stage !== filter.stage) {
+      if (filter.stage && batch.currentStage !== filter.stage) {
         return false;
       }
 

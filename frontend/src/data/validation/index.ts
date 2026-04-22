@@ -287,7 +287,10 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
 
   const cropsById = new Map(cropCandidates.map((candidate) => [candidate.cropId, candidate]));
 
-  const remapCollection = (items: unknown, options?: { stripTaxonomy?: boolean }): unknown =>
+  const remapCollection = (
+    items: unknown,
+    options?: { stripTaxonomy?: boolean; normalizeBatchAliases?: boolean },
+  ): unknown =>
     Array.isArray(items)
       ? items.map((item) => {
           if (!isObjectRecord(item)) {
@@ -295,10 +298,51 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
           }
 
           const remappedCropId = resolveMigratedCropId(item, cropsById, cropCandidates);
-          const nextItem = {
+          const nextItem: Record<string, unknown> = {
             ...(options?.stripTaxonomy ? stripLegacyTaxonomyFields(item) : item),
             ...(remappedCropId ? { cropId: remappedCropId } : {}),
           };
+
+          if (options?.normalizeBatchAliases) {
+            if (typeof nextItem.currentStage !== 'string' && typeof nextItem.stage === 'string') {
+              nextItem.currentStage = nextItem.stage;
+            }
+
+            if (typeof nextItem.stage !== 'string' && typeof nextItem.currentStage === 'string') {
+              nextItem.stage = nextItem.currentStage;
+            }
+
+            if (!Array.isArray(nextItem.bedAssignments) && Array.isArray(nextItem.assignments)) {
+              nextItem.bedAssignments = nextItem.assignments;
+            }
+
+            if (!Array.isArray(nextItem.assignments) && Array.isArray(nextItem.bedAssignments)) {
+              nextItem.assignments = nextItem.bedAssignments;
+            }
+
+            if (typeof nextItem.cultivarId !== 'string' && typeof nextItem.cropId === 'string') {
+              nextItem.cultivarId = nextItem.cropId;
+            }
+
+            if (Array.isArray(nextItem.stageEvents)) {
+              nextItem.stageEvents = nextItem.stageEvents.map((stageEvent) => {
+                if (!isObjectRecord(stageEvent)) {
+                  return stageEvent;
+                }
+
+                const nextStageEvent: Record<string, unknown> = { ...stageEvent };
+                if (typeof nextStageEvent.stage !== 'string' && typeof nextStageEvent.type === 'string') {
+                  nextStageEvent.stage = nextStageEvent.type;
+                }
+
+                if (typeof nextStageEvent.occurredAt !== 'string' && typeof nextStageEvent.date === 'string') {
+                  nextStageEvent.occurredAt = nextStageEvent.date;
+                }
+
+                return nextStageEvent;
+              });
+            }
+          }
 
           return nextItem;
         })
@@ -307,7 +351,7 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
   return {
     ...payload,
     cropPlans: remapCollection(payload.cropPlans, { stripTaxonomy: true }),
-    batches: remapCollection(payload.batches, { stripTaxonomy: true }),
+    batches: remapCollection(payload.batches, { stripTaxonomy: true, normalizeBatchAliases: true }),
   };
 };
 
