@@ -898,7 +898,7 @@ const validateHierarchyForImport = (appState: AppState): HierarchyValidationResu
       return;
     }
 
-    if (cultivarId && !resolvedCultivarParent) {
+    if (cultivarId && !resolvedCultivarParent && !(legacyCropId && resolvedLegacyParent)) {
       errors.push(`batch:${batch.batchId} references missing cultivar:${cultivarId}.`);
     }
 
