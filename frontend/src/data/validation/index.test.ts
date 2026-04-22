@@ -226,6 +226,7 @@ const validSegment = {
 const validBatch = {
   batchId: 'batch-1',
   cropId: 'crop-1',
+  cultivarId: 'crop-1',
   variety: 'Nantes',
   startedAt: '2024-03-01T00:00:00Z',
   stage: 'sowing',
@@ -236,6 +237,7 @@ const validBatch = {
   meta: { confidence: 'exact' },
   stageEvents: [{ stage: 'sowing', occurredAt: '2024-03-01T00:00:00Z' }],
   assignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
+  bedAssignments: [{ bedId: 'bed-1', assignedAt: '2024-03-01T00:00:00Z' }],
   photos: [{ id: 'photo-1', storageRef: 'photo-1', contentType: 'image/jpeg' }],
 };
 
@@ -966,10 +968,13 @@ describe('batch repository boundary helpers', () => {
     const secondBatch = {
       batchId: 'batch-2',
       cropId: 'crop-1',
+      cultivarId: 'crop-1',
       startedAt: '2024-04-15T00:00:00Z',
       stage: 'transplant',
+      currentStage: 'transplant',
       stageEvents: [{ stage: 'transplant', occurredAt: '2024-04-15T00:00:00Z' }],
       assignments: [{ bedId: 'bed-2', assignedAt: '2024-04-15T00:00:00Z' }],
+      bedAssignments: [{ bedId: 'bed-2', assignedAt: '2024-04-15T00:00:00Z' }],
     };
 
     const withSecondBatch = upsertBatchInAppState(validAppState, secondBatch);
