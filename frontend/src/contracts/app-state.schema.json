@@ -6,7 +6,6 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "beds",
     "crops",
     "cropPlans",
     "batches",
@@ -18,13 +17,6 @@
     "schemaVersion": {
       "type": "integer",
       "minimum": 1
-    },
-    "beds": {
-      "description": "Deprecated compatibility field. Canonical layout ownership is segments[].beds[].",
-      "type": "array",
-      "items": {
-        "$ref": "https://survivalgarden/contracts/bed.schema.json"
-      }
     },
     "segments": {
       "type": "array",

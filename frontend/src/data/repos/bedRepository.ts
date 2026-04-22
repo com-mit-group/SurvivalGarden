@@ -27,9 +27,11 @@ const listBedsFromSegments = (state: AppState): Bed[] =>
     }),
   );
 
+const resolveCanonicalSegments = (state: AppState) => state.segments ?? [];
+
 export const getBedFromAppState = (appState: unknown, bedId: Bed['bedId']): Bed | null => {
   const state = assertValid('appState', appState);
-  const beds = state.segments && state.segments.length > 0 ? listBedsFromSegments(state) : state.beds;
+  const beds = listBedsFromSegments(state);
   const candidate = beds.find((bed) => bed.bedId === bedId);
 
   if (!candidate) {
@@ -41,25 +43,40 @@ export const getBedFromAppState = (appState: unknown, bedId: Bed['bedId']): Bed 
 
 export const listBedsFromAppState = (appState: unknown): Bed[] => {
   const state = assertValid('appState', appState);
-  const beds = state.segments && state.segments.length > 0 ? listBedsFromSegments(state) : state.beds;
+  const beds = listBedsFromSegments(state);
   return beds.map((bed) => assertValid('bed', normalizeBedCandidate(bed)));
 };
 
 export const upsertBedInAppState = (appState: unknown, bed: unknown): AppState => {
   const state = assertValid('appState', appState);
   const validBed = assertValid('bed', normalizeBedCandidate(bed));
-  const existingIndex = state.beds.findIndex((entry) => entry.bedId === validBed.bedId);
+  const targetSegmentId = validBed.segmentId ?? resolveCanonicalSegments(state)[0]?.segmentId;
+  const segments = resolveCanonicalSegments(state).map((segment) => {
+    const existingIndex = segment.beds.findIndex((entry) => entry.bedId === validBed.bedId);
+    if (existingIndex < 0 && segment.segmentId !== targetSegmentId) {
+      return segment;
+    }
 
-  const beds =
-    existingIndex >= 0
-      ? state.beds.map((entry, index) => (index === existingIndex ? validBed : entry))
-      : [...state.beds, validBed];
+    if (existingIndex < 0 && segment.segmentId === targetSegmentId) {
+      return { ...segment, beds: [...segment.beds, validBed] };
+    }
 
-  return assertValid('appState', { ...state, beds });
+    return {
+      ...segment,
+      beds:
+        segment.segmentId === targetSegmentId
+          ? segment.beds.map((entry, index) => (index === existingIndex ? validBed : entry))
+          : segment.beds.filter((entry, index) => index !== existingIndex),
+    };
+  });
+  return assertValid('appState', { ...state, segments });
 };
 
 export const removeBedFromAppState = (appState: unknown, bedId: Bed['bedId']): AppState => {
   const state = assertValid('appState', appState);
-  const beds = state.beds.filter((bed) => bed.bedId !== bedId);
-  return assertValid('appState', { ...state, beds });
+  const segments = resolveCanonicalSegments(state).map((segment) => ({
+    ...segment,
+    beds: segment.beds.filter((bed) => bed.bedId !== bedId),
+  }));
+  return assertValid('appState', { ...state, segments });
 };

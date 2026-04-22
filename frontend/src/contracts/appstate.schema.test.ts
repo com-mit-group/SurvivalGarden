@@ -94,16 +94,6 @@ describe('AppState schema', () => {
     const payload: AppState = {
       schemaVersion: 1,
       segments: [],
-      beds: [
-        {
-          bedId: 'bed_001',
-          gardenId: 'garden_001',
-          name: 'North bed',
-          type: 'vegetable_bed',
-          createdAt: '2026-01-05T00:00:00Z',
-          updatedAt: '2026-01-05T00:00:00Z',
-        },
-      ],
       species: [
         {
           id: 'species_tomato',
@@ -234,7 +224,6 @@ describe('AppState schema', () => {
     const validate = buildValidator();
     const payload = {
       segments: [],
-      beds: [],
       crops: [],
       cropPlans: [],
       batches: [],
