@@ -1,4 +1,4 @@
-import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from '../contracts';
 import { SchemaValidationError, assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
@@ -1800,6 +1800,57 @@ export const getCrop = async (cropId: Crop['cropId']): Promise<Crop | null> => {
   return appState ? getCropFromAppStateLocal(appState, cropId) : null;
 };
 
+export const listSpecies = async (): Promise<Species[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listSpecies();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState?.species ?? [];
+};
+
+export const getSpecies = async (speciesId: Species['id']): Promise<Species | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.getSpecies(speciesId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return (appState?.species ?? []).find((species) => species.id === speciesId) ?? null;
+};
+
+export const upsertSpecies = async (species: unknown): Promise<Species> => {
+  const validatedSpecies = assertValid('species', species);
+
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextSpecies = (appState?.species ?? []).some((entry) => entry.id === validatedSpecies.id)
+    ? (appState?.species ?? []).map((entry) => (entry.id === validatedSpecies.id ? validatedSpecies : entry))
+    : [...(appState?.species ?? []), validatedSpecies];
+  const nextState = assertValid('appState', { ...(appState ?? createEmptyAppState(appState)), species: nextSpecies });
+  await saveAppStateToIndexedDb(nextState);
+  return validatedSpecies;
+};
+
+export const removeSpecies = async (speciesId: Species['id']): Promise<void> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    await workflowAdapter.taxonomy.removeSpecies(speciesId);
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+
+  await saveAppStateToIndexedDb(assertValid('appState', {
+    ...appState,
+    species: (appState.species ?? []).filter((species) => species.id !== speciesId),
+  }));
+};
+
 export const listCrops = async (): Promise<Crop[]> => {
   if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
     return workflowAdapter.taxonomy.listCrops();
@@ -1873,6 +1924,276 @@ export const removeCropPlan = async (planId: CropPlan['planId']): Promise<void> 
     return;
   }
   await saveAppStateToIndexedDb(removeCropPlanFromAppStateLocal(appState, planId));
+};
+
+type ImportStatusSummary = {
+  imported: number;
+  merged: number;
+  skipped: number;
+  rejected: number;
+};
+
+type ImportStatusIssue = {
+  path: string;
+  message: string;
+};
+
+type ImportCommandResult = {
+  summary: ImportStatusSummary;
+  errors: ImportStatusIssue[];
+};
+
+export const importCrops = async (crops: Crop[]): Promise<ImportCommandResult> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.importCrops(crops);
+  }
+
+  const existingAppState = await loadAppStateFromIndexedDb();
+  if (!existingAppState) {
+    throw new Error('Crop import failed: local app state is unavailable.');
+  }
+
+  const cropsById = new Map(existingAppState.crops.map((crop) => [crop.cropId, crop]));
+  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+  const errors: ImportStatusIssue[] = [];
+
+  crops.forEach((incomingCrop, index) => {
+    const currentCrop = cropsById.get(incomingCrop.cropId);
+
+    if (!currentCrop) {
+      cropsById.set(incomingCrop.cropId, incomingCrop);
+      summary.imported += 1;
+      return;
+    }
+
+    if (incomingCrop.createdAt !== currentCrop.createdAt) {
+      summary.rejected += 1;
+      errors.push({
+        path: `/crops/${index}`,
+        message: `rejected (crop_identity_conflict): createdAt mismatch for cropId ${incomingCrop.cropId}`,
+      });
+      return;
+    }
+
+    const mergedCrop: Crop = {
+      ...currentCrop,
+      name: incomingCrop.name,
+      rules: incomingCrop.rules,
+      nutritionProfile: incomingCrop.nutritionProfile,
+      updatedAt: incomingCrop.updatedAt,
+    };
+
+    if (incomingCrop.aliases !== undefined) {
+      mergedCrop.aliases = incomingCrop.aliases;
+    }
+    if (incomingCrop.category !== undefined) {
+      mergedCrop.category = incomingCrop.category;
+    }
+    if (incomingCrop.cultivarGroup !== undefined) {
+      mergedCrop.cultivarGroup = incomingCrop.cultivarGroup;
+    }
+    if (incomingCrop.taskRules !== undefined) {
+      mergedCrop.taskRules = incomingCrop.taskRules;
+    }
+    const incomingCultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
+    if (incomingCultivar !== undefined) {
+      (mergedCrop as Crop & { cultivar?: string }).cultivar = incomingCultivar;
+    }
+    const incomingSpeciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
+    if (incomingSpeciesId !== undefined) {
+      (mergedCrop as Crop & { speciesId?: string }).speciesId = incomingSpeciesId;
+    }
+
+    const incomingSpecies = (incomingCrop as Crop & {
+      species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+    }).species;
+    const incomingTaxonomy = incomingCrop.taxonomy;
+
+    if (incomingSpecies !== undefined || incomingTaxonomy !== undefined) {
+      const currentSpecies = (currentCrop as Crop & {
+        species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+      }).species;
+      const commonName = incomingSpecies?.commonName ?? currentSpecies?.commonName;
+      const scientificName = incomingSpecies?.scientificName ?? currentSpecies?.scientificName;
+
+      if (commonName !== undefined && scientificName !== undefined) {
+        (mergedCrop as Crop & {
+          species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
+        }).species = {
+          ...(currentSpecies?.id !== undefined ? { id: currentSpecies.id } : {}),
+          ...(incomingSpecies?.id !== undefined ? { id: incomingSpecies.id } : {}),
+          commonName,
+          scientificName,
+          ...((incomingTaxonomy !== undefined || incomingSpecies?.taxonomy !== undefined || currentSpecies?.taxonomy !== undefined)
+            ? {
+                taxonomy: {
+                  ...(currentSpecies?.taxonomy ?? {}),
+                  ...(incomingTaxonomy ?? {}),
+                  ...(incomingSpecies?.taxonomy ?? {}),
+                },
+              }
+            : {}),
+        };
+      }
+    }
+
+    const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
+    cropsById.set(incomingCrop.cropId, mergedCrop);
+    if (unchanged) {
+      summary.skipped += 1;
+    } else {
+      summary.merged += 1;
+    }
+  });
+
+  await saveAppStateToIndexedDb({ ...existingAppState, crops: [...cropsById.values()] }, { mode: 'replace' });
+  return { summary, errors };
+};
+
+export const importSpecies = async (species: Species[]): Promise<ImportCommandResult> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.importSpecies(species);
+  }
+
+  const existingAppState = await loadAppStateFromIndexedDb();
+  if (!existingAppState) {
+    throw new Error('Species import failed: local app state is unavailable.');
+  }
+
+  const speciesById = new Map((existingAppState.species ?? []).map((entry) => [entry.id, entry]));
+  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+  const errors: ImportStatusIssue[] = [];
+
+  species.forEach((incomingSpecies, index) => {
+    const currentSpecies = speciesById.get(incomingSpecies.id);
+
+    if (!currentSpecies) {
+      speciesById.set(incomingSpecies.id, incomingSpecies);
+      summary.imported += 1;
+      return;
+    }
+
+    const mergedSpecies: Species = {
+      ...currentSpecies,
+      ...((incomingSpecies.commonName ?? currentSpecies.commonName) !== undefined
+        ? { commonName: incomingSpecies.commonName ?? currentSpecies.commonName }
+        : {}),
+      ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
+        ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
+        : {}),
+      ...((incomingSpecies.aliases ?? currentSpecies.aliases) !== undefined
+        ? { aliases: incomingSpecies.aliases ?? currentSpecies.aliases }
+        : {}),
+      ...((incomingSpecies.notes ?? currentSpecies.notes) !== undefined
+        ? { notes: incomingSpecies.notes ?? currentSpecies.notes }
+        : {}),
+    };
+
+    const unchanged = JSON.stringify(currentSpecies) === JSON.stringify(mergedSpecies);
+    speciesById.set(incomingSpecies.id, mergedSpecies);
+    if (unchanged) {
+      summary.skipped += 1;
+    } else {
+      summary.merged += 1;
+      if (currentSpecies.commonName !== incomingSpecies.commonName || currentSpecies.scientificName !== incomingSpecies.scientificName) {
+        errors.push({
+          path: `/species/${index}`,
+          message: `merged (shared_reference_update): crop species references remain linked to ${incomingSpecies.id}`,
+        });
+      }
+    }
+  });
+
+  await saveAppStateToIndexedDb({ ...existingAppState, species: [...speciesById.values()] }, { mode: 'replace' });
+  return { summary, errors };
+};
+
+export const importCropPlans = async (cropPlans: CropPlan[]): Promise<ImportCommandResult> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.importCropPlans(cropPlans);
+  }
+
+  const existingAppState = await loadAppStateFromIndexedDb();
+  if (!existingAppState) {
+    throw new Error('Crop plan import failed: local app state is unavailable.');
+  }
+
+  const plansById = new Map(existingAppState.cropPlans.map((plan) => [plan.planId, plan]));
+  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+
+  cropPlans.forEach((incomingPlan) => {
+    const currentPlan = plansById.get(incomingPlan.planId);
+    if (!currentPlan) {
+      plansById.set(incomingPlan.planId, incomingPlan);
+      summary.imported += 1;
+      return;
+    }
+
+    const unchanged = JSON.stringify(currentPlan) === JSON.stringify(incomingPlan);
+    plansById.set(incomingPlan.planId, incomingPlan);
+    if (unchanged) {
+      summary.skipped += 1;
+    } else {
+      summary.merged += 1;
+    }
+  });
+
+  await saveAppStateToIndexedDb({ ...existingAppState, cropPlans: [...plansById.values()] }, { mode: 'replace' });
+  return { summary, errors: [] };
+};
+
+export const listSegments = async (): Promise<Segment[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return workflowAdapter.bedsSegments.listSegments();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState?.segments ?? [];
+};
+
+export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return workflowAdapter.bedsSegments.importSegments(segments);
+  }
+
+  const existingAppState = await loadAppStateFromIndexedDb();
+  if (!existingAppState) {
+    throw new Error('Segment import failed: local app state is unavailable.');
+  }
+
+  const segmentsById = new Map((existingAppState.segments ?? []).map((segment) => [segment.segmentId, segment]));
+  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+  const errors: ImportStatusIssue[] = [];
+
+  segments.forEach((incomingSegment, index) => {
+    const currentSegment = segmentsById.get(incomingSegment.segmentId);
+
+    if (!currentSegment) {
+      segmentsById.set(incomingSegment.segmentId, incomingSegment);
+      summary.imported += 1;
+      return;
+    }
+
+    if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
+      summary.skipped += 1;
+      return;
+    }
+
+    if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
+      summary.rejected += 1;
+      errors.push({
+        path: `/segments/${index}`,
+        message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
+      });
+      return;
+    }
+
+    segmentsById.set(incomingSegment.segmentId, incomingSegment);
+    summary.merged += 1;
+  });
+
+  await saveAppStateToIndexedDb({ ...existingAppState, segments: [...segmentsById.values()] }, { mode: 'replace' });
+  return { summary, errors };
 };
 
 export const getSeedInventoryItem = async (
