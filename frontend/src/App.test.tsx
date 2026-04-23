@@ -27,6 +27,7 @@ import {
   saveAppStateToIndexedDb,
   SchemaValidationError,
   serializeAppStateForExport,
+  upsertBatch,
 } from './data';
 
 vi.mock('./data', () => ({
@@ -45,6 +46,7 @@ vi.mock('./data', () => ({
     ...appState,
     batches: [...(appState.batches ?? []).filter((entry: { batchId: string }) => entry.batchId !== batch.batchId), batch],
   })),
+  upsertBatch: vi.fn(async (batch: unknown) => batch),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
   listTasksFromAppState: vi.fn().mockReturnValue([]),
@@ -1447,13 +1449,11 @@ describe('App', () => {
       fireEvent.click(within(createBatchForm).getByRole('button', { name: 'Create batch' }));
 
       await waitFor(() => {
-        expect(saveAppStateToIndexedDb).toHaveBeenCalledTimes(index + 1);
+        expect(upsertBatch).toHaveBeenCalledTimes(index + 1);
       });
 
-      const saveCalls = vi.mocked(saveAppStateToIndexedDb).mock.calls;
-      const savedState = saveCalls[saveCalls.length - 1]?.[0] as { batches: Array<Record<string, unknown>> };
-      const savedBatches = savedState.batches;
-      const savedBatch = savedBatches[savedBatches.length - 1];
+      const upsertCalls = vi.mocked(upsertBatch).mock.calls;
+      const savedBatch = upsertCalls[upsertCalls.length - 1]?.[0] as Record<string, unknown>;
 
       expect(savedBatch).toMatchObject({
         startMethod: testCase.expectedStartMethod,
