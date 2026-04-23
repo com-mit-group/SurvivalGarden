@@ -204,6 +204,12 @@ const assertContractList = <T extends SchemaName>(
 
 export const workflowAdapter = {
   batches: {
+    upsertBatch: async (batch: Batch): Promise<Batch> =>
+      assertContract('batches.upsertBatch', 'batch', await fetchJson<unknown>(`/api/batches/${encodeURIComponent(batch.batchId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch),
+      })),
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
       fetchJson<Batch>(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`, {
         method: 'POST',
@@ -230,6 +236,12 @@ export const workflowAdapter = {
     },
   },
   tasks: {
+    upsertTask: async (task: AppState['tasks'][number]): Promise<AppState['tasks'][number]> =>
+      assertContract('tasks.upsertTask', 'task', await fetchJson<unknown>(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+      })),
     regenerateCalendar: async (year: number): Promise<{
       generatedTasks: AppState['tasks'];
       diagnostics: { cropId: string; reason: string; detail: string }[];

@@ -13,22 +13,23 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
+  removeBed,
   removeBatch,
+  removeSeedInventoryItem,
   saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
-  removeSeedInventoryItemFromAppState,
-  upsertSeedInventoryItemInAppState,
-  upsertTaskInAppState,
-  upsertBatchInAppState,
-  upsertCropInAppState,
-  upsertBedInAppState,
+  upsertTask,
+  upsertBatch,
   getActiveBedAssignment,
   assertValid,
   mutateBatchAssignment,
   regenerateCalendarTasks,
   transitionBatchStage,
+  upsertBed,
+  upsertCrop,
+  upsertSeedInventoryItem,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { canTransition, inferBatchStartMethod } from './domain';
@@ -1125,18 +1126,7 @@ function BedDetailPage() {
 
       setIsDeletingBed(true);
 
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
-        return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
-      });
-
-      const nextState = {
-        ...appState,
-        segments: nextSegments,
-        beds: [],
-      };
-
-      await saveAppStateToIndexedDb(nextState);
+      await removeBed(bedId);
       await navigate('/beds');
     } catch (error) {
       setDeleteBedMessage(error instanceof Error ? error.message : 'Failed to delete bed.');
@@ -1166,14 +1156,14 @@ function BedDetailPage() {
           return;
         }
 
-        const nextState = upsertBedInAppState(appState, {
+        const savedBed = await upsertBed({
           ...latestBed,
           notes,
           updatedAt: new Date().toISOString(),
         });
-
-        await saveAppStateToIndexedDb(nextState);
-        setBed((current) => (current && current.bedId === bedId ? { ...current, notes } : current));
+        setBed((current) => (current && current.bedId === bedId ? savedBed : current));
+        const refreshedState = await loadAppStateFromIndexedDb();
+        refreshBedBatches(refreshedState);
       };
 
       void persistNotes();
@@ -1182,7 +1172,7 @@ function BedDetailPage() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [bed, bedId, notes]);
+  }, [bed, bedId, notes, refreshBedBatches]);
 
   if (isLoading) {
     return <p className="beds-empty-state">Loading bed…</p>;
@@ -1577,9 +1567,11 @@ function CalendarPage() {
       const doneStatuses = new Set(['done', 'completed']);
       const isDone = doneStatuses.has(task.status.toLowerCase());
       const updatedTask = { ...task, status: isDone ? 'pending' : 'done' };
-      const nextState = upsertTaskInAppState(appState, updatedTask);
-      await saveAppStateToIndexedDb(nextState);
-      setTasks((current) => current.map((entry) => (entry.id === updatedTask.id ? updatedTask : entry)));
+      await upsertTask(updatedTask);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (refreshedState) {
+        setTasks(listTasksFromAppState(refreshedState));
+      }
     } finally {
       setSavingTaskId(null);
     }
@@ -1640,7 +1632,8 @@ function CalendarPage() {
       }
 
       await saveAppStateToIndexedDb(nextState);
-      setTasks(tasksAfter);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      setTasks(refreshedState ? listTasksFromAppState(refreshedState) : tasksAfter);
       const warnings = generationResult.diagnostics.map((entry) => `${entry.cropId}: ${entry.reason}`);
       setRegenerationSummary({ added, updated, unchanged, warnings });
     } catch (error) {
@@ -2319,8 +2312,7 @@ function SeedInventoryPage() {
         updatedAt: nowIso,
       };
 
-      const nextState = upsertSeedInventoryItemInAppState(appState, nextItem);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertSeedInventoryItem(nextItem);
       await loadInventory();
       resetForm();
     } finally {
@@ -2337,8 +2329,7 @@ function SeedInventoryPage() {
         return;
       }
 
-      const nextState = removeSeedInventoryItemFromAppState(appState, seedInventoryItemId);
-      await saveAppStateToIndexedDb(nextState);
+      await removeSeedInventoryItem(seedInventoryItemId);
       await loadInventory();
       if (editingId === seedInventoryItemId) {
         resetForm();
@@ -3632,18 +3623,21 @@ function BatchesPage({
         delete nextCrop.cultivarGroup;
       }
 
-      const nextState = upsertCropInAppState(appState, nextCrop);
-      await saveAppStateToIndexedDb(nextState);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      await upsertCrop(nextCrop);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(refreshedState.species))]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
@@ -4041,7 +4035,7 @@ function BatchesPage({
 
       const createdAt = new Date().toISOString();
       const cropId = createUniqueUserCropId(cultivar, appState.crops.map((crop) => crop.cropId));
-      const nextState = upsertCropInAppState(appState, {
+      await upsertCrop({
         cropId,
         name: cultivar,
         cultivar,
@@ -4062,19 +4056,21 @@ function BatchesPage({
         createdAt,
         updatedAt: createdAt,
       });
-
-      await saveAppStateToIndexedDb(nextState);
-      const nextSpeciesById = buildSpeciesLookup(nextState.species);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      const nextSpeciesById = buildSpeciesLookup(refreshedState.species);
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
@@ -4084,7 +4080,7 @@ function BatchesPage({
       );
       setUserDefinedCropIds(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
             return [crop.cropId, isUserDefined === true];
           }),
@@ -4247,14 +4243,19 @@ function BatchesPage({
         ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
       } as Batch;
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      setBatches(listBatchesFromAppState(nextState));
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      await upsertBatch(nextBatch);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      await saveAppStateToIndexedDb(refreshedState);
+      const stateForUi = refreshedState;
+      setBatches(listBatchesFromAppState(stateForUi));
+      setCropIds(stateForUi.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(stateForUi.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          stateForUi.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(stateForUi.species))]),
         ),
       );
       setFormErrors({});
@@ -5355,9 +5356,9 @@ function BatchDetailPage() {
         stageEvents: nextStageEvents,
       };
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      await upsertBatch(nextBatch);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setTimelineMessage(
         latestStageEventAt && occurredAt < latestStageEventAt
@@ -5461,9 +5462,9 @@ function BatchDetailPage() {
     }
 
     const nextBatch: BatchWithPhotos = { ...(batch as BatchWithPhotos), photos: nextPhotos };
-    const nextState = upsertBatchInAppState(appState, nextBatch as Batch);
-    await saveAppStateToIndexedDb(nextState);
-    const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+    await upsertBatch(nextBatch as Batch);
+    const refreshedState = await loadAppStateFromIndexedDb();
+    const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
     setBatch(refreshedBatch);
   };
 
@@ -8228,6 +8229,11 @@ function App() {
         <h1>SurvivalGarden</h1>
         <p className={`app-mode-indicator app-mode-indicator--${frontendMode}`} aria-live="polite">
           Mode: {frontendMode === 'backend' ? '.NET backend' : 'TypeScript local'}
+        </p>
+        <p className="app-mode-authority-note">
+          {frontendMode === 'backend'
+            ? 'Canonical updates are backend-authoritative; UI state reflects server responses.'
+            : 'Local TypeScript mode is enabled for UI-only workflows and development fallback.'}
         </p>
       </header>
 
