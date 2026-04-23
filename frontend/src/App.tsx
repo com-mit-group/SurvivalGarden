@@ -20,8 +20,8 @@ import {
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
-  upsertTaskInAppState,
-  upsertBatchInAppState,
+  upsertTask,
+  upsertBatch,
   getActiveBedAssignment,
   assertValid,
   mutateBatchAssignment,
@@ -1567,8 +1567,7 @@ function CalendarPage() {
       const doneStatuses = new Set(['done', 'completed']);
       const isDone = doneStatuses.has(task.status.toLowerCase());
       const updatedTask = { ...task, status: isDone ? 'pending' : 'done' };
-      const nextState = upsertTaskInAppState(appState, updatedTask);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertTask(updatedTask);
       const refreshedState = await loadAppStateFromIndexedDb();
       if (refreshedState) {
         setTasks(listTasksFromAppState(refreshedState));
@@ -4244,10 +4243,12 @@ function BatchesPage({
         ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
       } as Batch;
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertBatch(nextBatch);
       const refreshedState = await loadAppStateFromIndexedDb();
-      const stateForUi = refreshedState ?? nextState;
+      if (!refreshedState) {
+        return;
+      }
+      const stateForUi = refreshedState;
       setBatches(listBatchesFromAppState(stateForUi));
       setCropIds(stateForUi.crops.map((crop) => crop.cropId));
       setCropNames(Object.fromEntries(stateForUi.crops.map((crop) => [crop.cropId, crop.name])));
@@ -5354,10 +5355,9 @@ function BatchDetailPage() {
         stageEvents: nextStageEvents,
       };
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertBatch(nextBatch);
       const refreshedState = await loadAppStateFromIndexedDb();
-      const refreshedBatch = (refreshedState ?? nextState).batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setTimelineMessage(
         latestStageEventAt && occurredAt < latestStageEventAt
@@ -5461,10 +5461,9 @@ function BatchDetailPage() {
     }
 
     const nextBatch: BatchWithPhotos = { ...(batch as BatchWithPhotos), photos: nextPhotos };
-    const nextState = upsertBatchInAppState(appState, nextBatch as Batch);
-    await saveAppStateToIndexedDb(nextState);
+    await upsertBatch(nextBatch as Batch);
     const refreshedState = await loadAppStateFromIndexedDb();
-    const refreshedBatch = (refreshedState ?? nextState).batches.find((candidate) => candidate.batchId === batchId) ?? null;
+    const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
     setBatch(refreshedBatch);
   };
 

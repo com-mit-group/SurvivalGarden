@@ -1,4 +1,4 @@
-import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Task } from '../contracts';
 import { SchemaValidationError, assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
@@ -37,6 +37,8 @@ import {
 import type { ListQuery } from './repos/interfaces';
 import {
   generateCalendarTasksWithDiagnostics as generateCalendarTasksWithDiagnosticsLocal,
+  getTaskFromAppState as getTaskFromAppStateLocal,
+  upsertTaskInAppState as upsertTaskInAppStateLocal,
   upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
 } from './repos/taskRepository';
 import { applyStageEvent } from '../domain';
@@ -1926,6 +1928,28 @@ export const removeSeedInventoryItem = async (
     return;
   }
   await saveAppStateToIndexedDb(removeSeedInventoryItemFromAppStateLocal(appState, seedInventoryItemId));
+};
+
+export const upsertTask = async (task: unknown): Promise<Task> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('tasks')) {
+    return assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertTaskInAppStateLocal(appState ?? createEmptyAppState(appState), task);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid('task', getTaskFromAppStateLocal(nextState, assertValid('task', task).id));
+};
+
+export const upsertBatch = async (batch: unknown): Promise<Batch> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('batches')) {
+    return assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextState = upsertBatchInAppStateLocal(appState ?? createEmptyAppState(appState), batch);
+  await saveAppStateToIndexedDb(nextState);
+  return assertValid('batch', getBatchFromAppStateLocal(nextState, assertValid('batch', batch).batchId));
 };
 
 export const transitionBatchStage = async (
