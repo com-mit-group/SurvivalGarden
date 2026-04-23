@@ -43,7 +43,6 @@ import {
 } from './repos/taskRepository';
 import { applyStageEvent } from '../domain';
 import {
-  getFrontendMode,
   shouldUseCanonicalBackendPath,
   shouldUseTypescriptRollbackShim,
   toBackendApiUrl,
