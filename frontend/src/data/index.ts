@@ -157,7 +157,7 @@ type LayoutMigrationReport = {
   warnings: LayoutMigrationWarning[];
 };
 
-const isBackendModeEnabled = (): boolean => getFrontendMode() === 'backend';
+const isBackendModeEnabled = (): boolean => true;
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
