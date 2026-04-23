@@ -4248,6 +4248,7 @@ function BatchesPage({
       if (!refreshedState) {
         return;
       }
+      await saveAppStateToIndexedDb(refreshedState);
       const stateForUi = refreshedState;
       setBatches(listBatchesFromAppState(stateForUi));
       setCropIds(stateForUi.crops.map((crop) => crop.cropId));
