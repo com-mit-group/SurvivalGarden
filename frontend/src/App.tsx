@@ -4081,7 +4081,7 @@ function BatchesPage({
       );
       setUserDefinedCropIds(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
             return [crop.cropId, isUserDefined === true];
           }),
