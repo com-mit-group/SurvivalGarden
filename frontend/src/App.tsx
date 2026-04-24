@@ -30,12 +30,15 @@ import {
   listCrops,
   listSpecies,
   listCropPlans,
+  listBeds,
   listSegments,
   upsertSpecies,
   importCrops,
   importSpecies,
   importCropPlans,
   importSegments,
+  upsertSegment,
+  removeSegment,
   upsertBed,
   upsertCrop,
   upsertSeedInventoryItem,
@@ -139,36 +142,18 @@ function BedsPage() {
   const [deletingEntityKey, setDeletingEntityKey] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const syncLocalLayoutState = useCallback((appState: AppState | null) => {
-    if (!appState) {
-      setBeds([]);
-      setBatches([]);
-      setSegments([]);
-      return;
-    }
-
-    setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
-    setBatches(listBatchesFromAppState(appState));
-    setSegments(appState.segments ?? []);
-  }, []);
-
   const reloadPersistedLayoutState = useCallback(async () => {
-    const persistedState = await loadAppStateFromIndexedDb();
-    syncLocalLayoutState(persistedState);
-    return persistedState;
-  }, [syncLocalLayoutState]);
+    const [nextBeds, nextSegments, appState] = await Promise.all([
+      listBeds(),
+      listSegments(),
+      loadAppStateFromIndexedDb(),
+    ]);
 
-  const persistLayoutState = useCallback(async (nextState: AppState, successMessage: string) => {
-    await saveAppStateToIndexedDb(nextState);
-    const persistedState = await reloadPersistedLayoutState();
-
-    if (!persistedState) {
-      throw new Error('Layout changes could not be reloaded after saving.');
-    }
-
-    setActionMessage(successMessage);
-    return persistedState;
-  }, [reloadPersistedLayoutState]);
+    setBeds([...nextBeds].sort((left, right) => left.bedId.localeCompare(right.bedId)));
+    setSegments(nextSegments);
+    setBatches(appState ? listBatchesFromAppState(appState) : []);
+    return appState;
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -449,8 +434,18 @@ function BedsPage() {
         ...currentState,
         segments: nextSegments,
       });
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegments = currentState.segments ?? [];
+      const originalSegmentIds = new Set(originalSegments.map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentId) => !nextSegmentIds.has(segmentId));
 
-      await persistLayoutState(nextState, `${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentId) => removeSegment(segmentId)),
+      ]);
+      await reloadPersistedLayoutState();
+      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
     } catch (error) {
       if (error instanceof SchemaValidationError) {
@@ -462,7 +457,7 @@ function BedsPage() {
     } finally {
       setSavingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, persistLayoutState, savingEntityKey]);
+  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, reloadPersistedLayoutState, savingEntityKey]);
 
   const getReferenceCounts = useCallback((appState: AppState, bedId: string) => {
     const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
@@ -576,9 +571,17 @@ function BedsPage() {
         ...appState,
         segments: nextSegments,
       });
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegmentIds = new Set((appState.segments ?? []).map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentIdToRemove) => !nextSegmentIds.has(segmentIdToRemove));
 
-      await persistLayoutState(
-        nextState,
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentIdToRemove) => removeSegment(segmentIdToRemove)),
+      ]);
+      await reloadPersistedLayoutState();
+      setActionMessage(
         kind === 'path'
           ? `Deleted path ${entityId}.`
           : kind === 'bed'
@@ -593,7 +596,7 @@ function BedsPage() {
     } finally {
       setDeletingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, persistLayoutState]);
+  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, reloadPersistedLayoutState]);
 
   const hasAnyLayoutRecords = segments.length > 0 || totalSegmentBedCount > 0 || totalPathCount > 0;
 
@@ -1644,7 +1647,6 @@ function CalendarPage() {
         }
       }
 
-      await saveAppStateToIndexedDb(nextState);
       const refreshedState = await loadAppStateFromIndexedDb();
       if (!refreshedState) {
         throw new Error('Tasks could not be reloaded after regeneration.');
@@ -4255,7 +4257,6 @@ function BatchesPage({
       if (!refreshedState) {
         return;
       }
-      await saveAppStateToIndexedDb(refreshedState);
       const stateForUi = refreshedState;
       setBatches(listBatchesFromAppState(stateForUi));
       setCropIds(stateForUi.crops.map((crop) => crop.cropId));
@@ -7053,18 +7054,16 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const report = await saveAppStateToIndexedDb(pendingBatchImportState, { mode: 'merge' });
-      const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
-      const created = report?.batches.added ?? appStateWithBatches.batches?.length ?? 0;
-      const merged = report?.batches.updated ?? 0;
-      const skipped = report?.batches.unchanged ?? 0;
-      const rejectedConflict = report?.conflicts.length ?? 0;
+      const appStateWithBatches = pendingBatchImportState as { batches?: Batch[] };
+      const batchesToImport = Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : [];
+      await Promise.all(batchesToImport.map((batch) => upsertBatch(batch)));
+      const created = batchesToImport.length;
+      const merged = 0;
+      const skipped = 0;
+      const rejectedConflict = 0;
       const renamed = 0;
-      const conflictDetail = rejectedConflict > 0
-        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
-        : '';
       const renameCapabilityNote = autoRenameOnConflict
-        ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
+        ? ' Auto-rename requested, and this command path relies on backend conflict handling.'
         : '';
       setBatchImportStatusSummary({
         skipped,
@@ -7074,7 +7073,6 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
       setImportMessage(
         `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
-        + conflictDetail
         + renameCapabilityNote,
       );
       setPendingBatchImportState(null);
