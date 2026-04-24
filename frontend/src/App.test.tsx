@@ -1224,17 +1224,16 @@ describe('App', () => {
 
 
   it('keeps a created species after command save and query refresh on the taxonomy page', async () => {
-    const createdSpecies = {
-      id: 'species_pea',
-      commonName: 'Pea',
-      scientificName: 'Pisum sativum',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-    };
     let persistedAppState = {
       schemaVersion: 1,
       beds: [],
-      species: [] as Array<typeof createdSpecies>,
+      species: [] as Array<{
+        id: string;
+        commonName: string;
+        scientificName: string;
+        createdAt: string;
+        updatedAt: string;
+      }>,
       crops: [],
       cropPlans: [],
       batches: [],
@@ -1256,7 +1255,13 @@ describe('App', () => {
     vi.mocked(upsertSpecies).mockImplementation(async (species) => {
       persistedAppState = {
         ...persistedAppState,
-        species: [...persistedAppState.species, species as typeof createdSpecies],
+        species: [...persistedAppState.species, species as {
+          id: string;
+          commonName: string;
+          scientificName: string;
+          createdAt: string;
+          updatedAt: string;
+        }],
       };
       return species as never;
     });
