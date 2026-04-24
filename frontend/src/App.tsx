@@ -36,6 +36,8 @@ import {
   importSpecies,
   importCropPlans,
   importSegments,
+  upsertSegment,
+  removeSegment,
   upsertBed,
   upsertCrop,
   upsertSeedInventoryItem,
@@ -433,7 +435,16 @@ function BedsPage() {
         ...currentState,
         segments: nextSegments,
       });
-      await saveAppStateToIndexedDb(nextState);
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegments = currentState.segments ?? [];
+      const originalSegmentIds = new Set(originalSegments.map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentId) => !nextSegmentIds.has(segmentId));
+
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentId) => removeSegment(segmentId)),
+      ]);
       await reloadPersistedLayoutState();
       setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
@@ -561,7 +572,15 @@ function BedsPage() {
         ...appState,
         segments: nextSegments,
       });
-      await saveAppStateToIndexedDb(nextState);
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegmentIds = new Set((appState.segments ?? []).map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentIdToRemove) => !nextSegmentIds.has(segmentIdToRemove));
+
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentIdToRemove) => removeSegment(segmentIdToRemove)),
+      ]);
       await reloadPersistedLayoutState();
       setActionMessage(
         kind === 'path'
