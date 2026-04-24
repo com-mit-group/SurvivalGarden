@@ -30,14 +30,75 @@ import {
   upsertBatch,
 } from './data';
 
-vi.mock('./data', () => ({
-  initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
-  resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
-  loadAppStateFromIndexedDb: vi.fn().mockResolvedValue(null),
-  parseImportedAppState: vi.fn(),
-  saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
-  serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
-  assertValid: vi.fn((schemaName: string, value: unknown) => value),
+vi.mock('./data', () => {
+  const saveAppStateToIndexedDb = vi.fn().mockResolvedValue(undefined);
+  const loadAppStateFromIndexedDb = vi.fn().mockResolvedValue(null);
+
+  return {
+    initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
+    resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
+    loadAppStateFromIndexedDb,
+    parseImportedAppState: vi.fn(),
+    saveAppStateToIndexedDb,
+    serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
+    assertValid: vi.fn((schemaName: string, value: unknown) => value),
+    listCrops: vi.fn(async () => (await loadAppStateFromIndexedDb())?.crops ?? []),
+    listSpecies: vi.fn(async () => (await loadAppStateFromIndexedDb())?.species ?? []),
+    listCropPlans: vi.fn(async () => (await loadAppStateFromIndexedDb())?.cropPlans ?? []),
+    listSegments: vi.fn(async () => (await loadAppStateFromIndexedDb())?.segments ?? []),
+    upsertSpecies: vi.fn(async (species: { id: string }) => {
+      const state = await loadAppStateFromIndexedDb();
+      if (!state) {
+        return species;
+      }
+
+      const nextSpecies = (state.species ?? []).some((entry: { id: string }) => entry.id === species.id)
+        ? (state.species ?? []).map((entry: { id: string }) => (entry.id === species.id ? species : entry))
+        : [...(state.species ?? []), species];
+      await saveAppStateToIndexedDb({ ...state, species: nextSpecies });
+      return species;
+    }),
+    importCrops: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importSpecies: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importCropPlans: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importSegments: vi.fn(async (segments: Array<{ segmentId: string; name: string; originReference?: string }>) => {
+      const state = await loadAppStateFromIndexedDb();
+      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+      const errors: Array<{ path: string; message: string }> = [];
+
+      if (state) {
+        const segmentsById = new Map((state.segments ?? []).map((segment: { segmentId: string }) => [segment.segmentId, segment]));
+        segments.forEach((incomingSegment, index) => {
+          const currentSegment = segmentsById.get(incomingSegment.segmentId) as { name?: string; originReference?: string } | undefined;
+
+          if (!currentSegment) {
+            segmentsById.set(incomingSegment.segmentId, incomingSegment);
+            summary.imported += 1;
+            return;
+          }
+
+          if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
+            summary.skipped += 1;
+            return;
+          }
+
+          if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
+            summary.rejected += 1;
+            errors.push({
+              path: `/segments/${index}`,
+              message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
+            });
+            return;
+          }
+
+          segmentsById.set(incomingSegment.segmentId, incomingSegment);
+          summary.merged += 1;
+        });
+
+        await saveAppStateToIndexedDb({ ...state, segments: [...segmentsById.values()] }, { mode: 'replace' });
+      }
+      return { summary, errors };
+    }),
   upsertCropInAppState: vi.fn((appState: { crops?: Array<{ cropId: string }> }, crop: { cropId: string }) => ({
     ...appState,
     crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
@@ -61,7 +122,8 @@ vi.mock('./data', () => ({
       this.issues = issues;
     }
   },
-}));
+  };
+});
 
 const buildBatchCreationState = () => ({
   schemaVersion: 1,
