@@ -28,6 +28,7 @@ import {
   SchemaValidationError,
   serializeAppStateForExport,
   upsertBatch,
+  upsertSegment,
 } from './data';
 
 vi.mock('./data', () => {
@@ -108,6 +109,8 @@ vi.mock('./data', () => {
     batches: [...(appState.batches ?? []).filter((entry: { batchId: string }) => entry.batchId !== batch.batchId), batch],
   })),
   upsertBatch: vi.fn(async (batch: unknown) => batch),
+  upsertSegment: vi.fn(async (segment: unknown) => segment),
+  removeSegment: vi.fn(async () => undefined),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
   listTasksFromAppState: vi.fn().mockReturnValue([]),
@@ -346,13 +349,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete path' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        segments: [
-          expect.objectContaining({
-            segmentId: 'segment-1',
-            paths: [],
-          }),
-        ],
+      expect(upsertSegment).toHaveBeenCalledWith(expect.objectContaining({
+        segmentId: 'segment-1',
+        paths: [],
       }));
     });
 
@@ -408,7 +407,7 @@ describe('App', () => {
       expect(screen.getByText('Cannot delete path path-1 because it is referenced by 1 crop plan.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
+    expect(upsertSegment).not.toHaveBeenCalled();
   });
 
   it('hides dev reset action when flag is disabled', () => {
