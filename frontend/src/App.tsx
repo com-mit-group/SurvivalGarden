@@ -1072,14 +1072,14 @@ function BedDetailPage() {
       }
 
       const endDate = new Date(removeDateInput).toISOString();
-      const nextBatch = await mutateBatchAssignment('remove', { batchId: existingBatch.batchId, at: endDate });
+      await mutateBatchAssignment('remove', { batchId: existingBatch.batchId, at: endDate });
       const nextState = await loadAppStateFromIndexedDb();
       refreshBedBatches(nextState);
       setRemoveConfirmByBatchId((current) => ({ ...current, [batch.batchId]: false }));
       setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
       setRemoveMessageByBatchId((current) => ({
         ...current,
-        [batch.batchId]: nextBatch === existingBatch ? 'Batch is already unassigned for that date.' : 'Batch removed from bed.',
+        [batch.batchId]: 'Batch removed from bed.',
       }));
     } catch (error) {
       setRemoveMessageByBatchId((current) => ({
@@ -1165,13 +1165,17 @@ function BedDetailPage() {
           return;
         }
 
-        const savedBed = await upsertBed({
+        await upsertBed({
           ...latestBed,
           notes,
           updatedAt: new Date().toISOString(),
         });
-        setBed((current) => (current && current.bedId === bedId ? savedBed : current));
         const refreshedState = await loadAppStateFromIndexedDb();
+        const refreshedBed =
+          refreshedState && bedId
+            ? listBedsFromAppState(refreshedState).find((candidate) => candidate.bedId === bedId) ?? null
+            : null;
+        setBed(refreshedBed);
         refreshBedBatches(refreshedState);
       };
 
@@ -1642,7 +1646,10 @@ function CalendarPage() {
 
       await saveAppStateToIndexedDb(nextState);
       const refreshedState = await loadAppStateFromIndexedDb();
-      setTasks(refreshedState ? listTasksFromAppState(refreshedState) : tasksAfter);
+      if (!refreshedState) {
+        throw new Error('Tasks could not be reloaded after regeneration.');
+      }
+      setTasks(listTasksFromAppState(refreshedState));
       const warnings = generationResult.diagnostics.map((entry) => `${entry.cropId}: ${entry.reason}`);
       setRegenerationSummary({ added, updated, unchanged, warnings });
     } catch (error) {
@@ -5263,8 +5270,9 @@ function BatchDetailPage() {
     setIsSavingStageAction(true);
 
     try {
-      const nextBatch = await transitionBatchStage(batchId, nextStage, occurredAt);
-      const refreshedBatch = nextBatch;
+      await transitionBatchStage(batchId, nextStage, occurredAt);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
@@ -5401,7 +5409,9 @@ function BatchDetailPage() {
     setIsSavingAssignToBed(true);
 
     try {
-      const refreshedBatch = await mutateBatchAssignment('assign', { batchId, bedId: assignToBedId, at: assignedAt });
+      await mutateBatchAssignment('assign', { batchId, bedId: assignToBedId, at: assignedAt });
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setAssignToBedMessage(`Batch assigned to ${assignToBedId}.`);
       setRemoveFromBedMessage(null);
@@ -5439,7 +5449,9 @@ function BatchDetailPage() {
     setIsSavingRemoveFromBed(true);
 
     try {
-      const refreshedBatch = await mutateBatchAssignment('remove', { batchId, at: endDate });
+      await mutateBatchAssignment('remove', { batchId, at: endDate });
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setRemoveFromBedMessage('Batch removed from bed.');
     } catch (error) {
