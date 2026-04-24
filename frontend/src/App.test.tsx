@@ -22,12 +22,17 @@ import {
   assertValid,
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
+  listCrops,
+  listSegments,
+  listSpecies,
   parseImportedAppState,
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
   SchemaValidationError,
   serializeAppStateForExport,
+  importSegments,
   upsertBatch,
+  upsertSpecies,
   upsertSegment,
 } from './data';
 
@@ -738,6 +743,20 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({
+          segmentId: 'segment_new',
+          name: 'North Segment',
+          beds: expect.arrayContaining([expect.objectContaining({ bedId: 'bed_n1' })]),
+          paths: expect.arrayContaining([expect.objectContaining({ pathId: 'path_north_1' })]),
+        }),
+        expect.objectContaining({
+          segmentId: 'segment_existing',
+          name: 'Existing Segment',
+        }),
+      ]));
+      expect(listSegments).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Segment Import Summary')).toBeInTheDocument();
       expect(screen.getByText('imported: 1')).toBeInTheDocument();
       expect(screen.getByText('merged: 0')).toBeInTheDocument();
@@ -807,6 +826,15 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({
+          segmentId: 'segment_north',
+          name: 'Conflicting Name',
+          originReference: 'se_corner',
+        }),
+      ]));
+      expect(listSegments).toHaveBeenCalledTimes(1);
       expect(screen.getByText('rejected (segment_identity_conflict): 1')).toBeInTheDocument();
       expect(screen.getByText(/rejected \(segment_identity_conflict\): identity mismatch for segmentId segment_north/)).toBeInTheDocument();
     });
@@ -991,12 +1019,14 @@ describe('App', () => {
 
     expect(screen.getByText('Size: 5.8 m × 4.5 m')).toBeInTheDocument();
     expect(screen.getByText('Types: vegetable_bed')).toBeInTheDocument();
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.objectContaining({ segments: expect.anything() }), { mode: 'replace' });
+    expect(importSegments).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({ segments: validSegmentState.segments }), { mode: 'replace' });
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(validSegmentState.segments);
+      expect(listSegments).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1193,11 +1223,18 @@ describe('App', () => {
   });
 
 
-  it('keeps a created species after save and reload on the batches page', async () => {
+  it('keeps a created species after command save and query refresh on the taxonomy page', async () => {
+    const createdSpecies = {
+      id: 'species_pea',
+      commonName: 'Pea',
+      scientificName: 'Pisum sativum',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
     let persistedAppState = {
       schemaVersion: 1,
       beds: [],
-      species: [],
+      species: [] as Array<typeof createdSpecies>,
       crops: [],
       cropPlans: [],
       batches: [],
@@ -1214,9 +1251,14 @@ describe('App', () => {
     };
 
     vi.mocked(loadAppStateFromIndexedDb).mockImplementation(async () => persistedAppState as never);
-    vi.mocked(saveAppStateToIndexedDb).mockImplementation(async (nextState) => {
-      persistedAppState = nextState as typeof persistedAppState;
-      return undefined as never;
+    vi.mocked(listCrops).mockImplementation(async () => persistedAppState.crops as never);
+    vi.mocked(listSpecies).mockImplementation(async () => persistedAppState.species as never);
+    vi.mocked(upsertSpecies).mockImplementation(async (species) => {
+      persistedAppState = {
+        ...persistedAppState,
+        species: [...persistedAppState.species, species as typeof createdSpecies],
+      };
+      return species as never;
     });
 
     const { unmount } = render(
@@ -1239,16 +1281,16 @@ describe('App', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Create species' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        species: [
-          expect.objectContaining({
-            id: 'species_pea',
-            commonName: 'Pea',
-            scientificName: 'Pisum sativum',
-          }),
-        ],
+      expect(upsertSpecies).toHaveBeenCalledTimes(1);
+      expect(upsertSpecies).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'species_pea',
+        commonName: 'Pea',
+        scientificName: 'Pisum sativum',
       }));
+      expect(listCrops).toHaveBeenCalledTimes(1);
+      expect(listSpecies).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Species created.')).toBeInTheDocument();
+      expect(screen.getAllByRole('option', { name: 'Pea (Pisum sativum)' })).toHaveLength(2);
     });
 
     unmount();
