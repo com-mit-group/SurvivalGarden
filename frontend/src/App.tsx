@@ -30,15 +30,12 @@ import {
   listCrops,
   listSpecies,
   listCropPlans,
-  listBeds,
   listSegments,
   upsertSpecies,
   importCrops,
   importSpecies,
   importCropPlans,
   importSegments,
-  upsertSegment,
-  removeSegment,
   upsertBed,
   upsertCrop,
   upsertSeedInventoryItem,
@@ -143,15 +140,17 @@ function BedsPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const reloadPersistedLayoutState = useCallback(async () => {
-    const [nextBeds, nextSegments, appState] = await Promise.all([
-      listBeds(),
-      listSegments(),
-      loadAppStateFromIndexedDb(),
-    ]);
+    const appState = await loadAppStateFromIndexedDb();
+    if (!appState) {
+      setBeds([]);
+      setBatches([]);
+      setSegments([]);
+      return appState;
+    }
 
-    setBeds([...nextBeds].sort((left, right) => left.bedId.localeCompare(right.bedId)));
-    setSegments(nextSegments);
-    setBatches(appState ? listBatchesFromAppState(appState) : []);
+    setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
+    setBatches(listBatchesFromAppState(appState));
+    setSegments(await listSegments());
     return appState;
   }, []);
 
@@ -434,16 +433,7 @@ function BedsPage() {
         ...currentState,
         segments: nextSegments,
       });
-      const touchedSegments = nextState.segments ?? [];
-      const originalSegments = currentState.segments ?? [];
-      const originalSegmentIds = new Set(originalSegments.map((segment) => segment.segmentId));
-      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
-      const removedSegmentIds = [...originalSegmentIds].filter((segmentId) => !nextSegmentIds.has(segmentId));
-
-      await Promise.all([
-        ...touchedSegments.map((segment) => upsertSegment(segment)),
-        ...removedSegmentIds.map((segmentId) => removeSegment(segmentId)),
-      ]);
+      await saveAppStateToIndexedDb(nextState);
       await reloadPersistedLayoutState();
       setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
@@ -571,15 +561,7 @@ function BedsPage() {
         ...appState,
         segments: nextSegments,
       });
-      const touchedSegments = nextState.segments ?? [];
-      const originalSegmentIds = new Set((appState.segments ?? []).map((segment) => segment.segmentId));
-      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
-      const removedSegmentIds = [...originalSegmentIds].filter((segmentIdToRemove) => !nextSegmentIds.has(segmentIdToRemove));
-
-      await Promise.all([
-        ...touchedSegments.map((segment) => upsertSegment(segment)),
-        ...removedSegmentIds.map((segmentIdToRemove) => removeSegment(segmentIdToRemove)),
-      ]);
+      await saveAppStateToIndexedDb(nextState);
       await reloadPersistedLayoutState();
       setActionMessage(
         kind === 'path'
@@ -7054,16 +7036,18 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const appStateWithBatches = pendingBatchImportState as { batches?: Batch[] };
-      const batchesToImport = Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : [];
-      await Promise.all(batchesToImport.map((batch) => upsertBatch(batch)));
-      const created = batchesToImport.length;
-      const merged = 0;
-      const skipped = 0;
-      const rejectedConflict = 0;
+      const report = await saveAppStateToIndexedDb(pendingBatchImportState, { mode: 'merge' });
+      const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
+      const created = report?.batches.added ?? appStateWithBatches.batches?.length ?? 0;
+      const merged = report?.batches.updated ?? 0;
+      const skipped = report?.batches.unchanged ?? 0;
+      const rejectedConflict = report?.conflicts.length ?? 0;
       const renamed = 0;
+      const conflictDetail = rejectedConflict > 0
+        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
+        : '';
       const renameCapabilityNote = autoRenameOnConflict
-        ? ' Auto-rename requested, and this command path relies on backend conflict handling.'
+        ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
         : '';
       setBatchImportStatusSummary({
         skipped,
@@ -7073,6 +7057,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       });
       setImportMessage(
         `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
+        + conflictDetail
         + renameCapabilityNote,
       );
       setPendingBatchImportState(null);
