@@ -2174,6 +2174,41 @@ export const listSegments = async (): Promise<Segment[]> => {
   return appState?.segments ?? [];
 };
 
+export const upsertSegment = async (segment: unknown): Promise<Segment> => {
+  const validatedSegment = assertValid('segment', segment);
+
+  if (shouldUseCanonicalBackendPath('bedsSegments')) {
+    const savedSegment = assertValid('segment', await workflowAdapter.bedsSegments.upsertSegment(validatedSegment));
+    await syncLocalMirrorFromBackend();
+    return savedSegment;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const nextSegments = (appState?.segments ?? []).some((entry) => entry.segmentId === validatedSegment.segmentId)
+    ? (appState?.segments ?? []).map((entry) => (entry.segmentId === validatedSegment.segmentId ? validatedSegment : entry))
+    : [...(appState?.segments ?? []), validatedSegment];
+  await saveAppStateToIndexedDb(assertValid('appState', { ...(appState ?? createEmptyAppState(appState)), segments: nextSegments }));
+  return validatedSegment;
+};
+
+export const removeSegment = async (segmentId: Segment['segmentId']): Promise<void> => {
+  if (shouldUseCanonicalBackendPath('bedsSegments')) {
+    await workflowAdapter.bedsSegments.removeSegment(segmentId);
+    await syncLocalMirrorFromBackend();
+    return;
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  if (!appState) {
+    return;
+  }
+
+  await saveAppStateToIndexedDb(assertValid('appState', {
+    ...appState,
+    segments: (appState.segments ?? []).filter((segment) => segment.segmentId !== segmentId),
+  }));
+};
+
 export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
   if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
     return workflowAdapter.bedsSegments.importSegments(segments);
