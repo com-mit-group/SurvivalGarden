@@ -1749,6 +1749,17 @@ const shouldUseCanonicalWorkflowWithoutRollback = (
   feature: 'bedsSegments' | 'taxonomy' | 'inventory' | 'batches' | 'tasks',
 ): boolean => shouldUseCanonicalBackendPath(feature) && !shouldUseTypescriptRollbackShim(feature);
 
+const syncLocalMirrorFromBackend = async (): Promise<void> => {
+  try {
+    const backendState = await loadAppStateFromBackendApi();
+    if (backendState) {
+      await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+    }
+  } catch (error) {
+    console.warn('Failed to refresh local IndexedDB mirror from backend.', toValidationDebugPayload(error));
+  }
+};
+
 export const getBed = async (bedId: Bed['bedId']): Promise<Bed | null> => {
   if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
     return workflowAdapter.bedsSegments.getBed(bedId);
@@ -1768,8 +1779,10 @@ export const listBeds = async (): Promise<Bed[]> => {
 };
 
 export const upsertBed = async (bed: unknown): Promise<Bed> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
-    return assertValid('bed', await workflowAdapter.bedsSegments.upsertBed(assertValid('bed', bed)));
+  if (shouldUseCanonicalBackendPath('bedsSegments')) {
+    const savedBed = assertValid('bed', await workflowAdapter.bedsSegments.upsertBed(assertValid('bed', bed)));
+    await syncLocalMirrorFromBackend();
+    return savedBed;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1779,8 +1792,9 @@ export const upsertBed = async (bed: unknown): Promise<Bed> => {
 };
 
 export const removeBed = async (bedId: Bed['bedId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+  if (shouldUseCanonicalBackendPath('bedsSegments')) {
     await workflowAdapter.bedsSegments.removeBed(bedId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -1821,8 +1835,10 @@ export const getSpecies = async (speciesId: Species['id']): Promise<Species | nu
 export const upsertSpecies = async (species: unknown): Promise<Species> => {
   const validatedSpecies = assertValid('species', species);
 
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
+    const savedSpecies = assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
+    await syncLocalMirrorFromBackend();
+    return savedSpecies;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1835,8 +1851,9 @@ export const upsertSpecies = async (species: unknown): Promise<Species> => {
 };
 
 export const removeSpecies = async (speciesId: Species['id']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
     await workflowAdapter.taxonomy.removeSpecies(speciesId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -1861,8 +1878,10 @@ export const listCrops = async (): Promise<Crop[]> => {
 };
 
 export const upsertCrop = async (crop: unknown): Promise<Crop> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return assertValid('crop', await workflowAdapter.taxonomy.upsertCrop(assertValid('crop', crop)));
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
+    const savedCrop = assertValid('crop', await workflowAdapter.taxonomy.upsertCrop(assertValid('crop', crop)));
+    await syncLocalMirrorFromBackend();
+    return savedCrop;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1872,8 +1891,9 @@ export const upsertCrop = async (crop: unknown): Promise<Crop> => {
 };
 
 export const removeCrop = async (cropId: Crop['cropId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
     await workflowAdapter.taxonomy.removeCrop(cropId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -1903,8 +1923,10 @@ export const listCropPlans = async (): Promise<CropPlan[]> => {
 };
 
 export const upsertCropPlan = async (cropPlan: unknown): Promise<CropPlan> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return assertValid('cropPlan', await workflowAdapter.taxonomy.upsertCropPlan(assertValid('cropPlan', cropPlan)));
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
+    const savedCropPlan = assertValid('cropPlan', await workflowAdapter.taxonomy.upsertCropPlan(assertValid('cropPlan', cropPlan)));
+    await syncLocalMirrorFromBackend();
+    return savedCropPlan;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -1914,8 +1936,9 @@ export const upsertCropPlan = async (cropPlan: unknown): Promise<CropPlan> => {
 };
 
 export const removeCropPlan = async (planId: CropPlan['planId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+  if (shouldUseCanonicalBackendPath('taxonomy')) {
     await workflowAdapter.taxonomy.removeCropPlan(planId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -2219,11 +2242,13 @@ export const listSeedInventoryItems = async (
 };
 
 export const upsertSeedInventoryItem = async (seedInventoryItem: unknown): Promise<SeedInventoryItem> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
-    return assertValid(
+  if (shouldUseCanonicalBackendPath('inventory')) {
+    const savedItem = assertValid(
       'seedInventoryItem',
       await workflowAdapter.inventory.upsertSeedInventoryItem(assertValid('seedInventoryItem', seedInventoryItem)),
     );
+    await syncLocalMirrorFromBackend();
+    return savedItem;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -2238,8 +2263,9 @@ export const upsertSeedInventoryItem = async (seedInventoryItem: unknown): Promi
 export const removeSeedInventoryItem = async (
   seedInventoryItemId: SeedInventoryItem['seedInventoryItemId'],
 ): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
+  if (shouldUseCanonicalBackendPath('inventory')) {
     await workflowAdapter.inventory.removeSeedInventoryItem(seedInventoryItemId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -2251,8 +2277,10 @@ export const removeSeedInventoryItem = async (
 };
 
 export const upsertTask = async (task: unknown): Promise<Task> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('tasks')) {
-    return assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
+  if (shouldUseCanonicalBackendPath('tasks')) {
+    const savedTask = assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
+    await syncLocalMirrorFromBackend();
+    return savedTask;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -2262,8 +2290,10 @@ export const upsertTask = async (task: unknown): Promise<Task> => {
 };
 
 export const upsertBatch = async (batch: unknown): Promise<Batch> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('batches')) {
-    return assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
+  if (shouldUseCanonicalBackendPath('batches')) {
+    const savedBatch = assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
+    await syncLocalMirrorFromBackend();
+    return savedBatch;
   }
 
   const appState = await loadAppStateFromIndexedDb();
@@ -2277,8 +2307,10 @@ export const transitionBatchStage = async (
   nextStage: string,
   occurredAt: string,
 ): Promise<Batch> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
-    return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
+  if (shouldUseCanonicalBackendPath('batches')) {
+    const transitionedBatch = assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
+    await syncLocalMirrorFromBackend();
+    return transitionedBatch;
   }
 
   // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
@@ -2307,8 +2339,10 @@ export const mutateBatchAssignment = async (
   operation: 'assign' | 'move' | 'remove',
   payload: { batchId: string; bedId?: string; at: string },
 ): Promise<Batch> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
-    return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
+  if (shouldUseCanonicalBackendPath('batches')) {
+    const mutatedBatch = assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
+    await syncLocalMirrorFromBackend();
+    return mutatedBatch;
   }
 
   // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
@@ -2335,8 +2369,9 @@ export const mutateBatchAssignment = async (
 };
 
 export const removeBatch = async (batchId: Batch['batchId']): Promise<void> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
+  if (shouldUseCanonicalBackendPath('batches')) {
     await workflowAdapter.batches.removeBatch(batchId);
+    await syncLocalMirrorFromBackend();
     return;
   }
 
@@ -2349,8 +2384,9 @@ export const removeBatch = async (batchId: Batch['batchId']): Promise<void> => {
 };
 
 export const regenerateCalendarTasks = async (year: number) => {
-  if (shouldUseCanonicalBackendPath('tasks') && !shouldUseTypescriptRollbackShim('tasks')) {
+  if (shouldUseCanonicalBackendPath('tasks')) {
     const payload = await workflowAdapter.tasks.regenerateCalendar(year);
+    await syncLocalMirrorFromBackend();
     return {
       generatedTasks: payload.generatedTasks,
       diagnostics: payload.diagnostics,
