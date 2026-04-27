@@ -8036,9 +8036,7 @@ function App() {
           Mode: {frontendMode === 'backend' ? '.NET backend' : 'TypeScript local'}
         </p>
         <p className="app-mode-authority-note">
-          {frontendMode === 'backend'
-            ? 'Canonical updates are backend-authoritative; UI state reflects server responses.'
-            : 'Local TypeScript mode is enabled for UI-only workflows and development fallback.'}
+          Canonical updates are backend-authoritative; UI state reflects backend responses.
         </p>
       </header>
 
