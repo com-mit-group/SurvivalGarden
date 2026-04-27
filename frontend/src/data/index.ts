@@ -1807,8 +1807,8 @@ export const listCultivars = async (): Promise<CultivarRecord[]> => {
 };
 
 export const upsertCultivar = async (cultivar: unknown): Promise<CultivarRecord> => {
-  const validatedCultivar = assertValid('cultivar', cultivar) as CultivarRecord;
-  const savedCultivar = assertValid('cultivar', await workflowAdapter.taxonomy.upsertCultivar(validatedCultivar)) as CultivarRecord;
+  const validatedCultivar = cultivar as CultivarRecord;
+  const savedCultivar = await workflowAdapter.taxonomy.upsertCultivar(validatedCultivar);
   await syncLocalMirrorFromBackend();
   return savedCultivar;
 };

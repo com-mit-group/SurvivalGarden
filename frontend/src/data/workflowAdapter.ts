@@ -410,13 +410,13 @@ export const workflowAdapter = {
   },
   taxonomy: {
     listCultivars: async (): Promise<CultivarRecord[]> =>
-      assertContractList('taxonomy.listCultivars', 'cultivar', await fetchJson<unknown>(backendPath('/api/cultivars'), { method: 'GET' })),
+      fetchJson<CultivarRecord[]>(backendPath('/api/cultivars'), { method: 'GET' }),
     upsertCultivar: async (cultivar: CultivarRecord): Promise<CultivarRecord> =>
-      assertContract('taxonomy.upsertCultivar', 'cultivar', await fetchJson<unknown>(`/api/cultivars/${encodeURIComponent(cultivar.cultivarId)}`, {
+      fetchJson<CultivarRecord>(`/api/cultivars/${encodeURIComponent(cultivar.cultivarId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cultivar),
-      })),
+      }),
     removeCultivar: async (cultivarId: string): Promise<void> => {
       const response = await fetch(toBackendApiUrl(`/api/cultivars/${encodeURIComponent(cultivarId)}`), { method: 'DELETE' });
       if (response.status === 404 || response.status === 204) {
