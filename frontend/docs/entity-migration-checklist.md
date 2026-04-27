@@ -58,3 +58,8 @@ This checklist tracks command/query migration progress for write workflows acros
 - [x] Post-write layout refresh uses query/read path (`listSegments`, `listBeds`, plus mirrored state read for batches).
 - [x] Segment and batch import confirmation paths now route through command APIs instead of direct canonical merge persistence.
 
+## Full App-State Import / Reset
+- [x] Added `replaceCanonicalAppState` command in `frontend/src/data/index.ts` for full-state replace flows.
+- [x] `frontend/src/data/workflowAdapter.ts` now exposes `appState.replace` backend write command for canonical app-state replacement.
+- [x] `frontend/src/App.tsx` full import confirmations (Recovery + Data page) now use command path instead of direct `saveAppStateToIndexedDb(..., { mode: 'replace' })`.
+- [x] `frontend/src/App.tsx` "Empty all data" reset flow now writes via command path and re-reads state using query/read APIs for post-write validation and UI refresh.

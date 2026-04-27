@@ -1900,6 +1900,31 @@ type ImportCommandResult = {
   errors: ImportStatusIssue[];
 };
 
+export const replaceCanonicalAppState = async (appState: unknown): Promise<AppState> => {
+  const candidateState =
+    appState && typeof appState === 'object'
+      ? {
+          ...(appState as Record<string, unknown>),
+          settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+        }
+      : appState;
+  const canonicalState = canonicalizeForExport(assertValid('appState', candidateState));
+
+  if (isBackendModeEnabled()) {
+    await workflowAdapter.appState.replace(canonicalState);
+    await syncLocalMirrorFromBackend();
+  } else {
+    await saveAppStateToLocalIndexedDb(canonicalState, { mode: 'replace' });
+  }
+
+  const refreshedState = await loadAppStateFromIndexedDb();
+  if (!refreshedState) {
+    throw new AppStateStorageError('Canonical app state replacement completed but no readable state was returned.');
+  }
+
+  return refreshedState;
+};
+
 export const importCrops = async (crops: Crop[]): Promise<ImportCommandResult> => {
   const result = await workflowAdapter.taxonomy.importCrops(crops);
   await syncLocalMirrorFromBackend();

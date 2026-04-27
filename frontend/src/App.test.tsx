@@ -39,6 +39,10 @@ import {
 vi.mock('./data', () => {
   const saveAppStateToIndexedDb = vi.fn().mockResolvedValue(undefined);
   const loadAppStateFromIndexedDb = vi.fn().mockResolvedValue(null);
+  const replaceCanonicalAppState = vi.fn(async (state: unknown) => {
+    await saveAppStateToIndexedDb(state, { mode: 'replace' });
+    return state;
+  });
 
   return {
     initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
@@ -46,6 +50,7 @@ vi.mock('./data', () => {
     loadAppStateFromIndexedDb,
     parseImportedAppState: vi.fn(),
     saveAppStateToIndexedDb,
+    replaceCanonicalAppState,
     serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
     assertValid: vi.fn((schemaName: string, value: unknown) => value),
     listCrops: vi.fn(async () => (await loadAppStateFromIndexedDb())?.crops ?? []),
