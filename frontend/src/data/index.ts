@@ -133,6 +133,18 @@ type LayoutMigrationReport = {
   warnings: LayoutMigrationWarning[];
 };
 
+export type CultivarRecord = {
+  cultivarId: string;
+  cropTypeId: string;
+  name: string;
+  supplier?: string;
+  source?: string;
+  year?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const isBackendModeEnabled = (): boolean => true;
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
@@ -1782,6 +1794,23 @@ export const listSpecies = async (): Promise<Species[]> => {
 
   const appState = await loadAppStateFromIndexedDb();
   return appState?.species ?? [];
+};
+
+export const listCultivars = async (): Promise<CultivarRecord[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listCultivars();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const cultivars = (appState as AppState & { cultivars?: unknown[] } | null)?.cultivars;
+  return Array.isArray(cultivars) ? (cultivars as CultivarRecord[]) : [];
+};
+
+export const upsertCultivar = async (cultivar: unknown): Promise<CultivarRecord> => {
+  const validatedCultivar = cultivar as CultivarRecord;
+  const savedCultivar = await workflowAdapter.taxonomy.upsertCultivar(validatedCultivar);
+  await syncLocalMirrorFromBackend();
+  return savedCultivar;
 };
 
 export const getSpecies = async (speciesId: Species['id']): Promise<Species | null> => {
