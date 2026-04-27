@@ -13,10 +13,10 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
+  replaceCanonicalAppState,
   removeBed,
   removeBatch,
   removeSeedInventoryItem,
-  saveAppStateToIndexedDb,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
@@ -6293,7 +6293,8 @@ export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: R
     setImportMessage(null);
 
     try {
-      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
+      await replaceCanonicalAppState(pendingImportState);
+      await loadAppStateFromIndexedDb();
       setPendingImportState(null);
       setImportMessage('Import complete. Existing data was replaced.');
     } catch (importError) {
@@ -7024,7 +7025,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
+      await replaceCanonicalAppState(pendingImportState);
+      await loadAppStateFromIndexedDb();
       setPendingImportState(null);
       setImportMessage('Import complete. Existing data was replaced.');
     } catch (error) {
@@ -7206,9 +7208,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     try {
       const currentState = await loadAppStateFromIndexedDb();
       const emptyState = createEmptyAppState(currentState);
-
-      await saveAppStateToIndexedDb(emptyState, { mode: 'replace' });
-      const validatedEmptyState = await loadAppStateFromIndexedDb();
+      const validatedEmptyState = await replaceCanonicalAppState(emptyState);
 
       if (
         !validatedEmptyState
@@ -7239,15 +7239,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setImportErrors([]);
       setImportMessage(null);
       setEmptyAllDataRecordCounts({
-        species: 0,
-        crops: 0,
-        segments: 0,
-        beds: 0,
-        paths: 0,
-        cropPlans: 0,
-        batches: 0,
-        tasks: 0,
-        seedInventoryItems: 0,
+        species: (validatedEmptyState.species ?? []).length,
+        crops: validatedEmptyState.crops.length,
+        segments: (validatedEmptyState.segments ?? []).length,
+        beds: listBedsFromAppState(validatedEmptyState).length,
+        paths: (validatedEmptyState.segments ?? []).reduce((total, segment) => total + segment.paths.length, 0),
+        cropPlans: validatedEmptyState.cropPlans.length,
+        batches: validatedEmptyState.batches.length,
+        tasks: validatedEmptyState.tasks.length,
+        seedInventoryItems: validatedEmptyState.seedInventoryItems.length,
       });
       setEmptyAllDataConfirmed(false);
       setEmptyAllDataConfirmationText('');

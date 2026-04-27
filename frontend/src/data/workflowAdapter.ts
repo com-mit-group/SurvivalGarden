@@ -285,6 +285,19 @@ const assertImportCommandResult = (contractName: string, payload: unknown): Impo
 };
 
 export const workflowAdapter = {
+  appState: {
+    replace: async (appState: AppState): Promise<void> => {
+      const response = await fetch(toBackendApiUrl('/api/app-state'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appState),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+  },
   batches: {
     upsertBatch: async (batch: Batch): Promise<Batch> =>
       assertContract('batches.upsertBatch', 'batch', await fetchJson<unknown>(`/api/batches/${encodeURIComponent(batch.batchId)}`, {
