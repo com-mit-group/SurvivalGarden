@@ -37,8 +37,6 @@ import {
 import type { ListQuery } from './repos/interfaces';
 import {
   generateCalendarTasksWithDiagnostics as generateCalendarTasksWithDiagnosticsLocal,
-  getTaskFromAppState as getTaskFromAppStateLocal,
-  upsertTaskInAppState as upsertTaskInAppStateLocal,
   upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
 } from './repos/taskRepository';
 import { applyStageEvent } from '../domain';
@@ -1834,38 +1832,14 @@ export const getSpecies = async (speciesId: Species['id']): Promise<Species | nu
 
 export const upsertSpecies = async (species: unknown): Promise<Species> => {
   const validatedSpecies = assertValid('species', species);
-
-  if (shouldUseCanonicalBackendPath('taxonomy')) {
-    const savedSpecies = assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
-    await syncLocalMirrorFromBackend();
-    return savedSpecies;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextSpecies = (appState?.species ?? []).some((entry) => entry.id === validatedSpecies.id)
-    ? (appState?.species ?? []).map((entry) => (entry.id === validatedSpecies.id ? validatedSpecies : entry))
-    : [...(appState?.species ?? []), validatedSpecies];
-  const nextState = assertValid('appState', { ...(appState ?? createEmptyAppState(appState)), species: nextSpecies });
-  await saveAppStateToIndexedDb(nextState);
-  return validatedSpecies;
+  const savedSpecies = assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
+  await syncLocalMirrorFromBackend();
+  return savedSpecies;
 };
 
 export const removeSpecies = async (speciesId: Species['id']): Promise<void> => {
-  if (shouldUseCanonicalBackendPath('taxonomy')) {
-    await workflowAdapter.taxonomy.removeSpecies(speciesId);
-    await syncLocalMirrorFromBackend();
-    return;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-
-  await saveAppStateToIndexedDb(assertValid('appState', {
-    ...appState,
-    species: (appState.species ?? []).filter((species) => species.id !== speciesId),
-  }));
+  await workflowAdapter.taxonomy.removeSpecies(speciesId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const listCrops = async (): Promise<Crop[]> => {
@@ -1967,202 +1941,21 @@ type ImportCommandResult = {
 };
 
 export const importCrops = async (crops: Crop[]): Promise<ImportCommandResult> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return workflowAdapter.taxonomy.importCrops(crops);
-  }
-
-  const existingAppState = await loadAppStateFromIndexedDb();
-  if (!existingAppState) {
-    throw new Error('Crop import failed: local app state is unavailable.');
-  }
-
-  const cropsById = new Map(existingAppState.crops.map((crop) => [crop.cropId, crop]));
-  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-  const errors: ImportStatusIssue[] = [];
-
-  crops.forEach((incomingCrop, index) => {
-    const currentCrop = cropsById.get(incomingCrop.cropId);
-
-    if (!currentCrop) {
-      cropsById.set(incomingCrop.cropId, incomingCrop);
-      summary.imported += 1;
-      return;
-    }
-
-    if (incomingCrop.createdAt !== currentCrop.createdAt) {
-      summary.rejected += 1;
-      errors.push({
-        path: `/crops/${index}`,
-        message: `rejected (crop_identity_conflict): createdAt mismatch for cropId ${incomingCrop.cropId}`,
-      });
-      return;
-    }
-
-    const mergedCrop: Crop = {
-      ...currentCrop,
-      name: incomingCrop.name,
-      rules: incomingCrop.rules,
-      nutritionProfile: incomingCrop.nutritionProfile,
-      updatedAt: incomingCrop.updatedAt,
-    };
-
-    if (incomingCrop.aliases !== undefined) {
-      mergedCrop.aliases = incomingCrop.aliases;
-    }
-    if (incomingCrop.category !== undefined) {
-      mergedCrop.category = incomingCrop.category;
-    }
-    if (incomingCrop.cultivarGroup !== undefined) {
-      mergedCrop.cultivarGroup = incomingCrop.cultivarGroup;
-    }
-    if (incomingCrop.taskRules !== undefined) {
-      mergedCrop.taskRules = incomingCrop.taskRules;
-    }
-    const incomingCultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
-    if (incomingCultivar !== undefined) {
-      (mergedCrop as Crop & { cultivar?: string }).cultivar = incomingCultivar;
-    }
-    const incomingSpeciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
-    if (incomingSpeciesId !== undefined) {
-      (mergedCrop as Crop & { speciesId?: string }).speciesId = incomingSpeciesId;
-    }
-
-    const incomingSpecies = (incomingCrop as Crop & {
-      species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-    }).species;
-    const incomingTaxonomy = incomingCrop.taxonomy;
-
-    if (incomingSpecies !== undefined || incomingTaxonomy !== undefined) {
-      const currentSpecies = (currentCrop as Crop & {
-        species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-      }).species;
-      const commonName = incomingSpecies?.commonName ?? currentSpecies?.commonName;
-      const scientificName = incomingSpecies?.scientificName ?? currentSpecies?.scientificName;
-
-      if (commonName !== undefined && scientificName !== undefined) {
-        (mergedCrop as Crop & {
-          species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-        }).species = {
-          ...(currentSpecies?.id !== undefined ? { id: currentSpecies.id } : {}),
-          ...(incomingSpecies?.id !== undefined ? { id: incomingSpecies.id } : {}),
-          commonName,
-          scientificName,
-          ...((incomingTaxonomy !== undefined || incomingSpecies?.taxonomy !== undefined || currentSpecies?.taxonomy !== undefined)
-            ? {
-                taxonomy: {
-                  ...(currentSpecies?.taxonomy ?? {}),
-                  ...(incomingTaxonomy ?? {}),
-                  ...(incomingSpecies?.taxonomy ?? {}),
-                },
-              }
-            : {}),
-        };
-      }
-    }
-
-    const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
-    cropsById.set(incomingCrop.cropId, mergedCrop);
-    if (unchanged) {
-      summary.skipped += 1;
-    } else {
-      summary.merged += 1;
-    }
-  });
-
-  await saveAppStateToIndexedDb({ ...existingAppState, crops: [...cropsById.values()] }, { mode: 'replace' });
-  return { summary, errors };
+  const result = await workflowAdapter.taxonomy.importCrops(crops);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const importSpecies = async (species: Species[]): Promise<ImportCommandResult> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return workflowAdapter.taxonomy.importSpecies(species);
-  }
-
-  const existingAppState = await loadAppStateFromIndexedDb();
-  if (!existingAppState) {
-    throw new Error('Species import failed: local app state is unavailable.');
-  }
-
-  const speciesById = new Map((existingAppState.species ?? []).map((entry) => [entry.id, entry]));
-  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-  const errors: ImportStatusIssue[] = [];
-
-  species.forEach((incomingSpecies, index) => {
-    const currentSpecies = speciesById.get(incomingSpecies.id);
-
-    if (!currentSpecies) {
-      speciesById.set(incomingSpecies.id, incomingSpecies);
-      summary.imported += 1;
-      return;
-    }
-
-    const mergedSpecies: Species = {
-      ...currentSpecies,
-      ...((incomingSpecies.commonName ?? currentSpecies.commonName) !== undefined
-        ? { commonName: incomingSpecies.commonName ?? currentSpecies.commonName }
-        : {}),
-      ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
-        ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
-        : {}),
-      ...((incomingSpecies.aliases ?? currentSpecies.aliases) !== undefined
-        ? { aliases: incomingSpecies.aliases ?? currentSpecies.aliases }
-        : {}),
-      ...((incomingSpecies.notes ?? currentSpecies.notes) !== undefined
-        ? { notes: incomingSpecies.notes ?? currentSpecies.notes }
-        : {}),
-    };
-
-    const unchanged = JSON.stringify(currentSpecies) === JSON.stringify(mergedSpecies);
-    speciesById.set(incomingSpecies.id, mergedSpecies);
-    if (unchanged) {
-      summary.skipped += 1;
-    } else {
-      summary.merged += 1;
-      if (currentSpecies.commonName !== incomingSpecies.commonName || currentSpecies.scientificName !== incomingSpecies.scientificName) {
-        errors.push({
-          path: `/species/${index}`,
-          message: `merged (shared_reference_update): crop species references remain linked to ${incomingSpecies.id}`,
-        });
-      }
-    }
-  });
-
-  await saveAppStateToIndexedDb({ ...existingAppState, species: [...speciesById.values()] }, { mode: 'replace' });
-  return { summary, errors };
+  const result = await workflowAdapter.taxonomy.importSpecies(species);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const importCropPlans = async (cropPlans: CropPlan[]): Promise<ImportCommandResult> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return workflowAdapter.taxonomy.importCropPlans(cropPlans);
-  }
-
-  const existingAppState = await loadAppStateFromIndexedDb();
-  if (!existingAppState) {
-    throw new Error('Crop plan import failed: local app state is unavailable.');
-  }
-
-  const plansById = new Map(existingAppState.cropPlans.map((plan) => [plan.planId, plan]));
-  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-
-  cropPlans.forEach((incomingPlan) => {
-    const currentPlan = plansById.get(incomingPlan.planId);
-    if (!currentPlan) {
-      plansById.set(incomingPlan.planId, incomingPlan);
-      summary.imported += 1;
-      return;
-    }
-
-    const unchanged = JSON.stringify(currentPlan) === JSON.stringify(incomingPlan);
-    plansById.set(incomingPlan.planId, incomingPlan);
-    if (unchanged) {
-      summary.skipped += 1;
-    } else {
-      summary.merged += 1;
-    }
-  });
-
-  await saveAppStateToIndexedDb({ ...existingAppState, cropPlans: [...plansById.values()] }, { mode: 'replace' });
-  return { summary, errors: [] };
+  const result = await workflowAdapter.taxonomy.importCropPlans(cropPlans);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const listSegments = async (): Promise<Segment[]> => {
@@ -2176,82 +1969,20 @@ export const listSegments = async (): Promise<Segment[]> => {
 
 export const upsertSegment = async (segment: unknown): Promise<Segment> => {
   const validatedSegment = assertValid('segment', segment);
-
-  if (shouldUseCanonicalBackendPath('bedsSegments')) {
-    const savedSegment = assertValid('segment', await workflowAdapter.bedsSegments.upsertSegment(validatedSegment));
-    await syncLocalMirrorFromBackend();
-    return savedSegment;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextSegments = (appState?.segments ?? []).some((entry) => entry.segmentId === validatedSegment.segmentId)
-    ? (appState?.segments ?? []).map((entry) => (entry.segmentId === validatedSegment.segmentId ? validatedSegment : entry))
-    : [...(appState?.segments ?? []), validatedSegment];
-  await saveAppStateToIndexedDb(assertValid('appState', { ...(appState ?? createEmptyAppState(appState)), segments: nextSegments }));
-  return validatedSegment;
+  const savedSegment = assertValid('segment', await workflowAdapter.bedsSegments.upsertSegment(validatedSegment));
+  await syncLocalMirrorFromBackend();
+  return savedSegment;
 };
 
 export const removeSegment = async (segmentId: Segment['segmentId']): Promise<void> => {
-  if (shouldUseCanonicalBackendPath('bedsSegments')) {
-    await workflowAdapter.bedsSegments.removeSegment(segmentId);
-    await syncLocalMirrorFromBackend();
-    return;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-
-  await saveAppStateToIndexedDb(assertValid('appState', {
-    ...appState,
-    segments: (appState.segments ?? []).filter((segment) => segment.segmentId !== segmentId),
-  }));
+  await workflowAdapter.bedsSegments.removeSegment(segmentId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
-    return workflowAdapter.bedsSegments.importSegments(segments);
-  }
-
-  const existingAppState = await loadAppStateFromIndexedDb();
-  if (!existingAppState) {
-    throw new Error('Segment import failed: local app state is unavailable.');
-  }
-
-  const segmentsById = new Map((existingAppState.segments ?? []).map((segment) => [segment.segmentId, segment]));
-  const summary: ImportStatusSummary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-  const errors: ImportStatusIssue[] = [];
-
-  segments.forEach((incomingSegment, index) => {
-    const currentSegment = segmentsById.get(incomingSegment.segmentId);
-
-    if (!currentSegment) {
-      segmentsById.set(incomingSegment.segmentId, incomingSegment);
-      summary.imported += 1;
-      return;
-    }
-
-    if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
-      summary.skipped += 1;
-      return;
-    }
-
-    if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
-      summary.rejected += 1;
-      errors.push({
-        path: `/segments/${index}`,
-        message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
-      });
-      return;
-    }
-
-    segmentsById.set(incomingSegment.segmentId, incomingSegment);
-    summary.merged += 1;
-  });
-
-  await saveAppStateToIndexedDb({ ...existingAppState, segments: [...segmentsById.values()] }, { mode: 'replace' });
-  return { summary, errors };
+  const result = await workflowAdapter.bedsSegments.importSegments(segments);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const getSeedInventoryItem = async (
@@ -2312,29 +2043,15 @@ export const removeSeedInventoryItem = async (
 };
 
 export const upsertTask = async (task: unknown): Promise<Task> => {
-  if (shouldUseCanonicalBackendPath('tasks')) {
-    const savedTask = assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
-    await syncLocalMirrorFromBackend();
-    return savedTask;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertTaskInAppStateLocal(appState ?? createEmptyAppState(appState), task);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid('task', getTaskFromAppStateLocal(nextState, assertValid('task', task).id));
+  const savedTask = assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
+  await syncLocalMirrorFromBackend();
+  return savedTask;
 };
 
 export const upsertBatch = async (batch: unknown): Promise<Batch> => {
-  if (shouldUseCanonicalBackendPath('batches')) {
-    const savedBatch = assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
-    await syncLocalMirrorFromBackend();
-    return savedBatch;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertBatchInAppStateLocal(appState ?? createEmptyAppState(appState), batch);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid('batch', getBatchFromAppStateLocal(nextState, assertValid('batch', batch).batchId));
+  const savedBatch = assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
+  await syncLocalMirrorFromBackend();
+  return savedBatch;
 };
 
 export const transitionBatchStage = async (
