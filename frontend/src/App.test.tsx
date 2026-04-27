@@ -23,7 +23,6 @@ import {
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
   listCrops,
-  listCultivars,
   listSegments,
   listSpecies,
   parseImportedAppState,
@@ -33,7 +32,6 @@ import {
   serializeAppStateForExport,
   importSegments,
   upsertBatch,
-  upsertCultivar,
   upsertSpecies,
   upsertSegment,
 } from './data';
@@ -901,7 +899,6 @@ describe('App', () => {
   });
 
   it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
     vi.mocked(assertValid).mockImplementation((_schemaName: string, value: unknown) => value as never);
 
     const deepLinkPayload = btoa(JSON.stringify({
