@@ -23,6 +23,7 @@ import {
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
   listCrops,
+  listCultivars,
   listSegments,
   listSpecies,
   parseImportedAppState,
@@ -32,6 +33,7 @@ import {
   serializeAppStateForExport,
   importSegments,
   upsertBatch,
+  upsertCultivar,
   upsertSpecies,
   upsertSegment,
 } from './data';
@@ -49,6 +51,7 @@ vi.mock('./data', () => {
     serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
     assertValid: vi.fn((schemaName: string, value: unknown) => value),
     listCrops: vi.fn(async () => (await loadAppStateFromIndexedDb())?.crops ?? []),
+    listCultivars: vi.fn(async () => (await loadAppStateFromIndexedDb())?.cultivars ?? []),
     listSpecies: vi.fn(async () => (await loadAppStateFromIndexedDb())?.species ?? []),
     listCropPlans: vi.fn(async () => (await loadAppStateFromIndexedDb())?.cropPlans ?? []),
     listSegments: vi.fn(async () => (await loadAppStateFromIndexedDb())?.segments ?? []),
@@ -64,6 +67,7 @@ vi.mock('./data', () => {
       await saveAppStateToIndexedDb({ ...state, species: nextSpecies });
       return species;
     }),
+    upsertCultivar: vi.fn(async (cultivar: { cultivarId: string }) => cultivar),
     importCrops: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
     importSpecies: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
     importCropPlans: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
@@ -646,7 +650,7 @@ describe('App', () => {
       expect(screen.getByText(/local_precheck_warning \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(upsertBatch).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Import Preview')).not.toBeInTheDocument();
@@ -659,7 +663,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+      expect(upsertBatch).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Collision Status Summary')).toBeInTheDocument();
       expect(screen.getByText('skipped (identical_batch): 0')).toBeInTheDocument();
       expect(screen.getByText('merged (eventsAdded): 0')).toBeInTheDocument();
@@ -855,7 +859,7 @@ describe('App', () => {
       expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(upsertBatch).not.toHaveBeenCalled();
   });
 
 
@@ -915,15 +919,12 @@ describe('App', () => {
     });
 
     expect(screen.getByText('Import Preview')).toBeInTheDocument();
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(upsertBatch).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        ...validOnlyState,
-        batches: expect.arrayContaining([expect.objectContaining({ batchId: 'batch-1' })]),
-      }), { mode: 'merge' });
+      expect(upsertBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'batch-1' }));
     });
   });
 
@@ -938,7 +939,7 @@ describe('App', () => {
       expect(screen.getByText('Deep-link import failed. Payload was invalid or too large.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(upsertBatch).not.toHaveBeenCalled();
   });
 
   it('accepts deep-link segment import payload and requires confirmation before import', async () => {

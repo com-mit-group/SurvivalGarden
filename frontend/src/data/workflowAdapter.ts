@@ -219,6 +219,18 @@ type ImportCommandResult = {
   errors: ImportIssue[];
 };
 
+type CultivarRecord = {
+  cultivarId: string;
+  cropTypeId: string;
+  name: string;
+  supplier?: string;
+  source?: string;
+  year?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const assertImportSummary = (contractName: string, payload: unknown): ImportSummary => {
   if (!payload || typeof payload !== 'object') {
     throw buildContractMismatchError(contractName, new Error('expected object payload'));
@@ -397,6 +409,23 @@ export const workflowAdapter = {
       })),
   },
   taxonomy: {
+    listCultivars: async (): Promise<CultivarRecord[]> =>
+      assertContractList('taxonomy.listCultivars', 'cultivar', await fetchJson<unknown>(backendPath('/api/cultivars'), { method: 'GET' })),
+    upsertCultivar: async (cultivar: CultivarRecord): Promise<CultivarRecord> =>
+      assertContract('taxonomy.upsertCultivar', 'cultivar', await fetchJson<unknown>(`/api/cultivars/${encodeURIComponent(cultivar.cultivarId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cultivar),
+      })),
+    removeCultivar: async (cultivarId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/cultivars/${encodeURIComponent(cultivarId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
     listSpecies: async (): Promise<Species[]> =>
       assertContractList('taxonomy.listSpecies', 'species', await fetchJson<unknown>(backendPath('/api/species'), { method: 'GET' })),
     getSpecies: async (speciesId: string): Promise<Species | null> => {

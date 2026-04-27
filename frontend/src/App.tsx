@@ -28,10 +28,12 @@ import {
   regenerateCalendarTasks,
   transitionBatchStage,
   listCrops,
+  listCultivars,
   listSpecies,
   listCropPlans,
   listSegments,
   upsertSpecies,
+  upsertCultivar,
   importCrops,
   importSpecies,
   importCropPlans,
@@ -1986,13 +1988,8 @@ function CultivarAdminPage() {
     setSavingId(editingCultivarId ?? 'new');
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        return;
-      }
-
       const nowIso = new Date().toISOString();
-      const existingCultivars = getCultivarsFromAppState(appState);
+      const existingCultivars = await listCultivars();
       const existingCultivar = editingCultivarId ? existingCultivars.find((cultivar) => cultivar.cultivarId === editingCultivarId) : undefined;
       const nextCultivar: CultivarRecord = {
         cultivarId: existingCultivar?.cultivarId ?? createUniqueCultivarId(trimmedName, trimmedCropTypeId, existingCultivars.map((cultivar) => cultivar.cultivarId)),
@@ -2009,8 +2006,10 @@ function CultivarAdminPage() {
       const nextCultivars = existingCultivars.some((cultivar) => cultivar.cultivarId === nextCultivar.cultivarId)
         ? existingCultivars.map((cultivar) => (cultivar.cultivarId === nextCultivar.cultivarId ? nextCultivar : cultivar))
         : [...existingCultivars, nextCultivar];
-
-      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      const cultivarToPersist =
+        nextCultivars.find((candidate) => candidate.cultivarId === nextCultivar.cultivarId)
+        ?? nextCultivar;
+      await upsertCultivar(cultivarToPersist);
       await loadCultivars();
 
       if (!existingCultivar && isBatchQuickCreate) {
@@ -2030,17 +2029,14 @@ function CultivarAdminPage() {
     setSaveMessage(null);
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        return;
-      }
-
       const nowIso = new Date().toISOString();
-      const nextCultivars = getCultivarsFromAppState(appState).map((cultivar) => (
+      const nextCultivars = (await listCultivars()).map((cultivar) => (
         cultivar.cultivarId === cultivarId ? withCultivarArchiveState(cultivar, archived, nowIso) : cultivar
       ));
-
-      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      const nextCultivar = nextCultivars.find((candidate) => candidate.cultivarId === cultivarId);
+      if (nextCultivar) {
+        await upsertCultivar(nextCultivar);
+      }
       await loadCultivars();
       if (editingCultivarId === cultivarId && archived) {
         resetForm();
@@ -2751,12 +2747,6 @@ const getCultivarsFromAppState = (appState: AppState): CultivarRecord[] => {
   const cultivars = (appState as AppStateWithCultivars).cultivars;
   return Array.isArray(cultivars) ? cultivars : [];
 };
-
-const withCultivarsInAppState = (appState: AppState, cultivars: CultivarRecord[]): AppState =>
-  ({
-    ...(appState as AppStateWithCultivars),
-    cultivars,
-  }) as AppState;
 
 const createUniqueCultivarId = (name: string, cropTypeId: string, existingCultivarIds: string[]): string => {
   const base = normalizeCropIdPart(`${cropTypeId}-${name}`) || `cultivar-${Date.now()}`;
@@ -7055,15 +7045,29 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const report = await saveAppStateToIndexedDb(pendingBatchImportState, { mode: 'merge' });
       const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
-      const created = report?.batches.added ?? appStateWithBatches.batches?.length ?? 0;
-      const merged = report?.batches.updated ?? 0;
-      const skipped = report?.batches.unchanged ?? 0;
-      const rejectedConflict = report?.conflicts.length ?? 0;
+      const candidateBatches = Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : [];
+      const importErrors: Array<{ path: string; message: string }> = [];
+      let created = 0;
+
+      await Promise.all(candidateBatches.map(async (batchCandidate, index) => {
+        try {
+          await upsertBatch(batchCandidate);
+          created += 1;
+        } catch (error) {
+          importErrors.push({
+            path: `/batches/${index}`,
+            message: error instanceof Error ? error.message : 'Batch upsert failed.',
+          });
+        }
+      }));
+
+      const merged = 0;
+      const skipped = 0;
+      const rejectedConflict = importErrors.length;
       const renamed = 0;
-      const conflictDetail = rejectedConflict > 0
-        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
+      const conflictDetail = rejectedConflict > 0 && importErrors.length > 0
+        ? ` Conflict reasons: ${importErrors.map((entry) => entry.message).join('; ')}`
         : '';
       const renameCapabilityNote = autoRenameOnConflict
         ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
@@ -7074,6 +7078,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         rejected: rejectedConflict,
         renamed,
       });
+      setImportErrors(importErrors);
       setImportMessage(
         `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
         + conflictDetail
