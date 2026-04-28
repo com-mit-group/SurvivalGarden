@@ -40,6 +40,18 @@ internal static class BatchEndpoints
                 });
             }
 
+            var batchId = payload["batchId"]?.GetValue<string>() ?? payload["id"]?.GetValue<string>() ?? string.Empty;
+            var existing = await service.GetByIdAsync("batches", "batchId", batchId, ct);
+            if (existing is not null)
+            {
+                return Results.Conflict(new
+                {
+                    error = "validation_failed",
+                    workflow = "create_batch",
+                    errors = new[] { new { path = "/batchId", message = "batch_already_exists" } }
+                });
+            }
+
             var saved = await service.UpsertAsync("batches", "batchId", payload, ct);
             return Results.Ok(saved);
         });
@@ -94,9 +106,9 @@ internal static class BatchEndpoints
             {
                 return Results.BadRequest(new
                 {
-                    error = transition.Error,
+                    error = "validation_failed",
                     workflow = "stage_event",
-                    batchId = id
+                    errors = new[] { new { path = "/stage", message = transition.Error ?? "invalid_stage_transition" } }
                 });
             }
 
@@ -165,7 +177,12 @@ internal static class BatchEndpoints
             var transition = ApplyStageEvent(batch, "ended", occurredAt);
             if (!transition.Ok)
             {
-                return Results.BadRequest(new { error = transition.Error, workflow = "complete_batch", batchId = id });
+                return Results.BadRequest(new
+                {
+                    error = "validation_failed",
+                    workflow = "complete_batch",
+                    errors = new[] { new { path = "/occurredAt", message = transition.Error ?? "invalid_stage_transition" } }
+                });
             }
 
             await service.SaveAppStateAsync(state, ct);
@@ -402,14 +419,14 @@ internal static class BatchEndpoints
         {
             return Results.BadRequest(new
             {
-                error = mutation.Error,
+                error = "validation_failed",
                 workflow = operation switch
                 {
                     "assign" => "assign_bed",
                     "move" => "move_bed",
                     _ => "unassign_bed"
                 },
-                batchId = id
+                errors = new[] { new { path = "/bedId|/at", message = mutation.Error ?? "invalid_assignment_operation" } }
             });
         }
 

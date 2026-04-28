@@ -30,6 +30,11 @@ export type BackendApiPath =
   | '/api/validate/{collection}'
   | '/api/batches'
   | '/api/batches/{id}'
+  | '/api/batches/{id}/stage-events'
+  | '/api/batches/{id}/assign-bed'
+  | '/api/batches/{id}/unassign-bed'
+  | '/api/batches/{id}/move-bed'
+  | '/api/batches/{id}/complete'
   | '/api/domain/batches/{id}/stage-events'
   | '/api/domain/batches/{id}/assignment'
   | '/api/domain/tasks/regenerate-calendar';

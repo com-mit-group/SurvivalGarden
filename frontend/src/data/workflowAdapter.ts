@@ -312,7 +312,9 @@ export const workflowAdapter = {
         body: JSON.stringify({ batches }),
       })),
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
-      fetchJson<Batch>(`/api/batches/${encodeURIComponent(batchId)}/stage-events`, {
+      fetchJson<Batch>(nextStage === 'ended'
+        ? `/api/batches/${encodeURIComponent(batchId)}/complete`
+        : `/api/batches/${encodeURIComponent(batchId)}/stage-events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage: nextStage, occurredAt }),
