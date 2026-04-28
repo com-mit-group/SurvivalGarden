@@ -37,6 +37,7 @@ import {
   importCrops,
   importSpecies,
   importCropPlans,
+  importBatches,
   importSegments,
   upsertSegment,
   removeSegment,
@@ -6406,6 +6407,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   }>>([]);
   const [autoRenameOnConflict, setAutoRenameOnConflict] = useState(false);
   const [batchImportStatusSummary, setBatchImportStatusSummary] = useState<{
+    created: number;
     skipped: number;
     merged: number;
     rejected: number;
@@ -7048,41 +7050,29 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
 
     try {
       const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
-      const candidateBatches = Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : [];
-      const importErrors: Array<{ path: string; message: string }> = [];
-      let created = 0;
-
-      await Promise.all(candidateBatches.map(async (batchCandidate, index) => {
-        try {
-          await upsertBatch(batchCandidate);
-          created += 1;
-        } catch (error) {
-          importErrors.push({
-            path: `/batches/${index}`,
-            message: error instanceof Error ? error.message : 'Batch upsert failed.',
-          });
-        }
-      }));
-
-      const merged = 0;
-      const skipped = 0;
-      const rejectedConflict = importErrors.length;
-      const renamed = 0;
-      const conflictDetail = rejectedConflict > 0 && importErrors.length > 0
-        ? ` Conflict reasons: ${importErrors.map((entry) => entry.message).join('; ')}`
+      const candidateBatches = (Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : []) as Batch[];
+      const commandResult = await importBatches(candidateBatches);
+      const created = commandResult.summary.imported;
+      const merged = commandResult.summary.merged;
+      const skipped = commandResult.summary.skipped;
+      const rejected = commandResult.summary.rejected;
+      const renamed = commandResult.errors.filter((entry) => entry.message.toLowerCase().includes('renamed')).length;
+      const conflictDetail = commandResult.errors.length > 0
+        ? ` Conflict reasons: ${commandResult.errors.map((entry) => entry.message).join('; ')}`
         : '';
       const renameCapabilityNote = autoRenameOnConflict
         ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
         : '';
       setBatchImportStatusSummary({
+        created,
         skipped,
         merged,
-        rejected: rejectedConflict,
+        rejected,
         renamed,
       });
-      setImportErrors(importErrors);
+      setImportErrors(commandResult.errors);
       setImportMessage(
-        `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
+        `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejected}, renamed ${renamed}.`
         + conflictDetail
         + renameCapabilityNote,
       );
@@ -7786,6 +7776,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         <section>
           <h3>Collision Status Summary</h3>
           <ul>
+            <li>created (imported): {batchImportStatusSummary.created}</li>
             <li>skipped (identical_batch): {batchImportStatusSummary.skipped}</li>
             <li>merged (eventsAdded): {batchImportStatusSummary.merged}</li>
             <li>rejected (batch_identity_conflict): {batchImportStatusSummary.rejected}</li>

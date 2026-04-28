@@ -2020,6 +2020,12 @@ export const upsertBatch = async (batch: unknown): Promise<Batch> => {
   return savedBatch;
 };
 
+export const importBatches = async (batches: Batch[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.batches.importBatches(batches);
+  await syncLocalMirrorFromBackend();
+  return result;
+};
+
 export const transitionBatchStage = async (
   batchId: string,
   nextStage: string,
