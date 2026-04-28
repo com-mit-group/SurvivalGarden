@@ -203,7 +203,7 @@ describe('workflow adapter transport', () => {
     expect(toBackendApiUrl('/api/beds')).toBe('/api/beds');
   });
 
-  it('posts stage transitions to the backend domain endpoint', async () => {
+  it('posts stage transitions to the backend batch endpoint', async () => {
     vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -216,7 +216,7 @@ describe('workflow adapter transport', () => {
 
     expect(batch.batchId).toBe('batch-1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:5142/api/domain/batches/batch-1/stage-events',
+      'http://localhost:5142/api/batches/batch-1/stage-events',
       expect.objectContaining({ method: 'POST' }),
     );
   });
