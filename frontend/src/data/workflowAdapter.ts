@@ -300,8 +300,8 @@ export const workflowAdapter = {
   },
   batches: {
     upsertBatch: async (batch: Batch): Promise<Batch> =>
-      assertContract('batches.upsertBatch', 'batch', await fetchJson<unknown>(`/api/batches/${encodeURIComponent(batch.batchId)}`, {
-        method: 'PUT',
+      assertContract('batches.upsertBatch', 'batch', await fetchJson<unknown>('/api/batches', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(batch),
       })),
@@ -312,7 +312,7 @@ export const workflowAdapter = {
         body: JSON.stringify({ batches }),
       })),
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
-      fetchJson<Batch>(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`, {
+      fetchJson<Batch>(`/api/batches/${encodeURIComponent(batchId)}/stage-events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage: nextStage, occurredAt }),
@@ -321,11 +321,18 @@ export const workflowAdapter = {
       operation: 'assign' | 'move' | 'remove',
       payload: { batchId: string; bedId?: string; at: string },
     ): Promise<Batch> =>
-      fetchJson<Batch>(`/api/domain/batches/${encodeURIComponent(payload.batchId)}/assignment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation, bedId: payload.bedId, at: payload.at }),
-      }),
+      fetchJson<Batch>(
+        operation === 'assign'
+          ? `/api/batches/${encodeURIComponent(payload.batchId)}/assign-bed`
+          : operation === 'move'
+            ? `/api/batches/${encodeURIComponent(payload.batchId)}/move-bed`
+            : `/api/batches/${encodeURIComponent(payload.batchId)}/unassign-bed`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bedId: payload.bedId, at: payload.at }),
+        },
+      ),
     removeBatch: async (batchId: string): Promise<void> => {
       const response = await fetch(toBackendApiUrl(`/api/batches/${encodeURIComponent(batchId)}`), { method: 'DELETE' });
       if (response.status === 404 || response.status === 204) {
