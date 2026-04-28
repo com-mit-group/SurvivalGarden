@@ -41,8 +41,10 @@ import {
   importSegments,
   upsertSegment,
   removeSegment,
+  removePath,
   upsertBed,
   upsertCrop,
+  upsertPath,
   upsertSeedInventoryItem,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
@@ -300,62 +302,31 @@ function BedsPage() {
     setSavingEntityKey(activeFormKey);
 
     try {
-      let nextSegments = currentState.segments ?? [];
+      const allSegments = currentState.segments ?? [];
 
-      if (kind === 'segment') {
-        if (isCreate) {
-          nextSegments = [
-            ...nextSegments,
-            {
-              segmentId: `segment-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-              name: formName.trim(),
-              ...(formKind.trim() ? { kind: formKind.trim() } : {}),
-              width,
-              widthM: width,
-              height,
-              lengthM: height,
-              beds: [],
-              paths: [],
-            },
-          ];
-        } else {
-          nextSegments = nextSegments.map((segment) =>
-            segment.segmentId === entityIdOrMode
-              ? (() => {
-                  const segmentWithoutKind = { ...segment };
-                  delete segmentWithoutKind.kind;
-
-                  return {
-                    ...segmentWithoutKind,
-                    name: formName.trim(),
-                    ...(formKind.trim() ? { kind: formKind.trim() } : {}),
-                    width,
-                    widthM: width,
-                    height,
-                    lengthM: height,
-                  };
-                })()
-              : segment,
-          );
+      switch (kind) {
+        case 'segment': {
+          const existingSegment = allSegments.find((segment) => segment.segmentId === entityIdOrMode);
+          const nextSegment: Segment = {
+            ...(isCreate ? {} : existingSegment),
+            segmentId: isCreate ? `segment-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : entityIdOrMode,
+            name: formName.trim(),
+            ...(formKind.trim() ? { kind: formKind.trim() } : {}),
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            beds: existingSegment?.beds ?? [],
+            paths: existingSegment?.paths ?? [],
+          };
+          await upsertSegment(nextSegment);
+          break;
         }
-      }
-
-      if (kind === 'bed') {
-        const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
-        nextSegments = nextSegments.map((segment) => {
-          if (segment.segmentId !== formSegmentId) {
-            if (!isCreate && segment.segmentId === entityIdOrMode) {
-              return {
-                ...segment,
-                beds: segment.beds.filter((bed) => bed.bedId !== existingEntityId),
-              };
-            }
-
-            return segment;
-          }
-
+        case 'bed': {
+          const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
+          const existingBed = allSegments.flatMap((segment) => segment.beds).find((bed) => bed.bedId === existingEntityId);
           const nextBed: Segment['beds'][number] = {
-            ...(isCreate ? {} : segment.beds.find((bed) => bed.bedId === existingEntityId)),
+            ...(isCreate ? {} : existingBed),
             bedId,
             segmentId: formSegmentId,
             gardenId: getDefaultGardenId(currentState),
@@ -367,48 +338,17 @@ function BedsPage() {
             widthM: width,
             height,
             lengthM: height,
-            createdAt: isCreate ? now : segment.beds.find((bed) => bed.bedId === existingEntityId)?.createdAt ?? now,
+            createdAt: isCreate ? now : existingBed?.createdAt ?? now,
             updatedAt: now,
           };
-
-          const nextBeds = isCreate
-            ? [...segment.beds, nextBed]
-            : segment.beds.some((bed) => bed.bedId === existingEntityId)
-              ? segment.beds.map((bed) => (bed.bedId === existingEntityId ? nextBed : bed))
-              : [...segment.beds, nextBed];
-
-          return {
-            ...segment,
-            beds: nextBeds,
-          };
-        });
-      }
-
-      if (kind === 'path') {
-        const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
-        nextSegments = nextSegments.map((segment) => {
-          if (segment.segmentId !== formSegmentId) {
-            if (!isCreate && segment.segmentId === entityIdOrMode) {
-              return {
-                ...segment,
-                paths: segment.paths.filter((path) => path.pathId !== existingEntityId),
-              };
-            }
-
-            return segment;
-          }
-
+          await upsertBed(nextBed);
+          break;
+        }
+        case 'path': {
+          const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
+          const existingPath = allSegments.flatMap((segment) => segment.paths).find((path) => path.pathId === existingEntityId);
           const nextPath: Segment['paths'][number] = {
-            ...(() => {
-              const existingPath = isCreate ? null : segment.paths.find((path) => path.pathId === existingEntityId);
-              if (!existingPath) {
-                return {};
-              }
-
-              const pathWithoutSurface = { ...existingPath };
-              delete pathWithoutSurface.surface;
-              return pathWithoutSurface;
-            })(),
+            ...(isCreate ? {} : existingPath),
             pathId,
             segmentId: formSegmentId,
             name: formName.trim(),
@@ -420,34 +360,10 @@ function BedsPage() {
             lengthM: height,
             ...(formSurface.trim() ? { surface: formSurface.trim() } : {}),
           };
-
-          const nextPaths = isCreate
-            ? [...segment.paths, nextPath]
-            : segment.paths.some((path) => path.pathId === existingEntityId)
-              ? segment.paths.map((path) => (path.pathId === existingEntityId ? nextPath : path))
-              : [...segment.paths, nextPath];
-
-          return {
-            ...segment,
-            paths: nextPaths,
-          };
-        });
+          await upsertPath(formSegmentId, nextPath, isCreate ? undefined : entityIdOrMode);
+          break;
+        }
       }
-
-      const nextState = assertValid('appState', {
-        ...currentState,
-        segments: nextSegments,
-      });
-      const touchedSegments = nextState.segments ?? [];
-      const originalSegments = currentState.segments ?? [];
-      const originalSegmentIds = new Set(originalSegments.map((segment) => segment.segmentId));
-      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
-      const removedSegmentIds = [...originalSegmentIds].filter((segmentId) => !nextSegmentIds.has(segmentId));
-
-      await Promise.all([
-        ...touchedSegments.map((segment) => upsertSegment(segment)),
-        ...removedSegmentIds.map((segmentId) => removeSegment(segmentId)),
-      ]);
       await reloadPersistedLayoutState();
       setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
@@ -495,11 +411,10 @@ function BedsPage() {
         return;
       }
 
-      let nextSegments = appState.segments ?? [];
       let confirmMessage = '';
 
       if (kind === 'segment') {
-        const targetSegment = nextSegments.find((segment) => segment.segmentId === segmentId);
+        const targetSegment = (appState.segments ?? []).find((segment) => segment.segmentId === segmentId);
         if (!targetSegment) {
           setActionMessage(`Segment ${segmentId} was not found.`);
           return;
@@ -524,7 +439,6 @@ function BedsPage() {
         }
 
         confirmMessage = `Delete segment ${segmentId} and its ${targetSegment.beds.length} bed(s) plus ${targetSegment.paths.length} path(s)? This action cannot be undone.`;
-        nextSegments = nextSegments.filter((segment) => segment.segmentId !== segmentId);
       }
 
       if (kind === 'bed') {
@@ -541,9 +455,6 @@ function BedsPage() {
         }
 
         confirmMessage = `Delete bed ${entityId} from segment ${segmentId}? This action cannot be undone.`;
-        nextSegments = nextSegments.map((segment) =>
-          segment.segmentId === segmentId ? { ...segment, beds: segment.beds.filter((bed) => bed.bedId !== entityId) } : segment,
-        );
       }
 
       if (kind === 'path') {
@@ -560,9 +471,6 @@ function BedsPage() {
         }
 
         confirmMessage = `Delete path ${entityId} from segment ${segmentId}? This action cannot be undone.`;
-        nextSegments = nextSegments.map((segment) =>
-          segment.segmentId === segmentId ? { ...segment, paths: segment.paths.filter((path) => path.pathId !== entityId) } : segment,
-        );
       }
 
       if (!window.confirm(confirmMessage)) {
@@ -571,19 +479,13 @@ function BedsPage() {
 
       setDeletingEntityKey(entityKey);
 
-      const nextState = assertValid('appState', {
-        ...appState,
-        segments: nextSegments,
-      });
-      const touchedSegments = nextState.segments ?? [];
-      const originalSegmentIds = new Set((appState.segments ?? []).map((segment) => segment.segmentId));
-      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
-      const removedSegmentIds = [...originalSegmentIds].filter((segmentIdToRemove) => !nextSegmentIds.has(segmentIdToRemove));
-
-      await Promise.all([
-        ...touchedSegments.map((segment) => upsertSegment(segment)),
-        ...removedSegmentIds.map((segmentIdToRemove) => removeSegment(segmentIdToRemove)),
-      ]);
+      if (kind === 'segment') {
+        await removeSegment(segmentId);
+      } else if (kind === 'bed') {
+        await removeBed(entityId!);
+      } else if (kind === 'path') {
+        await removePath(segmentId, entityId!);
+      }
       await reloadPersistedLayoutState();
       setActionMessage(
         kind === 'path'
