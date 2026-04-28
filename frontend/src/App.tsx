@@ -13,22 +13,37 @@ import {
   loadPhotoBlobFromIndexedDb,
   resetToGoldenDataset,
   parseImportedAppState,
+  replaceCanonicalAppState,
+  removeBed,
   removeBatch,
-  saveAppStateToIndexedDb,
+  removeSeedInventoryItem,
   savePhotoBlobToIndexedDb,
   serializeAppStateForExport,
   listSeedInventoryItemsFromAppState,
-  removeSeedInventoryItemFromAppState,
-  upsertSeedInventoryItemInAppState,
-  upsertTaskInAppState,
-  upsertBatchInAppState,
-  upsertCropInAppState,
-  upsertBedInAppState,
+  upsertTask,
+  upsertBatch,
   getActiveBedAssignment,
   assertValid,
   mutateBatchAssignment,
   regenerateCalendarTasks,
   transitionBatchStage,
+  listCrops,
+  listCultivars,
+  listSpecies,
+  listCropPlans,
+  listSegments,
+  upsertSpecies,
+  upsertCultivar,
+  importCrops,
+  importSpecies,
+  importCropPlans,
+  importBatches,
+  importSegments,
+  upsertSegment,
+  removeSegment,
+  upsertBed,
+  upsertCrop,
+  upsertSeedInventoryItem,
 } from './data';
 import { normalizeBatchCandidate } from './data/repos/batchRepository';
 import { canTransition, inferBatchStartMethod } from './domain';
@@ -129,36 +144,20 @@ function BedsPage() {
   const [deletingEntityKey, setDeletingEntityKey] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const syncLocalLayoutState = useCallback((appState: AppState | null) => {
+  const reloadPersistedLayoutState = useCallback(async () => {
+    const appState = await loadAppStateFromIndexedDb();
     if (!appState) {
       setBeds([]);
       setBatches([]);
       setSegments([]);
-      return;
+      return appState;
     }
 
     setBeds([...listBedsFromAppState(appState)].sort((left, right) => left.bedId.localeCompare(right.bedId)));
     setBatches(listBatchesFromAppState(appState));
-    setSegments(appState.segments ?? []);
+    setSegments(await listSegments());
+    return appState;
   }, []);
-
-  const reloadPersistedLayoutState = useCallback(async () => {
-    const persistedState = await loadAppStateFromIndexedDb();
-    syncLocalLayoutState(persistedState);
-    return persistedState;
-  }, [syncLocalLayoutState]);
-
-  const persistLayoutState = useCallback(async (nextState: AppState, successMessage: string) => {
-    await saveAppStateToIndexedDb(nextState);
-    const persistedState = await reloadPersistedLayoutState();
-
-    if (!persistedState) {
-      throw new Error('Layout changes could not be reloaded after saving.');
-    }
-
-    setActionMessage(successMessage);
-    return persistedState;
-  }, [reloadPersistedLayoutState]);
 
   useEffect(() => {
     const load = async () => {
@@ -439,8 +438,18 @@ function BedsPage() {
         ...currentState,
         segments: nextSegments,
       });
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegments = currentState.segments ?? [];
+      const originalSegmentIds = new Set(originalSegments.map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentId) => !nextSegmentIds.has(segmentId));
 
-      await persistLayoutState(nextState, `${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentId) => removeSegment(segmentId)),
+      ]);
+      await reloadPersistedLayoutState();
+      setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
       closeForm();
     } catch (error) {
       if (error instanceof SchemaValidationError) {
@@ -452,7 +461,7 @@ function BedsPage() {
     } finally {
       setSavingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, persistLayoutState, savingEntityKey]);
+  }, [activeFormKey, closeForm, formHeight, formKind, formName, formSegmentId, formSurface, formType, formWidth, formX, formY, getDefaultGardenId, reloadPersistedLayoutState, savingEntityKey]);
 
   const getReferenceCounts = useCallback((appState: AppState, bedId: string) => {
     const relatedPlanCount = appState.cropPlans.filter((plan) => plan.bedId === bedId).length;
@@ -566,9 +575,17 @@ function BedsPage() {
         ...appState,
         segments: nextSegments,
       });
+      const touchedSegments = nextState.segments ?? [];
+      const originalSegmentIds = new Set((appState.segments ?? []).map((segment) => segment.segmentId));
+      const nextSegmentIds = new Set(touchedSegments.map((segment) => segment.segmentId));
+      const removedSegmentIds = [...originalSegmentIds].filter((segmentIdToRemove) => !nextSegmentIds.has(segmentIdToRemove));
 
-      await persistLayoutState(
-        nextState,
+      await Promise.all([
+        ...touchedSegments.map((segment) => upsertSegment(segment)),
+        ...removedSegmentIds.map((segmentIdToRemove) => removeSegment(segmentIdToRemove)),
+      ]);
+      await reloadPersistedLayoutState();
+      setActionMessage(
         kind === 'path'
           ? `Deleted path ${entityId}.`
           : kind === 'bed'
@@ -583,7 +600,7 @@ function BedsPage() {
     } finally {
       setDeletingEntityKey(null);
     }
-  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, persistLayoutState]);
+  }, [activeFormKey, closeForm, deletingEntityKey, getReferenceCounts, reloadPersistedLayoutState]);
 
   const hasAnyLayoutRecords = segments.length > 0 || totalSegmentBedCount > 0 || totalPathCount > 0;
 
@@ -1062,14 +1079,14 @@ function BedDetailPage() {
       }
 
       const endDate = new Date(removeDateInput).toISOString();
-      const nextBatch = await mutateBatchAssignment('remove', { batchId: existingBatch.batchId, at: endDate });
+      await mutateBatchAssignment('remove', { batchId: existingBatch.batchId, at: endDate });
       const nextState = await loadAppStateFromIndexedDb();
       refreshBedBatches(nextState);
       setRemoveConfirmByBatchId((current) => ({ ...current, [batch.batchId]: false }));
       setRemoveDateByBatchId((current) => ({ ...current, [batch.batchId]: getLocalDateTimeDefault() }));
       setRemoveMessageByBatchId((current) => ({
         ...current,
-        [batch.batchId]: nextBatch === existingBatch ? 'Batch is already unassigned for that date.' : 'Batch removed from bed.',
+        [batch.batchId]: 'Batch removed from bed.',
       }));
     } catch (error) {
       setRemoveMessageByBatchId((current) => ({
@@ -1125,18 +1142,7 @@ function BedDetailPage() {
 
       setIsDeletingBed(true);
 
-      const nextSegments = (appState.segments ?? []).map((segment) => {
-        const nextBeds = segment.beds.filter((segmentBed) => segmentBed.bedId !== bedId);
-        return nextBeds.length === segment.beds.length ? segment : { ...segment, beds: nextBeds };
-      });
-
-      const nextState = {
-        ...appState,
-        segments: nextSegments,
-        beds: [],
-      };
-
-      await saveAppStateToIndexedDb(nextState);
+      await removeBed(bedId);
       await navigate('/beds');
     } catch (error) {
       setDeleteBedMessage(error instanceof Error ? error.message : 'Failed to delete bed.');
@@ -1166,14 +1172,18 @@ function BedDetailPage() {
           return;
         }
 
-        const nextState = upsertBedInAppState(appState, {
+        await upsertBed({
           ...latestBed,
           notes,
           updatedAt: new Date().toISOString(),
         });
-
-        await saveAppStateToIndexedDb(nextState);
-        setBed((current) => (current && current.bedId === bedId ? { ...current, notes } : current));
+        const refreshedState = await loadAppStateFromIndexedDb();
+        const refreshedBed =
+          refreshedState && bedId
+            ? listBedsFromAppState(refreshedState).find((candidate) => candidate.bedId === bedId) ?? null
+            : null;
+        setBed(refreshedBed);
+        refreshBedBatches(refreshedState);
       };
 
       void persistNotes();
@@ -1182,7 +1192,7 @@ function BedDetailPage() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [bed, bedId, notes]);
+  }, [bed, bedId, notes, refreshBedBatches]);
 
   if (isLoading) {
     return <p className="beds-empty-state">Loading bed…</p>;
@@ -1577,9 +1587,11 @@ function CalendarPage() {
       const doneStatuses = new Set(['done', 'completed']);
       const isDone = doneStatuses.has(task.status.toLowerCase());
       const updatedTask = { ...task, status: isDone ? 'pending' : 'done' };
-      const nextState = upsertTaskInAppState(appState, updatedTask);
-      await saveAppStateToIndexedDb(nextState);
-      setTasks((current) => current.map((entry) => (entry.id === updatedTask.id ? updatedTask : entry)));
+      await upsertTask(updatedTask);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (refreshedState) {
+        setTasks(listTasksFromAppState(refreshedState));
+      }
     } finally {
       setSavingTaskId(null);
     }
@@ -1639,8 +1651,11 @@ function CalendarPage() {
         }
       }
 
-      await saveAppStateToIndexedDb(nextState);
-      setTasks(tasksAfter);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        throw new Error('Tasks could not be reloaded after regeneration.');
+      }
+      setTasks(listTasksFromAppState(refreshedState));
       const warnings = generationResult.diagnostics.map((entry) => `${entry.cropId}: ${entry.reason}`);
       setRegenerationSummary({ added, updated, unchanged, warnings });
     } catch (error) {
@@ -1974,13 +1989,8 @@ function CultivarAdminPage() {
     setSavingId(editingCultivarId ?? 'new');
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        return;
-      }
-
       const nowIso = new Date().toISOString();
-      const existingCultivars = getCultivarsFromAppState(appState);
+      const existingCultivars = await listCultivars();
       const existingCultivar = editingCultivarId ? existingCultivars.find((cultivar) => cultivar.cultivarId === editingCultivarId) : undefined;
       const nextCultivar: CultivarRecord = {
         cultivarId: existingCultivar?.cultivarId ?? createUniqueCultivarId(trimmedName, trimmedCropTypeId, existingCultivars.map((cultivar) => cultivar.cultivarId)),
@@ -1997,8 +2007,10 @@ function CultivarAdminPage() {
       const nextCultivars = existingCultivars.some((cultivar) => cultivar.cultivarId === nextCultivar.cultivarId)
         ? existingCultivars.map((cultivar) => (cultivar.cultivarId === nextCultivar.cultivarId ? nextCultivar : cultivar))
         : [...existingCultivars, nextCultivar];
-
-      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      const cultivarToPersist =
+        nextCultivars.find((candidate) => candidate.cultivarId === nextCultivar.cultivarId)
+        ?? nextCultivar;
+      await upsertCultivar(cultivarToPersist);
       await loadCultivars();
 
       if (!existingCultivar && isBatchQuickCreate) {
@@ -2018,17 +2030,14 @@ function CultivarAdminPage() {
     setSaveMessage(null);
 
     try {
-      const appState = await loadAppStateFromIndexedDb();
-      if (!appState) {
-        return;
-      }
-
       const nowIso = new Date().toISOString();
-      const nextCultivars = getCultivarsFromAppState(appState).map((cultivar) => (
+      const nextCultivars = (await listCultivars()).map((cultivar) => (
         cultivar.cultivarId === cultivarId ? withCultivarArchiveState(cultivar, archived, nowIso) : cultivar
       ));
-
-      await saveAppStateToIndexedDb(assertValid('appState', withCultivarsInAppState(appState, nextCultivars)));
+      const nextCultivar = nextCultivars.find((candidate) => candidate.cultivarId === cultivarId);
+      if (nextCultivar) {
+        await upsertCultivar(nextCultivar);
+      }
       await loadCultivars();
       if (editingCultivarId === cultivarId && archived) {
         resetForm();
@@ -2319,8 +2328,7 @@ function SeedInventoryPage() {
         updatedAt: nowIso,
       };
 
-      const nextState = upsertSeedInventoryItemInAppState(appState, nextItem);
-      await saveAppStateToIndexedDb(nextState);
+      await upsertSeedInventoryItem(nextItem);
       await loadInventory();
       resetForm();
     } finally {
@@ -2337,8 +2345,7 @@ function SeedInventoryPage() {
         return;
       }
 
-      const nextState = removeSeedInventoryItemFromAppState(appState, seedInventoryItemId);
-      await saveAppStateToIndexedDb(nextState);
+      await removeSeedInventoryItem(seedInventoryItemId);
       await loadInventory();
       if (editingId === seedInventoryItemId) {
         resetForm();
@@ -2741,12 +2748,6 @@ const getCultivarsFromAppState = (appState: AppState): CultivarRecord[] => {
   const cultivars = (appState as AppStateWithCultivars).cultivars;
   return Array.isArray(cultivars) ? cultivars : [];
 };
-
-const withCultivarsInAppState = (appState: AppState, cultivars: CultivarRecord[]): AppState =>
-  ({
-    ...(appState as AppStateWithCultivars),
-    cultivars,
-  }) as AppState;
 
 const createUniqueCultivarId = (name: string, cropTypeId: string, existingCultivarIds: string[]): string => {
   const base = normalizeCropIdPart(`${cropTypeId}-${name}`) || `cultivar-${Date.now()}`;
@@ -3632,18 +3633,21 @@ function BatchesPage({
         delete nextCrop.cultivarGroup;
       }
 
-      const nextState = upsertCropInAppState(appState, nextCrop);
-      await saveAppStateToIndexedDb(nextState);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      await upsertCrop(nextCrop);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(refreshedState.species))]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
@@ -3735,18 +3739,13 @@ function BatchesPage({
       if (!notes) {
         delete (nextSpecies as { notes?: string }).notes;
       }
-      const nextSpeciesCollection = (appState.species ?? []).map((entry) => (entry.id === existingSpecies.id ? nextSpecies : entry));
-      const nextState = assertValid('appState', {
-        ...appState,
-        species: nextSpeciesCollection,
-      });
-      const nextSpeciesById = buildSpeciesLookup(nextState.species);
-
-      await saveAppStateToIndexedDb(nextState);
+      await upsertSpecies(nextSpecies);
+      const [refreshedCrops, refreshedSpecies] = await Promise.all([listCrops(), listSpecies()]);
+      const nextSpeciesById = buildSpeciesLookup(refreshedSpecies);
       setSpeciesById(nextSpeciesById);
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+          refreshedCrops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
       setSpeciesEditErrors({});
@@ -3762,7 +3761,7 @@ function BatchesPage({
       );
       setFormValues((current) =>
         selectedCultivar &&
-        nextState.crops.some((crop) => crop.cropId === selectedCultivar.cropTypeId && (crop as Crop & { speciesId?: string }).speciesId === existingSpecies.id)
+        refreshedCrops.some((crop) => crop.cropId === selectedCultivar.cropTypeId && (crop as Crop & { speciesId?: string }).speciesId === existingSpecies.id)
           ? {
               ...current,
               cropInput:
@@ -3835,18 +3834,14 @@ function BatchesPage({
         ...(aliases.length > 0 ? { aliases } : {}),
         ...(notes ? { notes } : {}),
       };
-      const nextState = assertValid('appState', {
-        ...appState,
-        species: [...(appState.species ?? []), nextSpecies],
-      });
-      const nextSpeciesById = buildSpeciesLookup(nextState.species);
-
-      await saveAppStateToIndexedDb(nextState);
+      await upsertSpecies(nextSpecies);
+      const [refreshedCrops, refreshedSpecies] = await Promise.all([listCrops(), listSpecies()]);
+      const nextSpeciesById = buildSpeciesLookup(refreshedSpecies);
       setSpeciesById(nextSpeciesById);
       setEditingSpeciesId(speciesId);
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+          refreshedCrops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
       setSpeciesCreateValues({
@@ -4041,7 +4036,7 @@ function BatchesPage({
 
       const createdAt = new Date().toISOString();
       const cropId = createUniqueUserCropId(cultivar, appState.crops.map((crop) => crop.cropId));
-      const nextState = upsertCropInAppState(appState, {
+      await upsertCrop({
         cropId,
         name: cultivar,
         cultivar,
@@ -4062,19 +4057,21 @@ function BatchesPage({
         createdAt,
         updatedAt: createdAt,
       });
-
-      await saveAppStateToIndexedDb(nextState);
-      const nextSpeciesById = buildSpeciesLookup(nextState.species);
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      const nextSpeciesById = buildSpeciesLookup(refreshedState.species);
+      setCropIds(refreshedState.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(refreshedState.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
+          refreshedState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, nextSpeciesById)]),
         ),
       );
       setCropAliases(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const aliasesForCrop = Array.isArray((crop as { aliases?: string[] }).aliases)
               ? (crop as { aliases?: string[] }).aliases ?? []
               : [];
@@ -4084,7 +4081,7 @@ function BatchesPage({
       );
       setUserDefinedCropIds(
         Object.fromEntries(
-          nextState.crops.map((crop) => {
+          refreshedState.crops.map((crop) => {
             const isUserDefined = (crop as { isUserDefined?: unknown }).isUserDefined;
             return [crop.cropId, isUserDefined === true];
           }),
@@ -4247,14 +4244,18 @@ function BatchesPage({
         ...(Object.keys(nextMeta).length > 0 ? { meta: nextMeta } : {}),
       } as Batch;
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      setBatches(listBatchesFromAppState(nextState));
-      setCropIds(nextState.crops.map((crop) => crop.cropId));
-      setCropNames(Object.fromEntries(nextState.crops.map((crop) => [crop.cropId, crop.name])));
+      await upsertBatch(nextBatch);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      if (!refreshedState) {
+        return;
+      }
+      const stateForUi = refreshedState;
+      setBatches(listBatchesFromAppState(stateForUi));
+      setCropIds(stateForUi.crops.map((crop) => crop.cropId));
+      setCropNames(Object.fromEntries(stateForUi.crops.map((crop) => [crop.cropId, crop.name])));
       setCropScientificNames(
         Object.fromEntries(
-          nextState.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(nextState.species))]),
+          stateForUi.crops.map((crop) => [crop.cropId, getCropSpeciesScientificName(crop, buildSpeciesLookup(stateForUi.species))]),
         ),
       );
       setFormErrors({});
@@ -5262,8 +5263,9 @@ function BatchDetailPage() {
     setIsSavingStageAction(true);
 
     try {
-      const nextBatch = await transitionBatchStage(batchId, nextStage, occurredAt);
-      const refreshedBatch = nextBatch;
+      await transitionBatchStage(batchId, nextStage, occurredAt);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       const dateDefault = getLocalDateTimeDefault();
       setActionDates({
@@ -5355,9 +5357,9 @@ function BatchDetailPage() {
         stageEvents: nextStageEvents,
       };
 
-      const nextState = upsertBatchInAppState(appState, nextBatch);
-      await saveAppStateToIndexedDb(nextState);
-      const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+      await upsertBatch(nextBatch);
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setTimelineMessage(
         latestStageEventAt && occurredAt < latestStageEventAt
@@ -5400,7 +5402,9 @@ function BatchDetailPage() {
     setIsSavingAssignToBed(true);
 
     try {
-      const refreshedBatch = await mutateBatchAssignment('assign', { batchId, bedId: assignToBedId, at: assignedAt });
+      await mutateBatchAssignment('assign', { batchId, bedId: assignToBedId, at: assignedAt });
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setAssignToBedMessage(`Batch assigned to ${assignToBedId}.`);
       setRemoveFromBedMessage(null);
@@ -5438,7 +5442,9 @@ function BatchDetailPage() {
     setIsSavingRemoveFromBed(true);
 
     try {
-      const refreshedBatch = await mutateBatchAssignment('remove', { batchId, at: endDate });
+      await mutateBatchAssignment('remove', { batchId, at: endDate });
+      const refreshedState = await loadAppStateFromIndexedDb();
+      const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
       setBatch(refreshedBatch);
       setRemoveFromBedMessage('Batch removed from bed.');
     } catch (error) {
@@ -5461,9 +5467,9 @@ function BatchDetailPage() {
     }
 
     const nextBatch: BatchWithPhotos = { ...(batch as BatchWithPhotos), photos: nextPhotos };
-    const nextState = upsertBatchInAppState(appState, nextBatch as Batch);
-    await saveAppStateToIndexedDb(nextState);
-    const refreshedBatch = nextState.batches.find((candidate) => candidate.batchId === batchId) ?? null;
+    await upsertBatch(nextBatch as Batch);
+    const refreshedState = await loadAppStateFromIndexedDb();
+    const refreshedBatch = refreshedState?.batches.find((candidate) => candidate.batchId === batchId) ?? null;
     setBatch(refreshedBatch);
   };
 
@@ -6288,7 +6294,8 @@ export function RecoveryScreen({ error, onRetry, showDevResetButton = false }: R
     setImportMessage(null);
 
     try {
-      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
+      await replaceCanonicalAppState(pendingImportState);
+      await loadAppStateFromIndexedDb();
       setPendingImportState(null);
       setImportMessage('Import complete. Existing data was replaced.');
     } catch (importError) {
@@ -6400,6 +6407,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
   }>>([]);
   const [autoRenameOnConflict, setAutoRenameOnConflict] = useState(false);
   const [batchImportStatusSummary, setBatchImportStatusSummary] = useState<{
+    created: number;
     skipped: number;
     merged: number;
     rejected: number;
@@ -7019,7 +7027,8 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      await saveAppStateToIndexedDb(pendingImportState, { mode: 'replace' });
+      await replaceCanonicalAppState(pendingImportState);
+      await loadAppStateFromIndexedDb();
       setPendingImportState(null);
       setImportMessage('Import complete. Existing data was replaced.');
     } catch (error) {
@@ -7040,27 +7049,30 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const report = await saveAppStateToIndexedDb(pendingBatchImportState, { mode: 'merge' });
       const appStateWithBatches = pendingBatchImportState as { batches?: unknown[] };
-      const created = report?.batches.added ?? appStateWithBatches.batches?.length ?? 0;
-      const merged = report?.batches.updated ?? 0;
-      const skipped = report?.batches.unchanged ?? 0;
-      const rejectedConflict = report?.conflicts.length ?? 0;
-      const renamed = 0;
-      const conflictDetail = rejectedConflict > 0
-        ? ` Conflict reasons: ${report?.conflicts.join('; ')}`
+      const candidateBatches = (Array.isArray(appStateWithBatches.batches) ? appStateWithBatches.batches : []) as Batch[];
+      const commandResult = await importBatches(candidateBatches);
+      const created = commandResult.summary.imported;
+      const merged = commandResult.summary.merged;
+      const skipped = commandResult.summary.skipped;
+      const rejected = commandResult.summary.rejected;
+      const renamed = commandResult.errors.filter((entry) => entry.message.toLowerCase().includes('renamed')).length;
+      const conflictDetail = commandResult.errors.length > 0
+        ? ` Conflict reasons: ${commandResult.errors.map((entry) => entry.message).join('; ')}`
         : '';
       const renameCapabilityNote = autoRenameOnConflict
         ? ' Auto-rename requested, but this importer currently reports collisions as deterministic rejects.'
         : '';
       setBatchImportStatusSummary({
+        created,
         skipped,
         merged,
-        rejected: rejectedConflict,
+        rejected,
         renamed,
       });
+      setImportErrors(commandResult.errors);
       setImportMessage(
-        `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejectedConflict}, renamed ${renamed}.`
+        `Batch import complete. Created: ${created}. Statuses: merged ${merged}, skipped ${skipped}, rejected ${rejected}, renamed ${renamed}.`
         + conflictDetail
         + renameCapabilityNote,
       );
@@ -7084,109 +7096,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const existingAppState = await loadAppStateFromIndexedDb();
-      if (!existingAppState) {
-        setImportMessage('Crop import failed: local app state is unavailable.');
-        return;
-      }
-
-      const cropsById = new Map(existingAppState.crops.map((crop) => [crop.cropId, crop]));
-      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-      const results: Array<{ path: string; message: string }> = [];
-
-      pendingCropImportCrops.forEach((incomingCrop, index) => {
-        const currentCrop = cropsById.get(incomingCrop.cropId);
-
-        if (!currentCrop) {
-          cropsById.set(incomingCrop.cropId, incomingCrop);
-          summary.imported += 1;
-          return;
-        }
-
-        if (incomingCrop.createdAt !== currentCrop.createdAt) {
-          summary.rejected += 1;
-          results.push({
-            path: `/crops/${index}`,
-            message: `rejected (crop_identity_conflict): createdAt mismatch for cropId ${incomingCrop.cropId}`,
-          });
-          return;
-        }
-
-        const mergedCrop: Crop = {
-          ...currentCrop,
-          name: incomingCrop.name,
-          rules: incomingCrop.rules,
-          nutritionProfile: incomingCrop.nutritionProfile,
-          updatedAt: incomingCrop.updatedAt,
-        };
-
-        if (incomingCrop.aliases !== undefined) {
-          mergedCrop.aliases = incomingCrop.aliases;
-        }
-        if (incomingCrop.category !== undefined) {
-          mergedCrop.category = incomingCrop.category;
-        }
-        if (incomingCrop.cultivarGroup !== undefined) {
-          mergedCrop.cultivarGroup = incomingCrop.cultivarGroup;
-        }
-        if (incomingCrop.taskRules !== undefined) {
-          mergedCrop.taskRules = incomingCrop.taskRules;
-        }
-        const incomingCultivar = (incomingCrop as Crop & { cultivar?: string }).cultivar;
-        if (incomingCultivar !== undefined) {
-          (mergedCrop as Crop & { cultivar?: string }).cultivar = incomingCultivar;
-        }
-        const incomingSpeciesId = (incomingCrop as Crop & { speciesId?: string }).speciesId;
-        if (incomingSpeciesId !== undefined) {
-          (mergedCrop as Crop & { speciesId?: string }).speciesId = incomingSpeciesId;
-        }
-
-        const incomingSpecies = (incomingCrop as Crop & {
-          species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-        }).species;
-        const incomingTaxonomy = incomingCrop.taxonomy;
-
-        if (incomingSpecies !== undefined || incomingTaxonomy !== undefined) {
-          const currentSpecies = (currentCrop as Crop & {
-            species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-          }).species;
-          const commonName = incomingSpecies?.commonName ?? currentSpecies?.commonName;
-          const scientificName = incomingSpecies?.scientificName ?? currentSpecies?.scientificName;
-
-          if (commonName !== undefined && scientificName !== undefined) {
-            (mergedCrop as Crop & {
-              species?: { id?: string; commonName: string; scientificName: string; taxonomy?: { family?: string; genus?: string; species?: string } };
-            }).species = {
-              ...(currentSpecies?.id !== undefined ? { id: currentSpecies.id } : {}),
-              ...(incomingSpecies?.id !== undefined ? { id: incomingSpecies.id } : {}),
-              commonName,
-              scientificName,
-              ...((incomingTaxonomy !== undefined || incomingSpecies?.taxonomy !== undefined || currentSpecies?.taxonomy !== undefined)
-                ? {
-                    taxonomy: {
-                      ...(currentSpecies?.taxonomy ?? {}),
-                      ...(incomingTaxonomy ?? {}),
-                      ...(incomingSpecies?.taxonomy ?? {}),
-                    },
-                  }
-                : {}),
-            };
-          }
-        }
-
-        const unchanged = JSON.stringify(currentCrop) === JSON.stringify(mergedCrop);
-        cropsById.set(incomingCrop.cropId, mergedCrop);
-        if (unchanged) {
-          summary.skipped += 1;
-        } else {
-          summary.merged += 1;
-        }
-      });
-
-      await saveAppStateToIndexedDb({ ...existingAppState, crops: [...cropsById.values()] }, { mode: 'replace' });
-      setCropImportStatusSummary(summary);
-      setImportErrors(results);
-      setImportMessage(`Crop import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      const commandResult = await importCrops(pendingCropImportCrops);
+      await Promise.all([listCrops(), listSpecies()]);
+      setCropImportStatusSummary(commandResult.summary);
+      setImportErrors(commandResult.errors);
+      setImportMessage(`Crop import complete. imported: ${commandResult.summary.imported}, merged: ${commandResult.summary.merged}, skipped: ${commandResult.summary.skipped}, rejected: ${commandResult.summary.rejected}.`);
       setPendingCropImportCrops([]);
     } catch (error) {
       setImportMessage('Import failed while saving.');
@@ -7206,61 +7120,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const existingAppState = await loadAppStateFromIndexedDb();
-      if (!existingAppState) {
-        setImportMessage('Species import failed: local app state is unavailable.');
-        return;
-      }
-
-      const speciesById = new Map((existingAppState.species ?? []).map((entry) => [entry.id, entry]));
-      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-      const results: Array<{ path: string; message: string }> = [];
-
-      pendingSpeciesImportSpecies.forEach((incomingSpecies, index) => {
-        const currentSpecies = speciesById.get(incomingSpecies.id);
-
-        if (!currentSpecies) {
-          speciesById.set(incomingSpecies.id, incomingSpecies);
-          summary.imported += 1;
-          return;
-        }
-
-        const mergedSpecies: Species = {
-          ...currentSpecies,
-          ...((incomingSpecies.commonName ?? currentSpecies.commonName) !== undefined
-            ? { commonName: incomingSpecies.commonName ?? currentSpecies.commonName }
-            : {}),
-          ...((incomingSpecies.scientificName ?? currentSpecies.scientificName) !== undefined
-            ? { scientificName: incomingSpecies.scientificName ?? currentSpecies.scientificName }
-            : {}),
-          ...((incomingSpecies.aliases ?? currentSpecies.aliases) !== undefined
-            ? { aliases: incomingSpecies.aliases ?? currentSpecies.aliases }
-            : {}),
-          ...((incomingSpecies.notes ?? currentSpecies.notes) !== undefined
-            ? { notes: incomingSpecies.notes ?? currentSpecies.notes }
-            : {}),
-        };
-
-        const unchanged = JSON.stringify(currentSpecies) === JSON.stringify(mergedSpecies);
-        speciesById.set(incomingSpecies.id, mergedSpecies);
-        if (unchanged) {
-          summary.skipped += 1;
-        } else {
-          summary.merged += 1;
-          if (currentSpecies.commonName !== incomingSpecies.commonName || currentSpecies.scientificName !== incomingSpecies.scientificName) {
-            results.push({
-              path: `/species/${index}`,
-              message: `merged (shared_reference_update): crop species references remain linked to ${incomingSpecies.id}`,
-            });
-          }
-        }
-      });
-
-      const nextState = { ...existingAppState, species: [...speciesById.values()] };
-      await saveAppStateToIndexedDb(nextState, { mode: 'replace' });
-      setSpeciesImportStatusSummary(summary);
-      setImportErrors(results);
-      setImportMessage(`Species import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      const commandResult = await importSpecies(pendingSpeciesImportSpecies);
+      await Promise.all([listSpecies(), listCrops()]);
+      setSpeciesImportStatusSummary(commandResult.summary);
+      setImportErrors(commandResult.errors);
+      setImportMessage(`Species import complete. imported: ${commandResult.summary.imported}, merged: ${commandResult.summary.merged}, skipped: ${commandResult.summary.skipped}, rejected: ${commandResult.summary.rejected}.`);
       setPendingSpeciesImportSpecies([]);
     } catch (error) {
       setImportMessage('Import failed while saving.');
@@ -7279,35 +7143,10 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportMessage(null);
 
     try {
-      const existingAppState = await loadAppStateFromIndexedDb();
-      if (!existingAppState) {
-        setImportMessage('Crop plan import failed: local app state is unavailable.');
-        return;
-      }
-
-      const plansById = new Map(existingAppState.cropPlans.map((plan) => [plan.planId, plan]));
-      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-
-      pendingCropPlanImportPlans.forEach((incomingPlan) => {
-        const currentPlan = plansById.get(incomingPlan.planId);
-        if (!currentPlan) {
-          plansById.set(incomingPlan.planId, incomingPlan);
-          summary.imported += 1;
-          return;
-        }
-
-        const unchanged = JSON.stringify(currentPlan) === JSON.stringify(incomingPlan);
-        plansById.set(incomingPlan.planId, incomingPlan);
-        if (unchanged) {
-          summary.skipped += 1;
-        } else {
-          summary.merged += 1;
-        }
-      });
-
-      await saveAppStateToIndexedDb({ ...existingAppState, cropPlans: [...plansById.values()] }, { mode: 'replace' });
-      setCropPlanImportStatusSummary(summary);
-      setImportMessage(`Crop plan import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      const commandResult = await importCropPlans(pendingCropPlanImportPlans);
+      await listCropPlans();
+      setCropPlanImportStatusSummary(commandResult.summary);
+      setImportMessage(`Crop plan import complete. imported: ${commandResult.summary.imported}, merged: ${commandResult.summary.merged}, skipped: ${commandResult.summary.skipped}, rejected: ${commandResult.summary.rejected}.`);
       setPendingCropPlanImportPlans([]);
     } catch (error) {
       setImportMessage('Import failed while saving.');
@@ -7328,47 +7167,11 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     setImportErrors([]);
 
     try {
-      const existingAppState = await loadAppStateFromIndexedDb();
-      if (!existingAppState) {
-        setImportMessage('Segment import failed: local app state is unavailable.');
-        return;
-      }
-
-      const segmentsById = new Map((existingAppState.segments ?? []).map((segment) => [segment.segmentId, segment]));
-      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
-      const results: Array<{ path: string; message: string }> = [];
-
-      pendingSegmentImportSegments.forEach((incomingSegment, index) => {
-        const currentSegment = segmentsById.get(incomingSegment.segmentId);
-
-        if (!currentSegment) {
-          segmentsById.set(incomingSegment.segmentId, incomingSegment);
-          summary.imported += 1;
-          return;
-        }
-
-        if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
-          summary.skipped += 1;
-          return;
-        }
-
-        if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
-          summary.rejected += 1;
-          results.push({
-            path: `/segments/${index}`,
-            message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
-          });
-          return;
-        }
-
-        segmentsById.set(incomingSegment.segmentId, incomingSegment);
-        summary.merged += 1;
-      });
-
-      await saveAppStateToIndexedDb({ ...existingAppState, segments: [...segmentsById.values()] }, { mode: 'replace' });
-      setSegmentImportStatusSummary(summary);
-      setImportErrors(results);
-      setImportMessage(`Segment import complete. imported: ${summary.imported}, merged: ${summary.merged}, skipped: ${summary.skipped}, rejected: ${summary.rejected}.`);
+      const commandResult = await importSegments(pendingSegmentImportSegments);
+      await listSegments();
+      setSegmentImportStatusSummary(commandResult.summary);
+      setImportErrors(commandResult.errors);
+      setImportMessage(`Segment import complete. imported: ${commandResult.summary.imported}, merged: ${commandResult.summary.merged}, skipped: ${commandResult.summary.skipped}, rejected: ${commandResult.summary.rejected}.`);
       setPendingSegmentImportSegments([]);
       setPendingSegmentImportPreview([]);
     } catch (error) {
@@ -7395,9 +7198,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
     try {
       const currentState = await loadAppStateFromIndexedDb();
       const emptyState = createEmptyAppState(currentState);
-
-      await saveAppStateToIndexedDb(emptyState, { mode: 'replace' });
-      const validatedEmptyState = await loadAppStateFromIndexedDb();
+      const validatedEmptyState = await replaceCanonicalAppState(emptyState);
 
       if (
         !validatedEmptyState
@@ -7428,15 +7229,15 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
       setImportErrors([]);
       setImportMessage(null);
       setEmptyAllDataRecordCounts({
-        species: 0,
-        crops: 0,
-        segments: 0,
-        beds: 0,
-        paths: 0,
-        cropPlans: 0,
-        batches: 0,
-        tasks: 0,
-        seedInventoryItems: 0,
+        species: (validatedEmptyState.species ?? []).length,
+        crops: validatedEmptyState.crops.length,
+        segments: (validatedEmptyState.segments ?? []).length,
+        beds: listBedsFromAppState(validatedEmptyState).length,
+        paths: (validatedEmptyState.segments ?? []).reduce((total, segment) => total + segment.paths.length, 0),
+        cropPlans: validatedEmptyState.cropPlans.length,
+        batches: validatedEmptyState.batches.length,
+        tasks: validatedEmptyState.tasks.length,
+        seedInventoryItems: validatedEmptyState.seedInventoryItems.length,
       });
       setEmptyAllDataConfirmed(false);
       setEmptyAllDataConfirmationText('');
@@ -7975,6 +7776,7 @@ function DataPage({ showDevResetButton, onResetToGoldenDataset }: DataPageProps)
         <section>
           <h3>Collision Status Summary</h3>
           <ul>
+            <li>created (imported): {batchImportStatusSummary.created}</li>
             <li>skipped (identical_batch): {batchImportStatusSummary.skipped}</li>
             <li>merged (eventsAdded): {batchImportStatusSummary.merged}</li>
             <li>rejected (batch_identity_conflict): {batchImportStatusSummary.rejected}</li>
@@ -8228,6 +8030,9 @@ function App() {
         <h1>SurvivalGarden</h1>
         <p className={`app-mode-indicator app-mode-indicator--${frontendMode}`} aria-live="polite">
           Mode: {frontendMode === 'backend' ? '.NET backend' : 'TypeScript local'}
+        </p>
+        <p className="app-mode-authority-note">
+          Canonical updates are backend-authoritative; UI state reflects backend responses.
         </p>
       </header>
 

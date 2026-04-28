@@ -22,21 +22,98 @@ import {
   assertValid,
   initializeAppStateStorage,
   loadAppStateFromIndexedDb,
+  listCrops,
+  listSegments,
+  listSpecies,
   parseImportedAppState,
   resetToGoldenDataset,
   saveAppStateToIndexedDb,
   SchemaValidationError,
   serializeAppStateForExport,
+  importSegments,
+  importBatches,
+  upsertBatch,
+  upsertSpecies,
+  upsertSegment,
 } from './data';
 
-vi.mock('./data', () => ({
-  initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
-  resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
-  loadAppStateFromIndexedDb: vi.fn().mockResolvedValue(null),
-  parseImportedAppState: vi.fn(),
-  saveAppStateToIndexedDb: vi.fn().mockResolvedValue(undefined),
-  serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
-  assertValid: vi.fn((schemaName: string, value: unknown) => value),
+vi.mock('./data', () => {
+  const saveAppStateToIndexedDb = vi.fn().mockResolvedValue(undefined);
+  const loadAppStateFromIndexedDb = vi.fn().mockResolvedValue(null);
+  const replaceCanonicalAppState = vi.fn(async (state: unknown) => {
+    await saveAppStateToIndexedDb(state, { mode: 'replace' });
+    return state;
+  });
+
+  return {
+    initializeAppStateStorage: vi.fn().mockResolvedValue(undefined),
+    resetToGoldenDataset: vi.fn().mockResolvedValue(undefined),
+    loadAppStateFromIndexedDb,
+    parseImportedAppState: vi.fn(),
+    saveAppStateToIndexedDb,
+    replaceCanonicalAppState,
+    serializeAppStateForExport: vi.fn().mockReturnValue('{"schemaVersion":1}'),
+    assertValid: vi.fn((schemaName: string, value: unknown) => value),
+    listCrops: vi.fn(async () => (await loadAppStateFromIndexedDb())?.crops ?? []),
+    listCultivars: vi.fn(async () => (await loadAppStateFromIndexedDb())?.cultivars ?? []),
+    listSpecies: vi.fn(async () => (await loadAppStateFromIndexedDb())?.species ?? []),
+    listCropPlans: vi.fn(async () => (await loadAppStateFromIndexedDb())?.cropPlans ?? []),
+    listSegments: vi.fn(async () => (await loadAppStateFromIndexedDb())?.segments ?? []),
+    upsertSpecies: vi.fn(async (species: { id: string }) => {
+      const state = await loadAppStateFromIndexedDb();
+      if (!state) {
+        return species;
+      }
+
+      const nextSpecies = (state.species ?? []).some((entry: { id: string }) => entry.id === species.id)
+        ? (state.species ?? []).map((entry: { id: string }) => (entry.id === species.id ? species : entry))
+        : [...(state.species ?? []), species];
+      await saveAppStateToIndexedDb({ ...state, species: nextSpecies });
+      return species;
+    }),
+    upsertCultivar: vi.fn(async (cultivar: { cultivarId: string }) => cultivar),
+    importCrops: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importSpecies: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importCropPlans: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importBatches: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importSegments: vi.fn(async (segments: Array<{ segmentId: string; name: string; originReference?: string }>) => {
+      const state = await loadAppStateFromIndexedDb();
+      const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
+      const errors: Array<{ path: string; message: string }> = [];
+
+      if (state) {
+        const segmentsById = new Map((state.segments ?? []).map((segment: { segmentId: string }) => [segment.segmentId, segment]));
+        segments.forEach((incomingSegment, index) => {
+          const currentSegment = segmentsById.get(incomingSegment.segmentId) as { name?: string; originReference?: string } | undefined;
+
+          if (!currentSegment) {
+            segmentsById.set(incomingSegment.segmentId, incomingSegment);
+            summary.imported += 1;
+            return;
+          }
+
+          if (JSON.stringify(currentSegment) === JSON.stringify(incomingSegment)) {
+            summary.skipped += 1;
+            return;
+          }
+
+          if (currentSegment.name !== incomingSegment.name || currentSegment.originReference !== incomingSegment.originReference) {
+            summary.rejected += 1;
+            errors.push({
+              path: `/segments/${index}`,
+              message: `rejected (segment_identity_conflict): identity mismatch for segmentId ${incomingSegment.segmentId}`,
+            });
+            return;
+          }
+
+          segmentsById.set(incomingSegment.segmentId, incomingSegment);
+          summary.merged += 1;
+        });
+
+        await saveAppStateToIndexedDb({ ...state, segments: [...segmentsById.values()] }, { mode: 'replace' });
+      }
+      return { summary, errors };
+    }),
   upsertCropInAppState: vi.fn((appState: { crops?: Array<{ cropId: string }> }, crop: { cropId: string }) => ({
     ...appState,
     crops: [...(appState.crops ?? []).filter((entry: { cropId: string }) => entry.cropId !== crop.cropId), crop],
@@ -45,6 +122,9 @@ vi.mock('./data', () => ({
     ...appState,
     batches: [...(appState.batches ?? []).filter((entry: { batchId: string }) => entry.batchId !== batch.batchId), batch],
   })),
+  upsertBatch: vi.fn(async (batch: unknown) => batch),
+  upsertSegment: vi.fn(async (segment: unknown) => segment),
+  removeSegment: vi.fn(async () => undefined),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
   listTasksFromAppState: vi.fn().mockReturnValue([]),
@@ -59,7 +139,8 @@ vi.mock('./data', () => ({
       this.issues = issues;
     }
   },
-}));
+  };
+});
 
 const buildBatchCreationState = () => ({
   schemaVersion: 1,
@@ -282,13 +363,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete path' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        segments: [
-          expect.objectContaining({
-            segmentId: 'segment-1',
-            paths: [],
-          }),
-        ],
+      expect(upsertSegment).toHaveBeenCalledWith(expect.objectContaining({
+        segmentId: 'segment-1',
+        paths: [],
       }));
     });
 
@@ -344,7 +421,7 @@ describe('App', () => {
       expect(screen.getByText('Cannot delete path path-1 because it is referenced by 1 crop plan.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalled();
+    expect(upsertSegment).not.toHaveBeenCalled();
   });
 
   it('hides dev reset action when flag is disabled', () => {
@@ -578,7 +655,7 @@ describe('App', () => {
       expect(screen.getByText(/local_precheck_warning \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(importBatches).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Import Preview')).not.toBeInTheDocument();
@@ -587,16 +664,23 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
     });
+    vi.mocked(importBatches).mockResolvedValueOnce({
+      summary: { imported: 2, merged: 3, skipped: 1, rejected: 4 },
+      errors: [{ path: '/batches/0', message: 'rejected (batch_identity_conflict): duplicate batch id batch-1' }],
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+      expect(importBatches).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Collision Status Summary')).toBeInTheDocument();
-      expect(screen.getByText('skipped (identical_batch): 0')).toBeInTheDocument();
-      expect(screen.getByText('merged (eventsAdded): 0')).toBeInTheDocument();
-      expect(screen.getByText('rejected (batch_identity_conflict): 0')).toBeInTheDocument();
+      expect(screen.getByText('created (imported): 2')).toBeInTheDocument();
+      expect(screen.getByText('skipped (identical_batch): 1')).toBeInTheDocument();
+      expect(screen.getByText('merged (eventsAdded): 3')).toBeInTheDocument();
+      expect(screen.getByText('rejected (batch_identity_conflict): 4')).toBeInTheDocument();
       expect(screen.getByText('renamed (newId): 0')).toBeInTheDocument();
+      expect(screen.getByText(/Batch import complete\. Created: 2\./)).toBeInTheDocument();
+      expect(screen.getByText(/Conflict reasons: rejected \(batch_identity_conflict\): duplicate batch id batch-1/)).toBeInTheDocument();
     });
   });
 
@@ -675,6 +759,20 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({
+          segmentId: 'segment_new',
+          name: 'North Segment',
+          beds: expect.arrayContaining([expect.objectContaining({ bedId: 'bed_n1' })]),
+          paths: expect.arrayContaining([expect.objectContaining({ pathId: 'path_north_1' })]),
+        }),
+        expect.objectContaining({
+          segmentId: 'segment_existing',
+          name: 'Existing Segment',
+        }),
+      ]));
+      expect(listSegments).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Segment Import Summary')).toBeInTheDocument();
       expect(screen.getByText('imported: 1')).toBeInTheDocument();
       expect(screen.getByText('merged: 0')).toBeInTheDocument();
@@ -744,6 +842,15 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({
+          segmentId: 'segment_north',
+          name: 'Conflicting Name',
+          originReference: 'se_corner',
+        }),
+      ]));
+      expect(listSegments).toHaveBeenCalledTimes(1);
       expect(screen.getByText('rejected (segment_identity_conflict): 1')).toBeInTheDocument();
       expect(screen.getByText(/rejected \(segment_identity_conflict\): identity mismatch for segmentId segment_north/)).toBeInTheDocument();
     });
@@ -764,7 +871,7 @@ describe('App', () => {
       expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(importBatches).not.toHaveBeenCalled();
   });
 
 
@@ -806,7 +913,6 @@ describe('App', () => {
   });
 
   it('accepts deep-link batch import payload and requires confirmation before merge', async () => {
-    const validOnlyState = { schemaVersion: 1, beds: [], crops: [], cropPlans: [], batches: [{ batchId: 'batch-1' }], seedInventoryItems: [], tasks: [] };
     vi.mocked(assertValid).mockImplementation((_schemaName: string, value: unknown) => value as never);
 
     const deepLinkPayload = btoa(JSON.stringify({
@@ -824,15 +930,12 @@ describe('App', () => {
     });
 
     expect(screen.getByText('Import Preview')).toBeInTheDocument();
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(importBatches).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        ...validOnlyState,
-        batches: expect.arrayContaining([expect.objectContaining({ batchId: 'batch-1' })]),
-      }), { mode: 'merge' });
+      expect(importBatches).toHaveBeenCalledWith([expect.objectContaining({ batchId: 'batch-1' })]);
     });
   });
 
@@ -847,7 +950,7 @@ describe('App', () => {
       expect(screen.getByText('Deep-link import failed. Payload was invalid or too large.')).toBeInTheDocument();
     });
 
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.anything(), { mode: 'merge' });
+    expect(importBatches).not.toHaveBeenCalled();
   });
 
   it('accepts deep-link segment import payload and requires confirmation before import', async () => {
@@ -928,12 +1031,14 @@ describe('App', () => {
 
     expect(screen.getByText('Size: 5.8 m × 4.5 m')).toBeInTheDocument();
     expect(screen.getByText('Types: vegetable_bed')).toBeInTheDocument();
-    expect(saveAppStateToIndexedDb).not.toHaveBeenCalledWith(expect.objectContaining({ segments: expect.anything() }), { mode: 'replace' });
+    expect(importSegments).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import segments' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({ segments: validSegmentState.segments }), { mode: 'replace' });
+      expect(importSegments).toHaveBeenCalledTimes(1);
+      expect(importSegments).toHaveBeenCalledWith(validSegmentState.segments);
+      expect(listSegments).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1130,11 +1235,17 @@ describe('App', () => {
   });
 
 
-  it('keeps a created species after save and reload on the batches page', async () => {
+  it('keeps a created species after command save and query refresh on the taxonomy page', async () => {
     let persistedAppState = {
       schemaVersion: 1,
       beds: [],
-      species: [],
+      species: [] as Array<{
+        id: string;
+        commonName: string;
+        scientificName: string;
+        createdAt: string;
+        updatedAt: string;
+      }>,
       crops: [],
       cropPlans: [],
       batches: [],
@@ -1151,9 +1262,20 @@ describe('App', () => {
     };
 
     vi.mocked(loadAppStateFromIndexedDb).mockImplementation(async () => persistedAppState as never);
-    vi.mocked(saveAppStateToIndexedDb).mockImplementation(async (nextState) => {
-      persistedAppState = nextState as typeof persistedAppState;
-      return undefined as never;
+    vi.mocked(listCrops).mockImplementation(async () => persistedAppState.crops as never);
+    vi.mocked(listSpecies).mockImplementation(async () => persistedAppState.species as never);
+    vi.mocked(upsertSpecies).mockImplementation(async (species) => {
+      persistedAppState = {
+        ...persistedAppState,
+        species: [...persistedAppState.species, species as {
+          id: string;
+          commonName: string;
+          scientificName: string;
+          createdAt: string;
+          updatedAt: string;
+        }],
+      };
+      return species as never;
     });
 
     const { unmount } = render(
@@ -1176,16 +1298,16 @@ describe('App', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Create species' }));
 
     await waitFor(() => {
-      expect(saveAppStateToIndexedDb).toHaveBeenCalledWith(expect.objectContaining({
-        species: [
-          expect.objectContaining({
-            id: 'species_pea',
-            commonName: 'Pea',
-            scientificName: 'Pisum sativum',
-          }),
-        ],
+      expect(upsertSpecies).toHaveBeenCalledTimes(1);
+      expect(upsertSpecies).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'species_pea',
+        commonName: 'Pea',
+        scientificName: 'Pisum sativum',
       }));
+      expect(listCrops).toHaveBeenCalledTimes(1);
+      expect(listSpecies).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Species created.')).toBeInTheDocument();
+      expect(screen.getAllByRole('option', { name: 'Pea (Pisum sativum)' })).toHaveLength(2);
     });
 
     unmount();
@@ -1447,13 +1569,11 @@ describe('App', () => {
       fireEvent.click(within(createBatchForm).getByRole('button', { name: 'Create batch' }));
 
       await waitFor(() => {
-        expect(saveAppStateToIndexedDb).toHaveBeenCalledTimes(index + 1);
+        expect(upsertBatch).toHaveBeenCalledTimes(index + 1);
       });
 
-      const saveCalls = vi.mocked(saveAppStateToIndexedDb).mock.calls;
-      const savedState = saveCalls[saveCalls.length - 1]?.[0] as { batches: Array<Record<string, unknown>> };
-      const savedBatches = savedState.batches;
-      const savedBatch = savedBatches[savedBatches.length - 1];
+      const upsertCalls = vi.mocked(upsertBatch).mock.calls;
+      const savedBatch = upsertCalls[upsertCalls.length - 1]?.[0] as Record<string, unknown>;
 
       expect(savedBatch).toMatchObject({
         startMethod: testCase.expectedStartMethod,

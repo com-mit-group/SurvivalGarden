@@ -1,47 +1,25 @@
-import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from '../contracts';
 import { SchemaValidationError, assertValid } from './validation';
 import { getSettingsOrDefault } from './repos/settingsRepository';
 import { mergeTaskForImport } from './repos/taskRepository';
 import {
-  assignBatchToBed as assignBatchToBedLocal,
-  getBatchFromAppState as getBatchFromAppStateLocal,
-  moveBatch as moveBatchLocal,
-  removeBatchFromBed as removeBatchFromBedLocal,
-  removeBatchFromAppState as removeBatchFromAppStateLocal,
-  upsertBatchInAppState as upsertBatchInAppStateLocal,
-} from './repos/batchRepository';
-import {
   getBedFromAppState as getBedFromAppStateLocal,
   listBedsFromAppState as listBedsFromAppStateLocal,
-  removeBedFromAppState as removeBedFromAppStateLocal,
-  upsertBedInAppState as upsertBedInAppStateLocal,
 } from './repos/bedRepository';
 import {
   getCropFromAppState as getCropFromAppStateLocal,
   listCropsFromAppState as listCropsFromAppStateLocal,
-  removeCropFromAppState as removeCropFromAppStateLocal,
-  upsertCropInAppState as upsertCropInAppStateLocal,
 } from './repos/cropRepository';
 import {
   getCropPlanFromAppState as getCropPlanFromAppStateLocal,
   listCropPlansFromAppState as listCropPlansFromAppStateLocal,
-  removeCropPlanFromAppState as removeCropPlanFromAppStateLocal,
-  upsertCropPlanInAppState as upsertCropPlanInAppStateLocal,
 } from './repos/cropPlanRepository';
 import {
   getSeedInventoryItemFromAppState as getSeedInventoryItemFromAppStateLocal,
   listSeedInventoryItemsFromAppState as listSeedInventoryItemsFromAppStateLocal,
-  removeSeedInventoryItemFromAppState as removeSeedInventoryItemFromAppStateLocal,
-  upsertSeedInventoryItemInAppState as upsertSeedInventoryItemInAppStateLocal,
 } from './repos/seedInventoryRepository';
 import type { ListQuery } from './repos/interfaces';
 import {
-  generateCalendarTasksWithDiagnostics as generateCalendarTasksWithDiagnosticsLocal,
-  upsertGeneratedTasksInAppState as upsertGeneratedTasksInAppStateLocal,
-} from './repos/taskRepository';
-import { applyStageEvent } from '../domain';
-import {
-  getFrontendMode,
   shouldUseCanonicalBackendPath,
   shouldUseTypescriptRollbackShim,
   toBackendApiUrl,
@@ -155,7 +133,19 @@ type LayoutMigrationReport = {
   warnings: LayoutMigrationWarning[];
 };
 
-const isBackendModeEnabled = (): boolean => getFrontendMode() === 'backend';
+export type CultivarRecord = {
+  cultivarId: string;
+  cropTypeId: string;
+  name: string;
+  supplier?: string;
+  source?: string;
+  year?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const isBackendModeEnabled = (): boolean => true;
 
 const addTypeToLegacyBed = <T extends Record<string, unknown>>(bed: T): T => ({
   ...bed,
@@ -1748,6 +1738,17 @@ const shouldUseCanonicalWorkflowWithoutRollback = (
   feature: 'bedsSegments' | 'taxonomy' | 'inventory' | 'batches' | 'tasks',
 ): boolean => shouldUseCanonicalBackendPath(feature) && !shouldUseTypescriptRollbackShim(feature);
 
+const syncLocalMirrorFromBackend = async (): Promise<void> => {
+  try {
+    const backendState = await loadAppStateFromBackendApi();
+    if (backendState) {
+      await saveAppStateToLocalIndexedDb(backendState, { mode: 'replace' });
+    }
+  } catch (error) {
+    console.warn('Failed to refresh local IndexedDB mirror from backend.', toValidationDebugPayload(error));
+  }
+};
+
 export const getBed = async (bedId: Bed['bedId']): Promise<Bed | null> => {
   if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
     return workflowAdapter.bedsSegments.getBed(bedId);
@@ -1767,27 +1768,14 @@ export const listBeds = async (): Promise<Bed[]> => {
 };
 
 export const upsertBed = async (bed: unknown): Promise<Bed> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
-    return assertValid('bed', await workflowAdapter.bedsSegments.upsertBed(assertValid('bed', bed)));
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertBedInAppStateLocal(appState ?? createEmptyAppState(appState), bed);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid('bed', getBedFromAppStateLocal(nextState, assertValid('bed', bed).bedId));
+  const savedBed = assertValid('bed', await workflowAdapter.bedsSegments.upsertBed(assertValid('bed', bed)));
+  await syncLocalMirrorFromBackend();
+  return savedBed;
 };
 
 export const removeBed = async (bedId: Bed['bedId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
-    await workflowAdapter.bedsSegments.removeBed(bedId);
-    return;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-  await saveAppStateToIndexedDb(removeBedFromAppStateLocal(appState, bedId));
+  await workflowAdapter.bedsSegments.removeBed(bedId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const getCrop = async (cropId: Crop['cropId']): Promise<Crop | null> => {
@@ -1797,6 +1785,53 @@ export const getCrop = async (cropId: Crop['cropId']): Promise<Crop | null> => {
 
   const appState = await loadAppStateFromIndexedDb();
   return appState ? getCropFromAppStateLocal(appState, cropId) : null;
+};
+
+export const listSpecies = async (): Promise<Species[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listSpecies();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return appState?.species ?? [];
+};
+
+export const listCultivars = async (): Promise<CultivarRecord[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.listCultivars();
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  const cultivars = (appState as AppState & { cultivars?: unknown[] } | null)?.cultivars;
+  return Array.isArray(cultivars) ? (cultivars as CultivarRecord[]) : [];
+};
+
+export const upsertCultivar = async (cultivar: unknown): Promise<CultivarRecord> => {
+  const validatedCultivar = cultivar as CultivarRecord;
+  const savedCultivar = await workflowAdapter.taxonomy.upsertCultivar(validatedCultivar);
+  await syncLocalMirrorFromBackend();
+  return savedCultivar;
+};
+
+export const getSpecies = async (speciesId: Species['id']): Promise<Species | null> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
+    return workflowAdapter.taxonomy.getSpecies(speciesId);
+  }
+
+  const appState = await loadAppStateFromIndexedDb();
+  return (appState?.species ?? []).find((species) => species.id === speciesId) ?? null;
+};
+
+export const upsertSpecies = async (species: unknown): Promise<Species> => {
+  const validatedSpecies = assertValid('species', species);
+  const savedSpecies = assertValid('species', await workflowAdapter.taxonomy.upsertSpecies(validatedSpecies));
+  await syncLocalMirrorFromBackend();
+  return savedSpecies;
+};
+
+export const removeSpecies = async (speciesId: Species['id']): Promise<void> => {
+  await workflowAdapter.taxonomy.removeSpecies(speciesId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const listCrops = async (): Promise<Crop[]> => {
@@ -1809,27 +1844,14 @@ export const listCrops = async (): Promise<Crop[]> => {
 };
 
 export const upsertCrop = async (crop: unknown): Promise<Crop> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return assertValid('crop', await workflowAdapter.taxonomy.upsertCrop(assertValid('crop', crop)));
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertCropInAppStateLocal(appState ?? createEmptyAppState(appState), crop);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid('crop', getCropFromAppStateLocal(nextState, assertValid('crop', crop).cropId));
+  const savedCrop = assertValid('crop', await workflowAdapter.taxonomy.upsertCrop(assertValid('crop', crop)));
+  await syncLocalMirrorFromBackend();
+  return savedCrop;
 };
 
 export const removeCrop = async (cropId: Crop['cropId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    await workflowAdapter.taxonomy.removeCrop(cropId);
-    return;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-  await saveAppStateToIndexedDb(removeCropFromAppStateLocal(appState, cropId));
+  await workflowAdapter.taxonomy.removeCrop(cropId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const getCropPlan = async (planId: CropPlan['planId']): Promise<CropPlan | null> => {
@@ -1851,27 +1873,101 @@ export const listCropPlans = async (): Promise<CropPlan[]> => {
 };
 
 export const upsertCropPlan = async (cropPlan: unknown): Promise<CropPlan> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    return assertValid('cropPlan', await workflowAdapter.taxonomy.upsertCropPlan(assertValid('cropPlan', cropPlan)));
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertCropPlanInAppStateLocal(appState ?? createEmptyAppState(appState), cropPlan);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid('cropPlan', getCropPlanFromAppStateLocal(nextState, assertValid('cropPlan', cropPlan).planId));
+  const savedCropPlan = assertValid('cropPlan', await workflowAdapter.taxonomy.upsertCropPlan(assertValid('cropPlan', cropPlan)));
+  await syncLocalMirrorFromBackend();
+  return savedCropPlan;
 };
 
 export const removeCropPlan = async (planId: CropPlan['planId']): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('taxonomy')) {
-    await workflowAdapter.taxonomy.removeCropPlan(planId);
-    return;
+  await workflowAdapter.taxonomy.removeCropPlan(planId);
+  await syncLocalMirrorFromBackend();
+};
+
+type ImportStatusSummary = {
+  imported: number;
+  merged: number;
+  skipped: number;
+  rejected: number;
+};
+
+type ImportStatusIssue = {
+  path: string;
+  message: string;
+};
+
+type ImportCommandResult = {
+  summary: ImportStatusSummary;
+  errors: ImportStatusIssue[];
+};
+
+export const replaceCanonicalAppState = async (appState: unknown): Promise<AppState> => {
+  const candidateState =
+    appState && typeof appState === 'object'
+      ? {
+          ...(appState as Record<string, unknown>),
+          settings: getSettingsOrDefault((appState as { settings?: unknown }).settings),
+        }
+      : appState;
+  const canonicalState = canonicalizeForExport(assertValid('appState', candidateState));
+
+  if (isBackendModeEnabled()) {
+    await workflowAdapter.appState.replace(canonicalState);
+    await syncLocalMirrorFromBackend();
+  } else {
+    await saveAppStateToLocalIndexedDb(canonicalState, { mode: 'replace' });
+  }
+
+  const refreshedState = await loadAppStateFromIndexedDb();
+  if (!refreshedState) {
+    throw new AppStateStorageError('Canonical app state replacement completed but no readable state was returned.');
+  }
+
+  return refreshedState;
+};
+
+export const importCrops = async (crops: Crop[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.taxonomy.importCrops(crops);
+  await syncLocalMirrorFromBackend();
+  return result;
+};
+
+export const importSpecies = async (species: Species[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.taxonomy.importSpecies(species);
+  await syncLocalMirrorFromBackend();
+  return result;
+};
+
+export const importCropPlans = async (cropPlans: CropPlan[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.taxonomy.importCropPlans(cropPlans);
+  await syncLocalMirrorFromBackend();
+  return result;
+};
+
+export const listSegments = async (): Promise<Segment[]> => {
+  if (shouldUseCanonicalWorkflowWithoutRollback('bedsSegments')) {
+    return workflowAdapter.bedsSegments.listSegments();
   }
 
   const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-  await saveAppStateToIndexedDb(removeCropPlanFromAppStateLocal(appState, planId));
+  return appState?.segments ?? [];
+};
+
+export const upsertSegment = async (segment: unknown): Promise<Segment> => {
+  const validatedSegment = assertValid('segment', segment);
+  const savedSegment = assertValid('segment', await workflowAdapter.bedsSegments.upsertSegment(validatedSegment));
+  await syncLocalMirrorFromBackend();
+  return savedSegment;
+};
+
+export const removeSegment = async (segmentId: Segment['segmentId']): Promise<void> => {
+  await workflowAdapter.bedsSegments.removeSegment(segmentId);
+  await syncLocalMirrorFromBackend();
+};
+
+export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.bedsSegments.importSegments(segments);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const getSeedInventoryItem = async (
@@ -1897,35 +1993,37 @@ export const listSeedInventoryItems = async (
 };
 
 export const upsertSeedInventoryItem = async (seedInventoryItem: unknown): Promise<SeedInventoryItem> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
-    return assertValid(
-      'seedInventoryItem',
-      await workflowAdapter.inventory.upsertSeedInventoryItem(assertValid('seedInventoryItem', seedInventoryItem)),
-    );
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  const nextState = upsertSeedInventoryItemInAppStateLocal(appState ?? createEmptyAppState(appState), seedInventoryItem);
-  await saveAppStateToIndexedDb(nextState);
-  return assertValid(
+  const savedItem = assertValid(
     'seedInventoryItem',
-    getSeedInventoryItemFromAppStateLocal(nextState, assertValid('seedInventoryItem', seedInventoryItem).seedInventoryItemId),
+    await workflowAdapter.inventory.upsertSeedInventoryItem(assertValid('seedInventoryItem', seedInventoryItem)),
   );
+  await syncLocalMirrorFromBackend();
+  return savedItem;
 };
 
 export const removeSeedInventoryItem = async (
   seedInventoryItemId: SeedInventoryItem['seedInventoryItemId'],
 ): Promise<void> => {
-  if (shouldUseCanonicalWorkflowWithoutRollback('inventory')) {
-    await workflowAdapter.inventory.removeSeedInventoryItem(seedInventoryItemId);
-    return;
-  }
+  await workflowAdapter.inventory.removeSeedInventoryItem(seedInventoryItemId);
+  await syncLocalMirrorFromBackend();
+};
 
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-  await saveAppStateToIndexedDb(removeSeedInventoryItemFromAppStateLocal(appState, seedInventoryItemId));
+export const upsertTask = async (task: unknown): Promise<Task> => {
+  const savedTask = assertValid('task', await workflowAdapter.tasks.upsertTask(assertValid('task', task)));
+  await syncLocalMirrorFromBackend();
+  return savedTask;
+};
+
+export const upsertBatch = async (batch: unknown): Promise<Batch> => {
+  const savedBatch = assertValid('batch', await workflowAdapter.batches.upsertBatch(assertValid('batch', batch)));
+  await syncLocalMirrorFromBackend();
+  return savedBatch;
+};
+
+export const importBatches = async (batches: Batch[]): Promise<ImportCommandResult> => {
+  const result = await workflowAdapter.batches.importBatches(batches);
+  await syncLocalMirrorFromBackend();
+  return result;
 };
 
 export const transitionBatchStage = async (
@@ -1933,101 +2031,32 @@ export const transitionBatchStage = async (
   nextStage: string,
   occurredAt: string,
 ): Promise<Batch> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
-    return assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
-  }
-
-  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
-  console.warn('[DEPRECATED] Using TypeScript batch stage transition rollback shim.');
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    throw new Error('App state unavailable.');
-  }
-
-  const existingBatch = getBatchFromAppStateLocal(appState, batchId);
-  if (!existingBatch) {
-    throw new Error('Batch not found.');
-  }
-
-  const transition = applyStageEvent(existingBatch, { stage: nextStage, occurredAt });
-  if (!transition.ok) {
-    throw new Error(transition.reason);
-  }
-
-  const nextState = upsertBatchInAppStateLocal(appState, transition.batch);
-  await saveAppStateToIndexedDb(nextState);
-  return transition.batch;
+  const transitionedBatch = assertValid('batch', await workflowAdapter.batches.transitionStage(batchId, nextStage, occurredAt));
+  await syncLocalMirrorFromBackend();
+  return transitionedBatch;
 };
 
 export const mutateBatchAssignment = async (
   operation: 'assign' | 'move' | 'remove',
   payload: { batchId: string; bedId?: string; at: string },
 ): Promise<Batch> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
-    return assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
-  }
-
-  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
-  console.warn('[DEPRECATED] Using TypeScript batch assignment rollback shim.');
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    throw new Error('App state unavailable.');
-  }
-
-  const existingBatch = getBatchFromAppStateLocal(appState, payload.batchId);
-  if (!existingBatch) {
-    throw new Error('Batch not found.');
-  }
-
-  const nextBatch =
-    operation === 'assign'
-      ? assignBatchToBedLocal(existingBatch, payload.bedId ?? '', payload.at)
-      : operation === 'move'
-        ? moveBatchLocal(existingBatch, payload.bedId ?? '', payload.at)
-        : removeBatchFromBedLocal(existingBatch, payload.at);
-  const nextState = upsertBatchInAppStateLocal(appState, nextBatch);
-  await saveAppStateToIndexedDb(nextState);
-  return nextBatch;
+  const mutatedBatch = assertValid('batch', await workflowAdapter.batches.mutateAssignment(operation, payload));
+  await syncLocalMirrorFromBackend();
+  return mutatedBatch;
 };
 
 export const removeBatch = async (batchId: Batch['batchId']): Promise<void> => {
-  if (shouldUseCanonicalBackendPath('batches') && !shouldUseTypescriptRollbackShim('batches')) {
-    await workflowAdapter.batches.removeBatch(batchId);
-    return;
-  }
-
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    return;
-  }
-
-  await saveAppStateToIndexedDb(removeBatchFromAppStateLocal(appState, batchId));
+  await workflowAdapter.batches.removeBatch(batchId);
+  await syncLocalMirrorFromBackend();
 };
 
 export const regenerateCalendarTasks = async (year: number) => {
-  if (shouldUseCanonicalBackendPath('tasks') && !shouldUseTypescriptRollbackShim('tasks')) {
-    const payload = await workflowAdapter.tasks.regenerateCalendar(year);
-    return {
-      generatedTasks: payload.generatedTasks,
-      diagnostics: payload.diagnostics,
-      stateAfter: assertValid('appState', payload.stateAfter),
-    };
-  }
-
-  // Deprecated rollback shim for emergency rollback only. Removal target: 2026-07-31.
-  console.warn('[DEPRECATED] Using TypeScript task regeneration rollback shim.');
-  const appState = await loadAppStateFromIndexedDb();
-  if (!appState) {
-    throw new Error('App state unavailable.');
-  }
-
-  const generationResult = generateCalendarTasksWithDiagnosticsLocal(appState, year);
-  const nextState = upsertGeneratedTasksInAppStateLocal(appState, generationResult.tasks);
-  await saveAppStateToIndexedDb(nextState);
+  const payload = await workflowAdapter.tasks.regenerateCalendar(year);
+  await syncLocalMirrorFromBackend();
   return {
-    generatedTasks: generationResult.tasks,
-    diagnostics: generationResult.diagnostics,
-    stateAfter: nextState,
+    generatedTasks: payload.generatedTasks,
+    diagnostics: payload.diagnostics,
+    stateAfter: assertValid('appState', payload.stateAfter),
   };
 };
 

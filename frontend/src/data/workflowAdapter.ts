@@ -1,4 +1,4 @@
-import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment } from '../contracts';
+import type { AppState, Batch, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species } from '../contracts';
 import { assertValid } from './validation';
 import type { SchemaName, SchemaTypeMap } from './validation';
 import type { BackendApiPath } from '../generated/api-client';
@@ -202,8 +202,115 @@ const assertContractList = <T extends SchemaName>(
   return payload.map((item, index) => assertContract(`${contractName}[${index}]`, schemaName, item));
 };
 
+type ImportSummary = {
+  imported: number;
+  merged: number;
+  skipped: number;
+  rejected: number;
+};
+
+type ImportIssue = {
+  path: string;
+  message: string;
+};
+
+type ImportCommandResult = {
+  summary: ImportSummary;
+  errors: ImportIssue[];
+};
+
+type CultivarRecord = {
+  cultivarId: string;
+  cropTypeId: string;
+  name: string;
+  supplier?: string;
+  source?: string;
+  year?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const assertImportSummary = (contractName: string, payload: unknown): ImportSummary => {
+  if (!payload || typeof payload !== 'object') {
+    throw buildContractMismatchError(contractName, new Error('expected object payload'));
+  }
+
+  const summary = payload as Record<string, unknown>;
+  const getNumber = (key: keyof ImportSummary): number => {
+    const value = summary[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw buildContractMismatchError(contractName, new Error(`expected numeric ${key}`));
+    }
+    return value;
+  };
+
+  return {
+    imported: getNumber('imported'),
+    merged: getNumber('merged'),
+    skipped: getNumber('skipped'),
+    rejected: getNumber('rejected'),
+  };
+};
+
+const assertImportIssues = (contractName: string, payload: unknown): ImportIssue[] => {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.map((entry, index) => {
+    if (!entry || typeof entry !== 'object') {
+      throw buildContractMismatchError(contractName, new Error(`errors[${index}] must be an object`));
+    }
+
+    const issue = entry as Record<string, unknown>;
+    if (typeof issue.path !== 'string' || typeof issue.message !== 'string') {
+      throw buildContractMismatchError(contractName, new Error(`errors[${index}] must include string path/message`));
+    }
+
+    return { path: issue.path, message: issue.message };
+  });
+};
+
+const assertImportCommandResult = (contractName: string, payload: unknown): ImportCommandResult => {
+  if (!payload || typeof payload !== 'object') {
+    throw buildContractMismatchError(contractName, new Error('expected object payload'));
+  }
+
+  const typedPayload = payload as Record<string, unknown>;
+  return {
+    summary: assertImportSummary(`${contractName}.summary`, typedPayload.summary),
+    errors: assertImportIssues(`${contractName}.errors`, typedPayload.errors),
+  };
+};
+
 export const workflowAdapter = {
+  appState: {
+    replace: async (appState: AppState): Promise<void> => {
+      const response = await fetch(toBackendApiUrl('/api/app-state'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appState),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+  },
   batches: {
+    upsertBatch: async (batch: Batch): Promise<Batch> =>
+      assertContract('batches.upsertBatch', 'batch', await fetchJson<unknown>(`/api/batches/${encodeURIComponent(batch.batchId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch),
+      })),
+    importBatches: async (batches: Batch[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('batches.importBatches', await fetchJson<unknown>('/api/import/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batches }),
+      })),
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
       fetchJson<Batch>(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`, {
         method: 'POST',
@@ -230,6 +337,12 @@ export const workflowAdapter = {
     },
   },
   tasks: {
+    upsertTask: async (task: AppState['tasks'][number]): Promise<AppState['tasks'][number]> =>
+      assertContract('tasks.upsertTask', 'task', await fetchJson<unknown>(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+      })),
     regenerateCalendar: async (year: number): Promise<{
       generatedTasks: AppState['tasks'];
       diagnostics: { cropId: string; reason: string; detail: string }[];
@@ -307,8 +420,58 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
+    importSegments: async (segments: Segment[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('bedsSegments.importSegments', await fetchJson<unknown>('/api/import/segments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segments }),
+      })),
   },
   taxonomy: {
+    listCultivars: async (): Promise<CultivarRecord[]> =>
+      fetchJson<CultivarRecord[]>(backendPath('/api/cultivars'), { method: 'GET' }),
+    upsertCultivar: async (cultivar: CultivarRecord): Promise<CultivarRecord> =>
+      fetchJson<CultivarRecord>(`/api/cultivars/${encodeURIComponent(cultivar.cultivarId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cultivar),
+      }),
+    removeCultivar: async (cultivarId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/cultivars/${encodeURIComponent(cultivarId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+    listSpecies: async (): Promise<Species[]> =>
+      assertContractList('taxonomy.listSpecies', 'species', await fetchJson<unknown>(backendPath('/api/species'), { method: 'GET' })),
+    getSpecies: async (speciesId: string): Promise<Species | null> => {
+      const response = await fetch(toBackendApiUrl(`/api/species/${encodeURIComponent(speciesId)}`), { method: 'GET' });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      return assertContract('taxonomy.getSpecies', 'species', await response.json());
+    },
+    upsertSpecies: async (species: Species): Promise<Species> =>
+      assertContract('taxonomy.upsertSpecies', 'species', await fetchJson<unknown>(`/api/species/${encodeURIComponent(species.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(species),
+      })),
+    removeSpecies: async (speciesId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/species/${encodeURIComponent(speciesId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
     listCrops: async (): Promise<Crop[]> =>
       assertContractList('taxonomy.listCrops', 'crop', await fetchJson<unknown>(backendPath('/api/crops'), { method: 'GET' })),
     getCrop: async (cropId: string): Promise<Crop | null> => {
@@ -363,6 +526,24 @@ export const workflowAdapter = {
         throw new Error(await parseBackendError(response));
       }
     },
+    importSpecies: async (species: Species[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('taxonomy.importSpecies', await fetchJson<unknown>('/api/import/species', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ species }),
+      })),
+    importCrops: async (crops: Crop[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('taxonomy.importCrops', await fetchJson<unknown>('/api/import/crops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crops }),
+      })),
+    importCropPlans: async (cropPlans: CropPlan[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('taxonomy.importCropPlans', await fetchJson<unknown>('/api/import/crop-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cropPlans }),
+      })),
   },
   inventory: {
     listSeedInventoryItems: async (): Promise<SeedInventoryItem[]> =>
