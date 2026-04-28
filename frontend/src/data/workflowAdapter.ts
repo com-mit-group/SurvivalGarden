@@ -305,6 +305,12 @@ export const workflowAdapter = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(batch),
       })),
+    importBatches: async (batches: Batch[]): Promise<ImportCommandResult> =>
+      assertImportCommandResult('batches.importBatches', await fetchJson<unknown>('/api/import/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batches }),
+      })),
     transitionStage: async (batchId: string, nextStage: string, occurredAt: string): Promise<Batch> =>
       fetchJson<Batch>(`/api/domain/batches/${encodeURIComponent(batchId)}/stage-events`, {
         method: 'POST',

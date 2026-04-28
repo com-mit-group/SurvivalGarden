@@ -31,6 +31,7 @@ import {
   SchemaValidationError,
   serializeAppStateForExport,
   importSegments,
+  importBatches,
   upsertBatch,
   upsertSpecies,
   upsertSegment,
@@ -74,6 +75,7 @@ vi.mock('./data', () => {
     importCrops: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
     importSpecies: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
     importCropPlans: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
+    importBatches: vi.fn(async () => ({ summary: { imported: 0, merged: 0, skipped: 0, rejected: 0 }, errors: [] })),
     importSegments: vi.fn(async (segments: Array<{ segmentId: string; name: string; originReference?: string }>) => {
       const state = await loadAppStateFromIndexedDb();
       const summary = { imported: 0, merged: 0, skipped: 0, rejected: 0 };
@@ -653,7 +655,7 @@ describe('App', () => {
       expect(screen.getByText(/local_precheck_warning \(batchId: batch-invalid, field: startedAt\)/)).toBeInTheDocument();
     });
 
-    expect(upsertBatch).not.toHaveBeenCalled();
+    expect(importBatches).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Import Preview')).not.toBeInTheDocument();
@@ -662,16 +664,23 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Import Preview')).toBeInTheDocument();
     });
+    vi.mocked(importBatches).mockResolvedValueOnce({
+      summary: { imported: 2, merged: 3, skipped: 1, rejected: 4 },
+      errors: [{ path: '/batches/0', message: 'rejected (batch_identity_conflict): duplicate batch id batch-1' }],
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(upsertBatch).toHaveBeenCalledTimes(1);
+      expect(importBatches).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Collision Status Summary')).toBeInTheDocument();
-      expect(screen.getByText('skipped (identical_batch): 0')).toBeInTheDocument();
-      expect(screen.getByText('merged (eventsAdded): 0')).toBeInTheDocument();
-      expect(screen.getByText('rejected (batch_identity_conflict): 0')).toBeInTheDocument();
+      expect(screen.getByText('created (imported): 2')).toBeInTheDocument();
+      expect(screen.getByText('skipped (identical_batch): 1')).toBeInTheDocument();
+      expect(screen.getByText('merged (eventsAdded): 3')).toBeInTheDocument();
+      expect(screen.getByText('rejected (batch_identity_conflict): 4')).toBeInTheDocument();
       expect(screen.getByText('renamed (newId): 0')).toBeInTheDocument();
+      expect(screen.getByText(/Batch import complete\. Created: 2\./)).toBeInTheDocument();
+      expect(screen.getByText(/Conflict reasons: rejected \(batch_identity_conflict\): duplicate batch id batch-1/)).toBeInTheDocument();
     });
   });
 
@@ -862,7 +871,7 @@ describe('App', () => {
       expect(screen.getByText('Import failed. Fix the errors below and try again.')).toBeInTheDocument();
     });
 
-    expect(upsertBatch).not.toHaveBeenCalled();
+    expect(importBatches).not.toHaveBeenCalled();
   });
 
 
@@ -921,12 +930,12 @@ describe('App', () => {
     });
 
     expect(screen.getByText('Import Preview')).toBeInTheDocument();
-    expect(upsertBatch).not.toHaveBeenCalled();
+    expect(importBatches).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() => {
-      expect(upsertBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'batch-1' }));
+      expect(importBatches).toHaveBeenCalledWith([expect.objectContaining({ batchId: 'batch-1' })]);
     });
   });
 
@@ -941,7 +950,7 @@ describe('App', () => {
       expect(screen.getByText('Deep-link import failed. Payload was invalid or too large.')).toBeInTheDocument();
     });
 
-    expect(upsertBatch).not.toHaveBeenCalled();
+    expect(importBatches).not.toHaveBeenCalled();
   });
 
   it('accepts deep-link segment import payload and requires confirmation before import', async () => {
