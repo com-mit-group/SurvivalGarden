@@ -302,67 +302,67 @@ function BedsPage() {
     setSavingEntityKey(activeFormKey);
 
     try {
-      if (kind === 'segment') {
-        const existingSegment = (currentState.segments ?? []).find((segment) => segment.segmentId === entityIdOrMode);
-        const nextSegment: Segment = {
-          ...(isCreate ? {} : existingSegment),
-          segmentId: isCreate ? `segment-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : entityIdOrMode,
-          name: formName.trim(),
-          ...(formKind.trim() ? { kind: formKind.trim() } : {}),
-          width,
-          widthM: width,
-          height,
-          lengthM: height,
-          beds: existingSegment?.beds ?? [],
-          paths: existingSegment?.paths ?? [],
-        };
+      const allSegments = currentState.segments ?? [];
 
-        if (isCreate) {
+      switch (kind) {
+        case 'segment': {
+          const existingSegment = allSegments.find((segment) => segment.segmentId === entityIdOrMode);
+          const nextSegment: Segment = {
+            ...(isCreate ? {} : existingSegment),
+            segmentId: isCreate ? `segment-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : entityIdOrMode,
+            name: formName.trim(),
+            ...(formKind.trim() ? { kind: formKind.trim() } : {}),
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            beds: existingSegment?.beds ?? [],
+            paths: existingSegment?.paths ?? [],
+          };
           await upsertSegment(nextSegment);
-        } else {
-          await upsertSegment(nextSegment);
+          break;
         }
-      }
-
-      if (kind === 'bed') {
-        const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
-        const existingBed = (currentState.segments ?? []).flatMap((segment) => segment.beds).find((bed) => bed.bedId === existingEntityId);
-        const nextBed: Segment['beds'][number] = {
-          ...(isCreate ? {} : existingBed),
-          bedId,
-          segmentId: formSegmentId,
-          gardenId: getDefaultGardenId(currentState),
-          name: formName.trim(),
-          type: formType as Segment['beds'][number]['type'],
-          x: x ?? 0,
-          y: y ?? 0,
-          width,
-          widthM: width,
-          height,
-          lengthM: height,
-          createdAt: isCreate ? now : existingBed?.createdAt ?? now,
-          updatedAt: now,
-        };
-        await upsertBed(nextBed);
-      }
-
-      if (kind === 'path') {
-        const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
-        const existingPath = (currentState.segments ?? []).flatMap((segment) => segment.paths).find((path) => path.pathId === existingEntityId);
-        const nextPath: Segment['paths'][number] = {
-          ...(isCreate ? {} : existingPath),
-          pathId,
-          segmentId: formSegmentId,
-          name: formName.trim(),
-          x: x ?? 0,
-          y: y ?? 0,
-          width,
-          widthM: width,
-          height,
-          lengthM: height,
-          ...(formSurface.trim() ? { surface: formSurface.trim() } : {}),
-        };
-        await upsertPath(formSegmentId, nextPath, isCreate ? undefined : entityIdOrMode);
+        case 'bed': {
+          const bedId = isCreate ? `bed-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
+          const existingBed = allSegments.flatMap((segment) => segment.beds).find((bed) => bed.bedId === existingEntityId);
+          const nextBed: Segment['beds'][number] = {
+            ...(isCreate ? {} : existingBed),
+            bedId,
+            segmentId: formSegmentId,
+            gardenId: getDefaultGardenId(currentState),
+            name: formName.trim(),
+            type: formType as Segment['beds'][number]['type'],
+            x: x ?? 0,
+            y: y ?? 0,
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            createdAt: isCreate ? now : existingBed?.createdAt ?? now,
+            updatedAt: now,
+          };
+          await upsertBed(nextBed);
+          break;
+        }
+        case 'path': {
+          const pathId = isCreate ? `path-${globalThis.crypto?.randomUUID?.() ?? Date.now()}` : existingEntityId!;
+          const existingPath = allSegments.flatMap((segment) => segment.paths).find((path) => path.pathId === existingEntityId);
+          const nextPath: Segment['paths'][number] = {
+            ...(isCreate ? {} : existingPath),
+            pathId,
+            segmentId: formSegmentId,
+            name: formName.trim(),
+            x: x ?? 0,
+            y: y ?? 0,
+            width,
+            widthM: width,
+            height,
+            lengthM: height,
+            ...(formSurface.trim() ? { surface: formSurface.trim() } : {}),
+          };
+          await upsertPath(formSegmentId, nextPath, isCreate ? undefined : entityIdOrMode);
+          break;
+        }
       }
       await reloadPersistedLayoutState();
       setActionMessage(`${kind === 'segment' ? 'Segment' : kind === 'bed' ? 'Bed' : 'Path'} saved.`);
