@@ -1964,6 +1964,60 @@ export const removeSegment = async (segmentId: Segment['segmentId']): Promise<vo
   await syncLocalMirrorFromBackend();
 };
 
+export const upsertPath = async (
+  segmentId: Segment['segmentId'],
+  path: Segment['paths'][number],
+  previousSegmentId?: Segment['segmentId'],
+): Promise<Segment['paths'][number]> => {
+  const targetSegment = await workflowAdapter.bedsSegments.getSegment(segmentId);
+  if (!targetSegment) {
+    throw new Error(`Segment ${segmentId} was not found.`);
+  }
+
+  const normalizedPath: Segment['paths'][number] = {
+    ...path,
+    segmentId,
+  };
+
+  const nextPaths = targetSegment.paths.some((entry) => entry.pathId === normalizedPath.pathId)
+    ? targetSegment.paths.map((entry) => (entry.pathId === normalizedPath.pathId ? normalizedPath : entry))
+    : [...targetSegment.paths, normalizedPath];
+
+  await workflowAdapter.bedsSegments.upsertSegment({
+    ...targetSegment,
+    paths: nextPaths,
+  });
+
+  if (previousSegmentId && previousSegmentId !== segmentId) {
+    const previousSegment = await workflowAdapter.bedsSegments.getSegment(previousSegmentId);
+    if (previousSegment) {
+      await workflowAdapter.bedsSegments.upsertSegment({
+        ...previousSegment,
+        paths: previousSegment.paths.filter((entry) => entry.pathId !== normalizedPath.pathId),
+      });
+    }
+  }
+
+  await syncLocalMirrorFromBackend();
+  return normalizedPath;
+};
+
+export const removePath = async (
+  segmentId: Segment['segmentId'],
+  pathId: Segment['paths'][number]['pathId'],
+): Promise<void> => {
+  const segment = await workflowAdapter.bedsSegments.getSegment(segmentId);
+  if (!segment) {
+    throw new Error(`Segment ${segmentId} was not found.`);
+  }
+
+  await workflowAdapter.bedsSegments.upsertSegment({
+    ...segment,
+    paths: segment.paths.filter((entry) => entry.pathId !== pathId),
+  });
+  await syncLocalMirrorFromBackend();
+};
+
 export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
   const result = await workflowAdapter.bedsSegments.importSegments(segments);
   await syncLocalMirrorFromBackend();
