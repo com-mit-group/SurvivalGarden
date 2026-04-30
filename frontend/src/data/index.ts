@@ -1969,6 +1969,7 @@ export const upsertPath = async (
   path: Segment['paths'][number],
   _previousSegmentId?: Segment['segmentId'],
 ): Promise<Segment['paths'][number]> => {
+  void _previousSegmentId;
   const normalizedPath: Segment['paths'][number] = {
     ...path,
     segmentId,
