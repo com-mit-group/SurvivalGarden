@@ -63,7 +63,6 @@ internal static class CoreEndpoints
             return DtoJsonMapper.ToJsonObject(payload);
         });
         MapEntityCrud(app, "cultivars", "id");
-        MapEntityCrud(app, "segments", "segmentId");
         MapTypedEntityCrud<SeedInventoryItemUpsertRequest>(app, "seedInventoryItems", "seedInventoryItemId", (payload, id) =>
         {
             payload.SeedInventoryItemId = id;
@@ -85,6 +84,18 @@ internal static class CoreEndpoints
 
     private static void MapLayoutWorkflowEndpoints(WebApplication app)
     {
+        app.MapGet("/api/segments", async (IGardenApplicationService service, CancellationToken ct) =>
+        {
+            var items = await service.ListAsync("segments", ct);
+            return Results.Ok(items);
+        });
+
+        app.MapGet("/api/segments/{id}", async (IGardenApplicationService service, string id, CancellationToken ct) =>
+        {
+            var item = await service.GetByIdAsync("segments", "segmentId", id, ct);
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        });
+
         app.MapGet("/api/beds", async (IGardenApplicationService service, CancellationToken ct) =>
         {
             var segments = (await service.ListAsync("segments", ct)).OfType<JsonObject>();
@@ -141,6 +152,12 @@ internal static class CoreEndpoints
 
             var saved = await service.UpsertAsync("segments", "segmentId", updated, ct);
             return Results.Ok(saved);
+        });
+
+        app.MapDelete("/api/segments/{id}", async (IGardenApplicationService service, string id, CancellationToken ct) =>
+        {
+            var removed = await service.RemoveAsync("segments", "segmentId", id, ct);
+            return removed ? Results.NoContent() : Results.NotFound();
         });
 
         app.MapPost("/api/segments/{id}/beds", async (IGardenApplicationService service, string id, JsonObject payload, CancellationToken ct) =>

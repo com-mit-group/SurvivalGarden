@@ -430,12 +430,21 @@ export const workflowAdapter = {
       }
       return assertContract('bedsSegments.getSegment', 'segment', await response.json());
     },
-    upsertSegment: async (segment: Segment): Promise<Segment> =>
-      fetchJson<Segment>(`/api/segments/${encodeURIComponent(segment.segmentId)}`, {
-        method: 'PUT',
+    upsertSegment: async (segment: Segment): Promise<Segment> => {
+      const existing = await workflowAdapter.bedsSegments.getSegment(segment.segmentId);
+      if (!existing) {
+        return fetchJson<Segment>('/api/segments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(segment),
+        });
+      }
+      return fetchJson<Segment>(`/api/segments/${encodeURIComponent(segment.segmentId)}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(segment),
-      }),
+      });
+    },
     removeSegment: async (segmentId: string): Promise<void> => {
       const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'DELETE' });
       if (response.status === 404 || response.status === 204) {
