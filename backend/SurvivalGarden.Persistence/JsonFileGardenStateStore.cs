@@ -18,6 +18,7 @@ public sealed class JsonFileGardenStateStore : IGardenStateStore
     public JsonFileGardenStateStore(string filePath)
     {
         _filePath = filePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(_filePath) ?? ".");
     }
 
     public async Task<JsonObject?> LoadAsync(CancellationToken cancellationToken = default)
@@ -38,7 +39,6 @@ public sealed class JsonFileGardenStateStore : IGardenStateStore
 
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_filePath) ?? ".");
             await using var stream = File.Create(_filePath);
             await JsonSerializer.SerializeAsync(stream, appState, JsonOptions, cancellationToken);
         }
