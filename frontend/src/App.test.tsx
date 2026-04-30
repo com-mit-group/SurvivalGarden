@@ -35,6 +35,7 @@ import {
   upsertBatch,
   upsertSpecies,
   upsertSegment,
+  removePath,
 } from './data';
 
 vi.mock('./data', () => {
@@ -124,6 +125,7 @@ vi.mock('./data', () => {
   })),
   upsertBatch: vi.fn(async (batch: unknown) => batch),
   upsertSegment: vi.fn(async (segment: unknown) => segment),
+  removePath: vi.fn(async () => undefined),
   removeSegment: vi.fn(async () => undefined),
   listBedsFromAppState: vi.fn().mockReturnValue([]),
   listBatchesFromAppState: vi.fn().mockReturnValue([]),
@@ -363,10 +365,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete path' }));
 
     await waitFor(() => {
-      expect(upsertSegment).toHaveBeenCalledWith(expect.objectContaining({
-        segmentId: 'segment-1',
-        paths: [],
-      }));
+      expect(removePath).toHaveBeenCalledWith('segment-1', 'path-1');
     });
 
     expect(screen.getByText('Deleted path path-1.')).toBeInTheDocument();

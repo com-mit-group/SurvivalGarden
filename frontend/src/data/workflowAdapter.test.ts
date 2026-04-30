@@ -315,6 +315,7 @@ describe('workflow adapter transport', () => {
 
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [validSegment] } as Response)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ bedId: 'bed%201' }) } as Response)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ cropId: 'crop%201' }) } as Response)
       .mockResolvedValueOnce({ status: 204, ok: true } as Response);
@@ -325,6 +326,7 @@ describe('workflow adapter transport', () => {
       name: 'Bed 1',
       type: 'vegetable_bed',
       gardenId: 'garden-1',
+      segmentId: 'segment-1',
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
     });
@@ -348,16 +350,21 @@ describe('workflow adapter transport', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:5142/api/beds/bed%201',
-      expect.objectContaining({ method: 'PUT' }),
+      'http://localhost:5142/api/segments',
+      expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      'http://localhost:5142/api/segments/segment-1/beds',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       'http://localhost:5142/api/crops/crop%201',
       expect.objectContaining({ method: 'PUT' }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       'http://localhost:5142/api/seedInventoryItems/seed%20item%201',
       expect.objectContaining({ method: 'DELETE' }),
     );
