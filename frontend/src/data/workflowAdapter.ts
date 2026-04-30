@@ -399,6 +399,10 @@ export const workflowAdapter = {
           });
         }
 
+        if (!bed.segmentId) {
+          throw new Error('segmentId is required to create a bed');
+        }
+
         return fetchJson<Bed>(`/api/segments/${encodeURIComponent(bed.segmentId)}/beds`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
