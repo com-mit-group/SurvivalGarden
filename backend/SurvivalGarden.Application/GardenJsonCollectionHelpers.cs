@@ -48,6 +48,25 @@ internal static class GardenJsonCollectionHelpers
             batch["bedAssignments"] = new JsonArray();
         }
 
+        if (batch["bedAssignments"] is JsonArray assignments)
+        {
+            foreach (var assignment in assignments.OfType<JsonObject>())
+            {
+                if (assignment["assignedAt"] is null && assignment["fromDate"] is not null)
+                {
+                    assignment["assignedAt"] = assignment["fromDate"]?.DeepClone();
+                }
+
+                if (assignment["removedAt"] is null && assignment["toDate"] is not null)
+                {
+                    assignment["removedAt"] = assignment["toDate"]?.DeepClone();
+                }
+
+                assignment.Remove("fromDate");
+                assignment.Remove("toDate");
+            }
+        }
+
         if (batch["stageEvents"] is null)
         {
             batch["stageEvents"] = new JsonArray();

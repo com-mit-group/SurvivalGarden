@@ -249,6 +249,11 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         {
             _ = GardenJsonCollectionHelpers.GetCollection(state, name);
         }
+
+        foreach (var batch in GardenJsonCollectionHelpers.GetCollection(state, "batches").OfType<JsonObject>())
+        {
+            GardenJsonCollectionHelpers.NormalizeBatchForPersistence(batch);
+        }
     }
 
     private static string UtcNowIso() =>
