@@ -320,6 +320,31 @@ const remapLegacyCropReferences = (payload: unknown): unknown => {
               nextItem.assignments = nextItem.bedAssignments;
             }
 
+            const normalizeAssignments = (value: unknown): unknown =>
+              Array.isArray(value)
+                ? value.map((assignment) => {
+                    if (!isObjectRecord(assignment)) {
+                      return assignment;
+                    }
+
+                    const nextAssignment: Record<string, unknown> = { ...assignment };
+                    if (typeof nextAssignment.assignedAt !== 'string' && typeof nextAssignment.fromDate === 'string') {
+                      nextAssignment.assignedAt = nextAssignment.fromDate;
+                    }
+
+                    if (typeof nextAssignment.removedAt !== 'string' && typeof nextAssignment.toDate === 'string') {
+                      nextAssignment.removedAt = nextAssignment.toDate;
+                    }
+
+                    delete nextAssignment.fromDate;
+                    delete nextAssignment.toDate;
+                    return nextAssignment;
+                  })
+                : value;
+
+            nextItem.bedAssignments = normalizeAssignments(nextItem.bedAssignments);
+            nextItem.assignments = normalizeAssignments(nextItem.assignments);
+
             if (typeof nextItem.cultivarId !== 'string' && typeof nextItem.cropId === 'string') {
               nextItem.cultivarId = nextItem.cropId;
             }

@@ -180,9 +180,6 @@ jobs:
           fi
 
           commit_subject="$INPUT_COMMIT_MESSAGE"
-          if [[ "$commit_subject" != *"[skip ci]"* ]]; then
-            commit_subject="$commit_subject [skip ci]"
-          fi
 
           git commit \
             -m "$commit_subject" \
