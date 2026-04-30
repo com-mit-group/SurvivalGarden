@@ -11,6 +11,8 @@ public sealed class JsonFileGardenStateStore : IGardenStateStore
         WriteIndented = true
     };
 
+    private static readonly SemaphoreSlim SaveLock = new(1, 1);
+
     private readonly string _filePath;
 
     public JsonFileGardenStateStore(string filePath)
@@ -32,8 +34,17 @@ public sealed class JsonFileGardenStateStore : IGardenStateStore
 
     public async Task SaveAsync(JsonObject appState, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_filePath) ?? ".");
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, appState, JsonOptions, cancellationToken);
+        await SaveLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_filePath) ?? ".");
+            await using var stream = File.Create(_filePath);
+            await JsonSerializer.SerializeAsync(stream, appState, JsonOptions, cancellationToken);
+        }
+        finally
+        {
+            SaveLock.Release();
+        }
     }
 }
