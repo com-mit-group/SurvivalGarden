@@ -77,7 +77,7 @@ internal static class SegmentEndpoints
 
         app.MapDelete("/api/segments/{id}", async (IGardenApplicationService service, string id, CancellationToken ct) =>
         {
-            var deleted = await service.DeleteAsync("segments", "segmentId", id, ct);
+            var deleted = await service.RemoveAsync("segments", "segmentId", id, ct);
             return deleted ? Results.NoContent() : Results.NotFound();
         });
         app.MapPost("/api/segments/{id}/beds", async (IGardenApplicationService service, string id, JsonObject payload, CancellationToken ct) =>
