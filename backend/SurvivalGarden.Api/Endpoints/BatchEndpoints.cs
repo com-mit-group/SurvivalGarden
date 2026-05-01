@@ -56,19 +56,6 @@ internal static class BatchEndpoints
             return Results.Ok(saved);
         });
 
-        app.MapPut("/api/batches/{id}", async (IGardenApplicationService service, string id, JsonObject payload, CancellationToken ct) =>
-        {
-            payload["batchId"] = id;
-            var validation = service.Validate("batches", payload);
-            if (!validation.Ok)
-            {
-                return Results.BadRequest(new { errors = validation.Issues });
-            }
-
-            var saved = await service.UpsertAsync("batches", "batchId", payload, ct);
-            return Results.Ok(saved);
-        });
-
         app.MapPost("/api/batches/{id}/stage-events", async (
             IGardenApplicationService service,
             string id,

@@ -53,6 +53,7 @@ if (corsOrigins.Length > 0)
 }
 
 app.MapCoreEndpoints();
+app.MapSegmentEndpoints();
 app.MapBatchEndpoints();
 app.MapDomainOperationEndpoints();
 
