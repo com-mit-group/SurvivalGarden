@@ -2168,7 +2168,6 @@ function SeedInventoryPage() {
   const [speciesNames, setSpeciesNames] = useState<Record<string, string>>({});
   const [projectedRowsById, setProjectedRowsById] = useState<Record<string, SeedInventoryQueryRow>>({});
   const [isProjectedInventoryAuthoritative, setIsProjectedInventoryAuthoritative] = useState(false);
-  const [taxonomyPickerCropsById, setTaxonomyPickerCropsById] = useState<Record<string, TaxonomyPickerCrop>>({});
   const [taxonomyPickerCultivars, setTaxonomyPickerCultivars] = useState<TaxonomyPickerCultivar[]>([]);
   const [cultivarIds, setCultivarIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -2192,7 +2191,6 @@ function SeedInventoryPage() {
       setCultivarIds([]);
       setProjectedRowsById({});
       setIsProjectedInventoryAuthoritative(false);
-      setTaxonomyPickerCropsById({});
       setTaxonomyPickerCultivars([]);
       setIsLoading(false);
       return;
@@ -2234,15 +2232,12 @@ function SeedInventoryPage() {
       const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
       if (taxonomyResponse.ok) {
         const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
-        setTaxonomyPickerCropsById(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop])));
         setTaxonomyPickerCultivars(taxonomy.cultivars);
         setCultivarIds(taxonomy.cultivars.filter((cultivar) => !cultivar.archived).map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
       } else {
-        setTaxonomyPickerCropsById({});
-        setTaxonomyPickerCultivars([]);
+          setTaxonomyPickerCultivars([]);
       }
     } catch {
-      setTaxonomyPickerCropsById({});
       setTaxonomyPickerCultivars([]);
     }
     setIsLoading(false);
@@ -3301,7 +3296,7 @@ function BatchesPage({
         return byBatchId;
       });
     },
-    [batches, cultivarsById, cropNames, cropScientificNames, filters],
+    [batches, cultivarsById, cropNames, cropScientificNames, filters, projectedBatchRowsById],
   );
 
   const updateFilter = (name: string, value: string) => {
