@@ -25,6 +25,8 @@ const validSegment = {
   name: 'Segment 1',
   width: 10,
   height: 5,
+  widthM: 10,
+  lengthM: 5,
   originReference: 'nw_corner',
   beds: [{ ...validBed, x: 0, y: 0, width: 2, height: 1 }],
   paths: [],
