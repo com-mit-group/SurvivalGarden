@@ -2988,7 +2988,13 @@ function BatchesPage({
       Array.from(
         new Set(
           batches
-            .map((batch) => batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId)
+            .map((batch) => getBatchCultivarDisplay({
+              batch,
+              cultivarsById,
+              cropNames,
+              cropScientificNames,
+              projectedRowsByBatchId: projectedBatchRowsById,
+            }).cropTypeId)
             .filter((cropTypeId): cropTypeId is string => Boolean(cropTypeId)),
         ),
       )
@@ -3001,7 +3007,7 @@ function BatchesPage({
             scientificName: cropScientificNames[cropId],
           }),
         })),
-    [batches, cultivarsById, cropNames, cropScientificNames],
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
   );
 
   const stageOptions = useMemo(
@@ -3022,20 +3028,30 @@ function BatchesPage({
   );
 
   const cultivarOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          batches
-            .map((batch) => getBatchCultivarLookupId(batch))
-            .filter((cultivarId): cultivarId is string => Boolean(cultivarId && cultivarsById[cultivarId])),
-        ),
-      )
-        .map((cultivarId) => ({
-          value: cultivarId,
-          label: cultivarsById[cultivarId]?.name ?? cultivarId,
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label)),
-    [batches, cultivarsById],
+    () => {
+      const optionsById = new Map<string, string>();
+
+      for (const batch of batches) {
+        const display = getBatchCultivarDisplay({
+          batch,
+          cultivarsById,
+          cropNames,
+          cropScientificNames,
+          projectedRowsByBatchId: projectedBatchRowsById,
+        });
+
+        if (!display.identityId) {
+          continue;
+        }
+
+        optionsById.set(display.identityId, display.name ?? cultivarsById[display.identityId]?.name ?? display.identityId);
+      }
+
+      return Array.from(optionsById.entries())
+        .map(([value, label]) => ({ value, label }))
+        .sort((left, right) => left.label.localeCompare(right.label));
+    },
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
   );
 
   const cultivarInputOptions = useMemo(
@@ -3079,8 +3095,6 @@ function BatchesPage({
         .filter((batch) => {
         const derivedBedId = getDerivedBedId(batch);
         const batchDate = batch.startedAt.slice(0, 10);
-        const cultivarId = getBatchCultivarLookupId(batch);
-        const cultivarName = cultivarId ? (cultivarsById[cultivarId]?.name ?? '') : '';
         const batchDisplay = getBatchCultivarDisplay({
           batch,
           cultivarsById,
@@ -3088,8 +3102,10 @@ function BatchesPage({
           cropScientificNames,
           projectedRowsByBatchId: projectedBatchRowsById,
         });
+        const cultivarId = batchDisplay.identityId;
+        const cultivarName = cultivarsById[cultivarId]?.name ?? batchDisplay.name ?? '';
 
-        const batchCropTypeId = batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId;
+        const batchCropTypeId = batchDisplay.cropTypeId;
         if (filters.crop && batchCropTypeId !== filters.crop) {
           return false;
         }
