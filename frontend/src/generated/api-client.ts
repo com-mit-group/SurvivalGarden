@@ -11,6 +11,8 @@ export type BackendApiPath =
   | '/'
   | '/api/app-state'
   | '/api/settings'
+  | '/api/query/taxonomy-picker'
+  | '/api/query/seed-inventory'
   | '/api/species'
   | '/api/species/{id}'
   | '/api/crops'

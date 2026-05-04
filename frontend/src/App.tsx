@@ -2195,18 +2195,6 @@ function SeedInventoryPage() {
     setCultivarIds(cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
 
     try {
-      const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
-      if (taxonomyResponse.ok) {
-        const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
-        setCropNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.cropName])));
-        setSpeciesNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.speciesDisplay])));
-        setCultivarIds(taxonomy.cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
-      }
-    } catch {
-      // keep local fallback state from app state
-    }
-
-    try {
       const response = await fetch('/api/query/seed-inventory');
       if (response.ok) {
         const projectedRows = await response.json() as SeedInventoryQueryRow[];
@@ -2926,11 +2914,25 @@ function BatchesPage({
         ),
       );
       setCultivars(getCultivarsFromAppState(appState));
+
+      if (taxonomyOnly) {
+        try {
+          const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
+          if (taxonomyResponse.ok) {
+            const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
+            setCropNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.cropName])));
+            setCropScientificNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.speciesDisplay])));
+          }
+        } catch {
+          // keep app-state fallback values
+        }
+      }
+
       setIsLoading(false);
     };
 
     void load();
-  }, []);
+  }, [taxonomyOnly]);
 
   const filters = useMemo(
     () => ({
