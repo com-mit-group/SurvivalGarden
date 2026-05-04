@@ -15,7 +15,7 @@ const validBed = {
   bedId: 'bed-1',
   gardenId: 'garden-1',
   name: 'Bed 1',
-  type: 'vegetable_bed',
+  type: 'vegetable_bed' as const,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
 };
@@ -28,7 +28,7 @@ const validSegment = {
   widthM: 10,
   lengthM: 5,
   originReference: 'nw_corner',
-  beds: [{ ...validBed, x: 0, y: 0, width: 2, height: 1 }],
+  beds: [{ ...validBed, segmentId: 'segment-1', x: 0, y: 0, width: 2, height: 1, widthM: 2, lengthM: 1 }],
   paths: [],
 };
 
