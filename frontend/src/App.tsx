@@ -2133,11 +2133,38 @@ function CultivarAdminPage() {
   );
 }
 
+
+type TaxonomyPickerQueryResponse = {
+  crops: Array<{ cropId: string; cropName: string; speciesId: string; speciesDisplay: string }>;
+  cultivars: Array<{ cultivarId: string; cultivarName: string; cropTypeId: string; cropTypeName: string; speciesDisplay: string; archived: boolean }>;
+};
+
+type SeedInventoryQueryRow = {
+  seedInventoryItemId: string;
+  cultivarId: string;
+  displayName: string;
+  cropTypeName: string;
+  speciesDisplay: string;
+};
+
+type BatchListQueryRow = {
+  batchId: string;
+  identityId: string;
+  capabilityCropId: string;
+  displayName: string;
+  cropTypeId: string;
+  cropTypeName: string;
+  speciesDisplay: string;
+};
+
+
 function SeedInventoryPage() {
   const [items, setItems] = useState<SeedInventoryItem[]>([]);
   const [cultivarsById, setCultivarsById] = useState<Record<string, CultivarRecord>>({});
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [speciesNames, setSpeciesNames] = useState<Record<string, string>>({});
+  const [projectedRowsById, setProjectedRowsById] = useState<Record<string, SeedInventoryQueryRow>>({});
+  const [isProjectedInventoryAuthoritative, setIsProjectedInventoryAuthoritative] = useState(false);
   const [cultivarIds, setCultivarIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -2158,6 +2185,8 @@ function SeedInventoryPage() {
       setCropNames({});
       setSpeciesNames({});
       setCultivarIds([]);
+      setProjectedRowsById({});
+      setIsProjectedInventoryAuthoritative(false);
       setIsLoading(false);
       return;
     }
@@ -2177,6 +2206,22 @@ function SeedInventoryPage() {
       ),
     );
     setCultivarIds(cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
+
+    try {
+      const response = await fetch('/api/query/seed-inventory');
+      if (response.ok) {
+        const projectedRows = await response.json() as SeedInventoryQueryRow[];
+        setProjectedRowsById(Object.fromEntries(projectedRows.map((row) => [row.seedInventoryItemId, row])));
+        setIsProjectedInventoryAuthoritative(true);
+      } else {
+        setProjectedRowsById({});
+        setIsProjectedInventoryAuthoritative(false);
+      }
+    } catch {
+      setProjectedRowsById({});
+      setIsProjectedInventoryAuthoritative(false);
+    }
+
     setIsLoading(false);
   }, []);
 
@@ -2320,10 +2365,17 @@ function SeedInventoryPage() {
         <ul className="seed-inventory-list">
           {items.map((item) => {
             const cultivar = cultivarsById[item.cultivarId];
+            const projected = projectedRowsById[item.seedInventoryItemId];
             const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
-            const cropTypeName = cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type';
-            const speciesName = cropTypeId ? speciesNames[cropTypeId] : '';
-            const displayName = cultivar?.name ?? item.variety ?? item.cultivarId;
+            const cropTypeName = isProjectedInventoryAuthoritative
+              ? (projected?.cropTypeName ?? 'Unknown crop type')
+              : (cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type');
+            const speciesName = isProjectedInventoryAuthoritative
+              ? (projected?.speciesDisplay ?? '')
+              : (cropTypeId ? speciesNames[cropTypeId] : '');
+            const displayName = isProjectedInventoryAuthoritative
+              ? (projected?.displayName ?? item.cultivarId)
+              : (cultivar?.name ?? item.variety ?? item.cultivarId);
 
             return (
               <li key={item.seedInventoryItemId} className="seed-inventory-row">
@@ -2708,11 +2760,13 @@ const getBatchCultivarDisplay = ({
   cultivarsById,
   cropNames,
   cropScientificNames,
+  projectedRowsByBatchId,
 }: {
   batch: Batch;
   cultivarsById: Record<string, CultivarRecord>;
   cropNames: Record<string, string>;
   cropScientificNames: Record<string, string>;
+  projectedRowsByBatchId?: Record<string, BatchListQueryRow>;
 }): {
   identityId: string;
   capabilityCropId: string;
@@ -2722,17 +2776,18 @@ const getBatchCultivarDisplay = ({
   cropTypeName?: string | undefined;
 } => {
   const lookupId = getBatchCultivarLookupId(batch) ?? batch.batchId;
+  const projected = projectedRowsByBatchId?.[batch.batchId];
   const cultivar = cultivarsById[lookupId];
-  const cropTypeId = batch.cropTypeId ?? cultivar?.cropTypeId;
-  const capabilityCropId = cropTypeId ?? lookupId;
+  const cropTypeId = projected?.cropTypeId ?? batch.cropTypeId ?? cultivar?.cropTypeId;
+  const capabilityCropId = projected?.capabilityCropId ?? cropTypeId ?? lookupId;
 
   return {
-    identityId: cultivar?.cultivarId ?? lookupId,
+    identityId: projected?.identityId ?? cultivar?.cultivarId ?? lookupId,
     capabilityCropId,
-    name: cultivar?.name ?? cropNames[lookupId] ?? cropNames[cropTypeId ?? ''],
-    scientificName: cropScientificNames[cropTypeId ?? ''] ?? cropScientificNames[lookupId],
+    name: projected?.displayName ?? cultivar?.name ?? cropNames[lookupId] ?? cropNames[cropTypeId ?? ''],
+    scientificName: projected?.speciesDisplay ?? cropScientificNames[cropTypeId ?? ''] ?? cropScientificNames[lookupId],
     cropTypeId,
-    cropTypeName: cropNames[cropTypeId ?? ''],
+    cropTypeName: projected?.cropTypeName ?? cropNames[cropTypeId ?? ''],
   };
 };
 
@@ -2756,6 +2811,7 @@ function BatchesPage({
   const [userDefinedCropIds, setUserDefinedCropIds] = useState<Record<string, boolean>>({});
   const [cultivars, setCultivars] = useState<CultivarRecord[]>([]);
   const [speciesById, setSpeciesById] = useState<Record<string, Species>>({});
+  const [projectedBatchRowsById, setProjectedBatchRowsById] = useState<Record<string, BatchListQueryRow>>({});
   const [editingSpeciesId, setEditingSpeciesId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isDeletingBatchId, setIsDeletingBatchId] = useState<string | null>(null);
@@ -2842,6 +2898,7 @@ function BatchesPage({
         setUserDefinedCropIds({});
         setCultivars([]);
         setSpeciesById({});
+        setProjectedBatchRowsById({});
         setIsLoading(false);
         return;
       }
@@ -2884,11 +2941,37 @@ function BatchesPage({
         ),
       );
       setCultivars(getCultivarsFromAppState(appState));
+
+      try {
+        const batchQueryResponse = await fetch('/api/query/batch-list');
+        if (batchQueryResponse.ok) {
+          const projected = await batchQueryResponse.json() as BatchListQueryRow[];
+          setProjectedBatchRowsById(Object.fromEntries(projected.map((row) => [row.batchId, row])));
+        } else {
+          setProjectedBatchRowsById({});
+        }
+      } catch {
+        setProjectedBatchRowsById({});
+      }
+
+      if (taxonomyOnly) {
+        try {
+          const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
+          if (taxonomyResponse.ok) {
+            const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
+            setCropNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.cropName])));
+            setCropScientificNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.speciesDisplay])));
+          }
+        } catch {
+          // keep app-state fallback values
+        }
+      }
+
       setIsLoading(false);
     };
 
     void load();
-  }, []);
+  }, [taxonomyOnly]);
 
   const filters = useMemo(
     () => ({
@@ -2916,7 +2999,13 @@ function BatchesPage({
       Array.from(
         new Set(
           batches
-            .map((batch) => batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId)
+            .map((batch) => getBatchCultivarDisplay({
+              batch,
+              cultivarsById,
+              cropNames,
+              cropScientificNames,
+              projectedRowsByBatchId: projectedBatchRowsById,
+            }).cropTypeId)
             .filter((cropTypeId): cropTypeId is string => Boolean(cropTypeId)),
         ),
       )
@@ -2929,7 +3018,7 @@ function BatchesPage({
             scientificName: cropScientificNames[cropId],
           }),
         })),
-    [batches, cultivarsById, cropNames, cropScientificNames],
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
   );
 
   const stageOptions = useMemo(
@@ -2950,20 +3039,30 @@ function BatchesPage({
   );
 
   const cultivarOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          batches
-            .map((batch) => getBatchCultivarLookupId(batch))
-            .filter((cultivarId): cultivarId is string => Boolean(cultivarId && cultivarsById[cultivarId])),
-        ),
-      )
-        .map((cultivarId) => ({
-          value: cultivarId,
-          label: cultivarsById[cultivarId]?.name ?? cultivarId,
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label)),
-    [batches, cultivarsById],
+    () => {
+      const optionsById = new Map<string, string>();
+
+      for (const batch of batches) {
+        const display = getBatchCultivarDisplay({
+          batch,
+          cultivarsById,
+          cropNames,
+          cropScientificNames,
+          projectedRowsByBatchId: projectedBatchRowsById,
+        });
+
+        if (!display.identityId) {
+          continue;
+        }
+
+        optionsById.set(display.identityId, display.name ?? cultivarsById[display.identityId]?.name ?? display.identityId);
+      }
+
+      return Array.from(optionsById.entries())
+        .map(([value, label]) => ({ value, label }))
+        .sort((left, right) => left.label.localeCompare(right.label));
+    },
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
   );
 
   const cultivarInputOptions = useMemo(
@@ -3007,16 +3106,17 @@ function BatchesPage({
         .filter((batch) => {
         const derivedBedId = getDerivedBedId(batch);
         const batchDate = batch.startedAt.slice(0, 10);
-        const cultivarId = getBatchCultivarLookupId(batch);
-        const cultivarName = cultivarId ? (cultivarsById[cultivarId]?.name ?? '') : '';
         const batchDisplay = getBatchCultivarDisplay({
           batch,
           cultivarsById,
           cropNames,
           cropScientificNames,
+          projectedRowsByBatchId: projectedBatchRowsById,
         });
+        const cultivarId = batchDisplay.identityId;
+        const cultivarName = cultivarsById[cultivarId]?.name ?? batchDisplay.name ?? '';
 
-        const batchCropTypeId = batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId;
+        const batchCropTypeId = batchDisplay.cropTypeId;
         if (filters.crop && batchCropTypeId !== filters.crop) {
           return false;
         }
@@ -4889,6 +4989,7 @@ function BatchesPage({
               cultivarsById,
               cropNames,
               cropScientificNames,
+              projectedRowsByBatchId: projectedBatchRowsById,
             });
 
             return (
