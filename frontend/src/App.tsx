@@ -2133,11 +2133,21 @@ function CultivarAdminPage() {
   );
 }
 
+
+type SeedInventoryQueryRow = {
+  seedInventoryItemId: string;
+  cultivarId: string;
+  displayName: string;
+  cropTypeName: string;
+  speciesDisplay: string;
+};
+
 function SeedInventoryPage() {
   const [items, setItems] = useState<SeedInventoryItem[]>([]);
   const [cultivarsById, setCultivarsById] = useState<Record<string, CultivarRecord>>({});
   const [cropNames, setCropNames] = useState<Record<string, string>>({});
   const [speciesNames, setSpeciesNames] = useState<Record<string, string>>({});
+  const [projectedRowsById, setProjectedRowsById] = useState<Record<string, SeedInventoryQueryRow>>({});
   const [cultivarIds, setCultivarIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -2158,6 +2168,7 @@ function SeedInventoryPage() {
       setCropNames({});
       setSpeciesNames({});
       setCultivarIds([]);
+      setProjectedRowsById({});
       setIsLoading(false);
       return;
     }
@@ -2177,6 +2188,19 @@ function SeedInventoryPage() {
       ),
     );
     setCultivarIds(cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
+
+    try {
+      const response = await fetch('/api/query/seed-inventory');
+      if (response.ok) {
+        const projectedRows = await response.json() as SeedInventoryQueryRow[];
+        setProjectedRowsById(Object.fromEntries(projectedRows.map((row) => [row.seedInventoryItemId, row])));
+      } else {
+        setProjectedRowsById({});
+      }
+    } catch {
+      setProjectedRowsById({});
+    }
+
     setIsLoading(false);
   }, []);
 
@@ -2320,10 +2344,11 @@ function SeedInventoryPage() {
         <ul className="seed-inventory-list">
           {items.map((item) => {
             const cultivar = cultivarsById[item.cultivarId];
+            const projected = projectedRowsById[item.seedInventoryItemId];
             const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
-            const cropTypeName = cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type';
-            const speciesName = cropTypeId ? speciesNames[cropTypeId] : '';
-            const displayName = cultivar?.name ?? item.variety ?? item.cultivarId;
+            const cropTypeName = projected?.cropTypeName ?? (cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type');
+            const speciesName = projected?.speciesDisplay ?? (cropTypeId ? speciesNames[cropTypeId] : '');
+            const displayName = projected?.displayName ?? cultivar?.name ?? item.variety ?? item.cultivarId;
 
             return (
               <li key={item.seedInventoryItemId} className="seed-inventory-row">
