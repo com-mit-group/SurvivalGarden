@@ -56,6 +56,85 @@ internal static class CoreEndpoints
             return Results.Ok(payload);
         });
 
+
+        app.MapGet("/api/query/taxonomy-picker", async (IGardenApplicationService service, CancellationToken ct) =>
+        {
+            var state = await service.LoadAppStateAsync(ct);
+            if (state is null)
+            {
+                return Results.NotFound();
+            }
+
+            var speciesById = BuildSpeciesLookup(state);
+
+            var crops = (state["crops"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var cultivars = (state["cultivars"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+
+            var cropRows = crops.Select(crop =>
+            {
+                var cropId = crop["cropId"]?.GetValue<string>() ?? string.Empty;
+                var speciesId = crop["speciesId"]?.GetValue<string>() ?? string.Empty;
+                return new
+                {
+                    cropId,
+                    cropName = crop["name"]?.GetValue<string>() ?? cropId,
+                    speciesId,
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                };
+            });
+
+            var cultivarRows = cultivars.Select(cultivar =>
+            {
+                var cropTypeId = cultivar["cropTypeId"]?.GetValue<string>() ?? string.Empty;
+                var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
+                var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
+                return new
+                {
+                    cultivarId = cultivar["cultivarId"]?.GetValue<string>() ?? string.Empty,
+                    cultivarName = cultivar["name"]?.GetValue<string>() ?? string.Empty,
+                    cropTypeId,
+                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId),
+                    archived = cultivar["isArchived"]?.GetValue<bool>() ?? false
+                };
+            });
+
+            return Results.Ok(new { crops = cropRows, cultivars = cultivarRows });
+        });
+
+        app.MapGet("/api/query/seed-inventory", async (IGardenApplicationService service, CancellationToken ct) =>
+        {
+            var state = await service.LoadAppStateAsync(ct);
+            if (state is null)
+            {
+                return Results.NotFound();
+            }
+
+            var items = (state["seedInventoryItems"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var crops = (state["crops"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var cultivars = (state["cultivars"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var speciesById = BuildSpeciesLookup(state);
+
+            var rows = items.Select(item =>
+            {
+                var cultivarId = item["cultivarId"]?.GetValue<string>() ?? string.Empty;
+                var cultivar = cultivars.FirstOrDefault(candidate => string.Equals(candidate["cultivarId"]?.GetValue<string>(), cultivarId, StringComparison.Ordinal));
+                var cropTypeId = cultivar?["cropTypeId"]?.GetValue<string>() ?? item["cropId"]?.GetValue<string>() ?? string.Empty;
+                var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
+                var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
+                return new
+                {
+                    seedInventoryItemId = item["seedInventoryItemId"]?.GetValue<string>() ?? string.Empty,
+                    cultivarId,
+                    displayName = cultivar?["name"]?.GetValue<string>() ?? item["variety"]?.GetValue<string>() ?? cultivarId,
+                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                };
+            });
+
+            return Results.Ok(rows);
+        });
+
         MapEntityCrud(app, "species", "id");
         MapTypedEntityCrud<CropUpsertRequest>(app, "crops", "cropId", (payload, id) =>
         {
@@ -79,6 +158,22 @@ internal static class CoreEndpoints
                 issues = validation.Issues
             });
         });
+    }
+
+
+    private static Dictionary<string, JsonObject> BuildSpeciesLookup(JsonObject state) =>
+        (state["species"] as JsonArray ?? []).OfType<JsonObject>()
+            .Where(species => !string.IsNullOrWhiteSpace(species["id"]?.GetValue<string>()))
+            .ToDictionary(species => species["id"]!.GetValue<string>(), species => species);
+
+    private static string ResolveSpeciesDisplay(IReadOnlyDictionary<string, JsonObject> speciesById, string speciesId)
+    {
+        if (!speciesById.TryGetValue(speciesId, out var species))
+        {
+            return string.Empty;
+        }
+
+        return species["commonName"]?.GetValue<string>() ?? species["scientificName"]?.GetValue<string>() ?? string.Empty;
     }
 
     private static void MapEntityCrud(WebApplication app, string collectionName, string idProperty)
