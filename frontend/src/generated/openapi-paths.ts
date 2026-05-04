@@ -1029,7 +1029,17 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": Array<{
+                            batchId: string;
+                            identityId: string;
+                            capabilityCropId: string;
+                            displayName: string;
+                            cropTypeId: string;
+                            cropTypeName: string;
+                            speciesDisplay: string;
+                        }>;
+                    };
                 };
             };
         };
@@ -1062,7 +1072,15 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": Array<{
+                            seedInventoryItemId: string;
+                            cultivarId: string;
+                            displayName: string;
+                            cropTypeName: string;
+                            speciesDisplay: string;
+                        }>;
+                    };
                 };
             };
         };
@@ -1095,7 +1113,24 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            crops: Array<{
+                                cropId: string;
+                                cropName: string;
+                                speciesId: string;
+                                speciesDisplay: string;
+                            }>;
+                            cultivars: Array<{
+                                cultivarId: string;
+                                cultivarName: string;
+                                cropTypeId: string;
+                                cropTypeName: string;
+                                speciesDisplay: string;
+                                archived: boolean;
+                            }>;
+                        };
+                    };
                 };
             };
         };
