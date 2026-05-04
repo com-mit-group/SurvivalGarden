@@ -58,3 +58,5 @@ app.MapBatchEndpoints();
 app.MapDomainOperationEndpoints();
 
 await app.RunAsync();
+
+public partial class Program { }

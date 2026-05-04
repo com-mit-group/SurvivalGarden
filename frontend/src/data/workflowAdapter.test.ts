@@ -15,7 +15,7 @@ const validBed = {
   bedId: 'bed-1',
   gardenId: 'garden-1',
   name: 'Bed 1',
-  type: 'vegetable_bed',
+  type: 'vegetable_bed' as const,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
 };
@@ -25,8 +25,10 @@ const validSegment = {
   name: 'Segment 1',
   width: 10,
   height: 5,
+  widthM: 10,
+  lengthM: 5,
   originReference: 'nw_corner',
-  beds: [{ ...validBed, x: 0, y: 0, width: 2, height: 1 }],
+  beds: [{ ...validBed, segmentId: 'segment-1', x: 0, y: 0, width: 2, height: 1, widthM: 2, lengthM: 1 }],
   paths: [],
 };
 
@@ -367,6 +369,61 @@ describe('workflow adapter transport', () => {
       4,
       'http://localhost:5142/api/seedInventoryItems/seed%20item%201',
       expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('saves segments with command-style calls and without pre-save existence probes', async () => {
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => validSegment } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await workflowAdapter.bedsSegments.upsertSegment(validSegment);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:5142/api/segments/segment-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  it('uses command-style batch routes for write operations', async () => {
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'http://localhost:5142');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ batchId: 'batch-1' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ batchId: 'batch-1' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ batchId: 'batch-1' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ batchId: 'batch-1' }) } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await workflowAdapter.batches.transitionStage('batch-1', 'active', '2026-04-01T00:00:00Z');
+    await workflowAdapter.batches.mutateAssignment('assign', { batchId: 'batch-1', bedId: 'bed-1', at: '2026-04-01T00:00:00Z' });
+    await workflowAdapter.batches.mutateAssignment('move', { batchId: 'batch-1', bedId: 'bed-2', at: '2026-04-01T00:00:00Z' });
+    await workflowAdapter.batches.mutateAssignment('remove', { batchId: 'batch-1', at: '2026-04-01T00:00:00Z' });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:5142/api/batches/batch-1/stage-events',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:5142/api/batches/batch-1/assign-bed',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:5142/api/batches/batch-1/move-bed',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://localhost:5142/api/batches/batch-1/unassign-bed',
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 });
