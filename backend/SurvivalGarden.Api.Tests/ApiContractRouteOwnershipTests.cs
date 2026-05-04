@@ -2,20 +2,31 @@ using System.Net;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Xunit;
+using NUnit.Framework;
 
 namespace SurvivalGarden.Api.Tests;
 
-public sealed class ApiContractRouteOwnershipTests : IClassFixture<WebApplicationFactory<Program>>
+[TestFixture]
+public sealed class ApiContractRouteOwnershipTests
 {
-    private readonly HttpClient _client;
+    private WebApplicationFactory<Program>? _factory;
+    private HttpClient? _client;
 
-    public ApiContractRouteOwnershipTests(WebApplicationFactory<Program> factory)
+    [OneTimeSetUp]
+    public void SetUp()
     {
-        _client = factory.CreateClient();
+        _factory = new WebApplicationFactory<Program>();
+        _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [OneTimeTearDown]
+    public void TearDown()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+    }
+
+    [Test]
     public async Task OpenApi_DoesNotExposeGenericSegmentMutationRoutes()
     {
         var document = await LoadOpenApiAsync();
@@ -25,7 +36,7 @@ public sealed class ApiContractRouteOwnershipTests : IClassFixture<WebApplicatio
         segmentById!.ContainsKey("put").Should().BeFalse("workflow-owned segment writes must be command-style");
     }
 
-    [Fact]
+    [Test]
     public async Task OpenApi_BatchGenericMutationRoutesRemainBlockedWhenBatchWorkflowCutoverCompletes()
     {
         var document = await LoadOpenApiAsync();
@@ -37,7 +48,8 @@ public sealed class ApiContractRouteOwnershipTests : IClassFixture<WebApplicatio
 
     private async Task<JsonObject> LoadOpenApiAsync()
     {
-        using var response = await _client.GetAsync("/openapi/v1.json");
+        _client.Should().NotBeNull();
+        using var response = await _client!.GetAsync("/openapi/v1.json");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var json = await response.Content.ReadAsStringAsync();
