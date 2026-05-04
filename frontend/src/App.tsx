@@ -2147,6 +2147,17 @@ type SeedInventoryQueryRow = {
   speciesDisplay: string;
 };
 
+type BatchListQueryRow = {
+  batchId: string;
+  identityId: string;
+  capabilityCropId: string;
+  displayName: string;
+  cropTypeId: string;
+  cropTypeName: string;
+  speciesDisplay: string;
+};
+
+
 function SeedInventoryPage() {
   const [items, setItems] = useState<SeedInventoryItem[]>([]);
   const [cultivarsById, setCultivarsById] = useState<Record<string, CultivarRecord>>({});
@@ -2738,11 +2749,13 @@ const getBatchCultivarDisplay = ({
   cultivarsById,
   cropNames,
   cropScientificNames,
+  projectedRowsByBatchId,
 }: {
   batch: Batch;
   cultivarsById: Record<string, CultivarRecord>;
   cropNames: Record<string, string>;
   cropScientificNames: Record<string, string>;
+  projectedRowsByBatchId?: Record<string, BatchListQueryRow>;
 }): {
   identityId: string;
   capabilityCropId: string;
@@ -2752,17 +2765,18 @@ const getBatchCultivarDisplay = ({
   cropTypeName?: string | undefined;
 } => {
   const lookupId = getBatchCultivarLookupId(batch) ?? batch.batchId;
+  const projected = projectedRowsByBatchId?.[batch.batchId];
   const cultivar = cultivarsById[lookupId];
-  const cropTypeId = batch.cropTypeId ?? cultivar?.cropTypeId;
-  const capabilityCropId = cropTypeId ?? lookupId;
+  const cropTypeId = projected?.cropTypeId ?? batch.cropTypeId ?? cultivar?.cropTypeId;
+  const capabilityCropId = projected?.capabilityCropId ?? cropTypeId ?? lookupId;
 
   return {
-    identityId: cultivar?.cultivarId ?? lookupId,
+    identityId: projected?.identityId ?? cultivar?.cultivarId ?? lookupId,
     capabilityCropId,
-    name: cultivar?.name ?? cropNames[lookupId] ?? cropNames[cropTypeId ?? ''],
-    scientificName: cropScientificNames[cropTypeId ?? ''] ?? cropScientificNames[lookupId],
+    name: projected?.displayName ?? cultivar?.name ?? cropNames[lookupId] ?? cropNames[cropTypeId ?? ''],
+    scientificName: projected?.speciesDisplay ?? cropScientificNames[cropTypeId ?? ''] ?? cropScientificNames[lookupId],
     cropTypeId,
-    cropTypeName: cropNames[cropTypeId ?? ''],
+    cropTypeName: projected?.cropTypeName ?? cropNames[cropTypeId ?? ''],
   };
 };
 
@@ -2786,6 +2800,7 @@ function BatchesPage({
   const [userDefinedCropIds, setUserDefinedCropIds] = useState<Record<string, boolean>>({});
   const [cultivars, setCultivars] = useState<CultivarRecord[]>([]);
   const [speciesById, setSpeciesById] = useState<Record<string, Species>>({});
+  const [projectedBatchRowsById, setProjectedBatchRowsById] = useState<Record<string, BatchListQueryRow>>({});
   const [editingSpeciesId, setEditingSpeciesId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isDeletingBatchId, setIsDeletingBatchId] = useState<string | null>(null);
@@ -2872,6 +2887,7 @@ function BatchesPage({
         setUserDefinedCropIds({});
         setCultivars([]);
         setSpeciesById({});
+        setProjectedBatchRowsById({});
         setIsLoading(false);
         return;
       }
@@ -2914,6 +2930,18 @@ function BatchesPage({
         ),
       );
       setCultivars(getCultivarsFromAppState(appState));
+
+      try {
+        const batchQueryResponse = await fetch('/api/query/batch-list');
+        if (batchQueryResponse.ok) {
+          const projected = await batchQueryResponse.json() as BatchListQueryRow[];
+          setProjectedBatchRowsById(Object.fromEntries(projected.map((row) => [row.batchId, row])));
+        } else {
+          setProjectedBatchRowsById({});
+        }
+      } catch {
+        setProjectedBatchRowsById({});
+      }
 
       if (taxonomyOnly) {
         try {
@@ -3058,6 +3086,7 @@ function BatchesPage({
           cultivarsById,
           cropNames,
           cropScientificNames,
+          projectedRowsByBatchId: projectedBatchRowsById,
         });
 
         const batchCropTypeId = batch.cropTypeId ?? cultivarsById[getBatchCultivarLookupId(batch) ?? '']?.cropTypeId;
@@ -4933,6 +4962,7 @@ function BatchesPage({
               cultivarsById,
               cropNames,
               cropScientificNames,
+              projectedRowsByBatchId: projectedBatchRowsById,
             });
 
             return (

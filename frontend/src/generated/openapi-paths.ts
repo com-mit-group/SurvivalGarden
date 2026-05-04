@@ -20,7 +20,15 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": Array<{
+                            seedInventoryItemId: string;
+                            cultivarId: string;
+                            displayName: string;
+                            cropTypeName: string;
+                            speciesDisplay: string;
+                        }>;
+                    };
                 };
             };
         };
@@ -1008,6 +1016,49 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/query/batch-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Array<{
+                            batchId: string;
+                            identityId: string;
+                            capabilityCropId: string;
+                            displayName: string;
+                            cropTypeId: string;
+                            cropTypeName: string;
+                            speciesDisplay: string;
+                        }>;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/query/seed-inventory": {
         parameters: {
             query?: never;
@@ -1062,7 +1113,24 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            crops: Array<{
+                                cropId: string;
+                                cropName: string;
+                                speciesId: string;
+                                speciesDisplay: string;
+                            }>;
+                            cultivars: Array<{
+                                cultivarId: string;
+                                cultivarName: string;
+                                cropTypeId: string;
+                                cropTypeName: string;
+                                speciesDisplay: string;
+                                archived: boolean;
+                            }>;
+                        };
+                    };
                 };
             };
         };

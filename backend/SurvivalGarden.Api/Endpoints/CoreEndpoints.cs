@@ -135,6 +135,43 @@ internal static class CoreEndpoints
             return Results.Ok(rows);
         });
 
+        app.MapGet("/api/query/batch-list", async (IGardenApplicationService service, CancellationToken ct) =>
+        {
+            var state = await service.LoadAppStateAsync(ct);
+            if (state is null)
+            {
+                return Results.NotFound();
+            }
+
+            var batches = (state["batches"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var crops = (state["crops"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var cultivars = (state["cultivars"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
+            var speciesById = BuildSpeciesLookup(state);
+
+            var rows = batches.Select(batch =>
+            {
+                var batchId = batch["batchId"]?.GetValue<string>() ?? string.Empty;
+                var lookupId = batch["cultivarId"]?.GetValue<string>() ?? batch["cropId"]?.GetValue<string>() ?? batchId;
+                var cultivar = cultivars.FirstOrDefault(candidate => string.Equals(candidate["cultivarId"]?.GetValue<string>(), lookupId, StringComparison.Ordinal));
+                var cropTypeId = batch["cropTypeId"]?.GetValue<string>() ?? cultivar?["cropTypeId"]?.GetValue<string>() ?? string.Empty;
+                var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
+                var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
+
+                return new
+                {
+                    batchId,
+                    identityId = cultivar?["cultivarId"]?.GetValue<string>() ?? lookupId,
+                    capabilityCropId = string.IsNullOrEmpty(cropTypeId) ? lookupId : cropTypeId,
+                    displayName = cultivar?["name"]?.GetValue<string>() ?? crop?["name"]?.GetValue<string>() ?? lookupId,
+                    cropTypeId,
+                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                };
+            });
+
+            return Results.Ok(rows);
+        });
+
         MapEntityCrud(app, "species", "id");
         MapTypedEntityCrud<CropUpsertRequest>(app, "crops", "cropId", (payload, id) =>
         {
