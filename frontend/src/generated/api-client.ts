@@ -13,6 +13,7 @@ export type BackendApiPath =
   | '/api/settings'
   | '/api/query/taxonomy-picker'
   | '/api/query/seed-inventory'
+  | '/api/query/batch-list'
   | '/api/species'
   | '/api/species/{id}'
   | '/api/crops'
