@@ -74,12 +74,12 @@ internal static class CoreEndpoints
             {
                 var cropId = crop["cropId"]?.GetValue<string>() ?? string.Empty;
                 var speciesId = crop["speciesId"]?.GetValue<string>() ?? string.Empty;
-                return new
+                return new TaxonomyPickerCropDto
                 {
-                    cropId,
-                    cropName = crop["name"]?.GetValue<string>() ?? cropId,
-                    speciesId,
-                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                    CropId = cropId,
+                    CropName = crop["name"]?.GetValue<string>() ?? cropId,
+                    SpeciesId = speciesId,
+                    SpeciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
                 };
             });
 
@@ -88,18 +88,22 @@ internal static class CoreEndpoints
                 var cropTypeId = cultivar["cropTypeId"]?.GetValue<string>() ?? string.Empty;
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
                 var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
-                return new
+                return new TaxonomyPickerCultivarDto
                 {
-                    cultivarId = cultivar["cultivarId"]?.GetValue<string>() ?? string.Empty,
-                    cultivarName = cultivar["name"]?.GetValue<string>() ?? string.Empty,
-                    cropTypeId,
-                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
-                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId),
-                    archived = cultivar["isArchived"]?.GetValue<bool>() ?? false
+                    CultivarId = cultivar["cultivarId"]?.GetValue<string>() ?? string.Empty,
+                    CultivarName = cultivar["name"]?.GetValue<string>() ?? string.Empty,
+                    CropTypeId = cropTypeId,
+                    CropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    SpeciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId),
+                    Archived = cultivar["isArchived"]?.GetValue<bool>() ?? false
                 };
             });
 
-            return Results.Ok(new { crops = cropRows, cultivars = cultivarRows });
+            return Results.Ok(new TaxonomyPickerQueryResponseDto
+            {
+                Crops = cropRows.ToArray(),
+                Cultivars = cultivarRows.ToArray()
+            });
         });
 
         app.MapGet("/api/query/seed-inventory", async (IGardenApplicationService service, CancellationToken ct) =>
@@ -122,17 +126,17 @@ internal static class CoreEndpoints
                 var cropTypeId = cultivar?["cropTypeId"]?.GetValue<string>() ?? item["cropId"]?.GetValue<string>() ?? string.Empty;
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
                 var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
-                return new
+                return new SeedInventoryQueryRowDto
                 {
-                    seedInventoryItemId = item["seedInventoryItemId"]?.GetValue<string>() ?? string.Empty,
-                    cultivarId,
-                    displayName = cultivar?["name"]?.GetValue<string>() ?? item["variety"]?.GetValue<string>() ?? cultivarId,
-                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
-                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                    SeedInventoryItemId = item["seedInventoryItemId"]?.GetValue<string>() ?? string.Empty,
+                    CultivarId = cultivarId,
+                    DisplayName = cultivar?["name"]?.GetValue<string>() ?? item["variety"]?.GetValue<string>() ?? cultivarId,
+                    CropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    SpeciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
                 };
             });
 
-            return Results.Ok(rows);
+            return Results.Ok(rows.ToArray());
         });
 
         app.MapGet("/api/query/batch-list", async (IGardenApplicationService service, CancellationToken ct) =>
@@ -157,19 +161,19 @@ internal static class CoreEndpoints
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
                 var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
 
-                return new
+                return new BatchListQueryRowDto
                 {
-                    batchId,
-                    identityId = cultivar?["cultivarId"]?.GetValue<string>() ?? lookupId,
-                    capabilityCropId = string.IsNullOrEmpty(cropTypeId) ? lookupId : cropTypeId,
-                    displayName = cultivar?["name"]?.GetValue<string>() ?? crop?["name"]?.GetValue<string>() ?? lookupId,
-                    cropTypeId,
-                    cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
-                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
+                    BatchId = batchId,
+                    IdentityId = cultivar?["cultivarId"]?.GetValue<string>() ?? lookupId,
+                    CapabilityCropId = string.IsNullOrEmpty(cropTypeId) ? lookupId : cropTypeId,
+                    DisplayName = cultivar?["name"]?.GetValue<string>() ?? crop?["name"]?.GetValue<string>() ?? lookupId,
+                    CropTypeId = cropTypeId,
+                    CropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
+                    SpeciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
                 };
             });
 
-            return Results.Ok(rows);
+            return Results.Ok(rows.ToArray());
         });
 
         MapEntityCrud(app, "species", "id");
@@ -211,6 +215,50 @@ internal static class CoreEndpoints
         }
 
         return species["commonName"]?.GetValue<string>() ?? species["scientificName"]?.GetValue<string>() ?? string.Empty;
+    }
+
+    private sealed class TaxonomyPickerQueryResponseDto
+    {
+        public required TaxonomyPickerCropDto[] Crops { get; init; }
+        public required TaxonomyPickerCultivarDto[] Cultivars { get; init; }
+    }
+
+    private sealed class TaxonomyPickerCropDto
+    {
+        public required string CropId { get; init; }
+        public required string CropName { get; init; }
+        public required string SpeciesId { get; init; }
+        public required string SpeciesDisplay { get; init; }
+    }
+
+    private sealed class TaxonomyPickerCultivarDto
+    {
+        public required string CultivarId { get; init; }
+        public required string CultivarName { get; init; }
+        public required string CropTypeId { get; init; }
+        public required string CropTypeName { get; init; }
+        public required string SpeciesDisplay { get; init; }
+        public required bool Archived { get; init; }
+    }
+
+    private sealed class SeedInventoryQueryRowDto
+    {
+        public required string SeedInventoryItemId { get; init; }
+        public required string CultivarId { get; init; }
+        public required string DisplayName { get; init; }
+        public required string CropTypeName { get; init; }
+        public required string SpeciesDisplay { get; init; }
+    }
+
+    private sealed class BatchListQueryRowDto
+    {
+        public required string BatchId { get; init; }
+        public required string IdentityId { get; init; }
+        public required string CapabilityCropId { get; init; }
+        public required string DisplayName { get; init; }
+        public required string CropTypeId { get; init; }
+        public required string CropTypeName { get; init; }
+        public required string SpeciesDisplay { get; init; }
     }
 
     private static void MapEntityCrud(WebApplication app, string collectionName, string idProperty)
