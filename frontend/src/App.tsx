@@ -2134,9 +2134,12 @@ function CultivarAdminPage() {
 }
 
 
+type TaxonomyPickerCrop = { cropId: string; cropName: string; speciesId: string; speciesDisplay: string };
+type TaxonomyPickerCultivar = { cultivarId: string; cultivarName: string; cropTypeId: string; cropTypeName: string; speciesDisplay: string; archived: boolean };
+
 type TaxonomyPickerQueryResponse = {
-  crops: Array<{ cropId: string; cropName: string; speciesId: string; speciesDisplay: string }>;
-  cultivars: Array<{ cultivarId: string; cultivarName: string; cropTypeId: string; cropTypeName: string; speciesDisplay: string; archived: boolean }>;
+  crops: TaxonomyPickerCrop[];
+  cultivars: TaxonomyPickerCultivar[];
 };
 
 type SeedInventoryQueryRow = {
@@ -2812,6 +2815,8 @@ function BatchesPage({
   const [cultivars, setCultivars] = useState<CultivarRecord[]>([]);
   const [speciesById, setSpeciesById] = useState<Record<string, Species>>({});
   const [projectedBatchRowsById, setProjectedBatchRowsById] = useState<Record<string, BatchListQueryRow>>({});
+  const [taxonomyPickerCrops, setTaxonomyPickerCrops] = useState<TaxonomyPickerCrop[]>([]);
+  const [taxonomyPickerCultivars, setTaxonomyPickerCultivars] = useState<TaxonomyPickerCultivar[]>([]);
   const [editingSpeciesId, setEditingSpeciesId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isDeletingBatchId, setIsDeletingBatchId] = useState<string | null>(null);
@@ -2954,17 +2959,25 @@ function BatchesPage({
         setProjectedBatchRowsById({});
       }
 
-      if (taxonomyOnly) {
-        try {
-          const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
-          if (taxonomyResponse.ok) {
-            const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
+      try {
+        const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
+        if (taxonomyResponse.ok) {
+          const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
+          setTaxonomyPickerCrops(taxonomy.crops);
+          setTaxonomyPickerCultivars(taxonomy.cultivars);
+
+          if (taxonomyOnly) {
             setCropNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.cropName])));
             setCropScientificNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.speciesDisplay])));
           }
-        } catch {
-          // keep app-state fallback values
+        } else {
+          setTaxonomyPickerCrops([]);
+          setTaxonomyPickerCultivars([]);
         }
+      } catch {
+        setTaxonomyPickerCrops([]);
+        setTaxonomyPickerCultivars([]);
+        // keep app-state fallback values
       }
 
       setIsLoading(false);
@@ -2995,8 +3008,23 @@ function BatchesPage({
   );
 
   const cropOptions = useMemo(
-    () =>
-      Array.from(
+    () => {
+      const authoritativeOptions = taxonomyPickerCrops
+        .map((crop) => ({
+          value: crop.cropId,
+          label: formatCropOptionLabel({
+            cropId: crop.cropId,
+            name: crop.cropName,
+            scientificName: crop.speciesDisplay,
+          }),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label));
+
+      if (authoritativeOptions.length > 0) {
+        return authoritativeOptions;
+      }
+
+      return Array.from(
         new Set(
           batches
             .map((batch) => getBatchCultivarDisplay({
@@ -3017,8 +3045,9 @@ function BatchesPage({
             name: cropNames[cropId],
             scientificName: cropScientificNames[cropId],
           }),
-        })),
-    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
+        }));
+    },
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById, taxonomyPickerCrops],
   );
 
   const stageOptions = useMemo(
@@ -3040,6 +3069,15 @@ function BatchesPage({
 
   const cultivarOptions = useMemo(
     () => {
+      const authoritativeOptions = taxonomyPickerCultivars
+        .filter((cultivar) => !cultivar.archived)
+        .map((cultivar) => ({ value: cultivar.cultivarId, label: cultivar.cultivarName }))
+        .sort((left, right) => left.label.localeCompare(right.label));
+
+      if (authoritativeOptions.length > 0) {
+        return authoritativeOptions;
+      }
+
       const optionsById = new Map<string, string>();
 
       for (const batch of batches) {
@@ -3062,7 +3100,7 @@ function BatchesPage({
         .map(([value, label]) => ({ value, label }))
         .sort((left, right) => left.label.localeCompare(right.label));
     },
-    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById],
+    [batches, cultivarsById, cropNames, cropScientificNames, projectedBatchRowsById, taxonomyPickerCultivars],
   );
 
   const cultivarInputOptions = useMemo(
