@@ -1964,6 +1964,29 @@ export const removeSegment = async (segmentId: Segment['segmentId']): Promise<vo
   await syncLocalMirrorFromBackend();
 };
 
+export const upsertPath = async (
+  segmentId: Segment['segmentId'],
+  path: Segment['paths'][number],
+  _previousSegmentId?: Segment['segmentId'],
+): Promise<Segment['paths'][number]> => {
+  void _previousSegmentId;
+  const normalizedPath: Segment['paths'][number] = {
+    ...path,
+    segmentId,
+  };
+  await workflowAdapter.bedsSegments.upsertPath(normalizedPath);
+  await syncLocalMirrorFromBackend();
+  return normalizedPath;
+};
+
+export const removePath = async (
+  _segmentId: Segment['segmentId'],
+  pathId: Segment['paths'][number]['pathId'],
+): Promise<void> => {
+  await workflowAdapter.bedsSegments.removePath(pathId);
+  await syncLocalMirrorFromBackend();
+};
+
 export const importSegments = async (segments: Segment[]): Promise<ImportCommandResult> => {
   const result = await workflowAdapter.bedsSegments.importSegments(segments);
   await syncLocalMirrorFromBackend();

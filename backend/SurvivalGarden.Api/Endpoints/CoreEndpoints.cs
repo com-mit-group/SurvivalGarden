@@ -63,13 +63,6 @@ internal static class CoreEndpoints
             return DtoJsonMapper.ToJsonObject(payload);
         });
         MapEntityCrud(app, "cultivars", "id");
-        MapEntityCrud(app, "segments", "segmentId");
-        MapTypedEntityCrud<BedUpsertRequest>(app, "beds", "bedId", (payload, id) =>
-        {
-            payload.BedId = id;
-            return DtoJsonMapper.ToJsonObject(payload);
-        });
-        MapEntityCrud(app, "paths", "pathId");
         MapTypedEntityCrud<SeedInventoryItemUpsertRequest>(app, "seedInventoryItems", "seedInventoryItemId", (payload, id) =>
         {
             payload.SeedInventoryItemId = id;

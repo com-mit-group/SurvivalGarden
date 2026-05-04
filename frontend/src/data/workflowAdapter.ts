@@ -388,11 +388,27 @@ export const workflowAdapter = {
       return assertContract('bedsSegments.getBed', 'bed', await response.json());
     },
     upsertBed: async (bed: Bed): Promise<Bed> =>
-      fetchJson<Bed>(`/api/beds/${encodeURIComponent(bed.bedId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bed),
-      }),
+      (await (async () => {
+        const segments = await workflowAdapter.bedsSegments.listSegments();
+        const exists = segments.some((segment) => segment.beds.some((entry) => entry.bedId === bed.bedId));
+        if (exists) {
+          return fetchJson<Bed>(`/api/beds/${encodeURIComponent(bed.bedId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bed),
+          });
+        }
+
+        if (!bed.segmentId) {
+          throw new Error('segmentId is required to create a bed');
+        }
+
+        return fetchJson<Bed>(`/api/segments/${encodeURIComponent(bed.segmentId)}/beds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bed),
+        });
+      })()),
     removeBed: async (bedId: string): Promise<void> => {
       const response = await fetch(toBackendApiUrl(`/api/beds/${encodeURIComponent(bedId)}`), { method: 'DELETE' });
       if (response.status === 404 || response.status === 204) {
@@ -414,14 +430,54 @@ export const workflowAdapter = {
       }
       return assertContract('bedsSegments.getSegment', 'segment', await response.json());
     },
-    upsertSegment: async (segment: Segment): Promise<Segment> =>
-      fetchJson<Segment>(`/api/segments/${encodeURIComponent(segment.segmentId)}`, {
-        method: 'PUT',
+    upsertSegment: async (segment: Segment): Promise<Segment> => {
+      const patchResponse = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segment.segmentId)}`), {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(segment),
-      }),
+      });
+
+      if (patchResponse.ok) {
+        return assertContract('bedsSegments.upsertSegment', 'segment', await patchResponse.json());
+      }
+
+      if (patchResponse.status !== 404) {
+        throw new Error(await parseBackendError(patchResponse));
+      }
+
+      return assertContract('bedsSegments.upsertSegment', 'segment', await fetchJson<unknown>(backendPath('/api/segments'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(segment),
+      }));
+    },
     removeSegment: async (segmentId: string): Promise<void> => {
       const response = await fetch(toBackendApiUrl(`/api/segments/${encodeURIComponent(segmentId)}`), { method: 'DELETE' });
+      if (response.status === 404 || response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+    },
+    upsertPath: async (path: Segment['paths'][number]): Promise<Segment['paths'][number]> => {
+      const segments = await workflowAdapter.bedsSegments.listSegments();
+      const exists = segments.some((segment) => segment.paths.some((entry) => entry.pathId === path.pathId));
+      if (!exists) {
+        return fetchJson<Segment['paths'][number]>(`/api/segments/${encodeURIComponent(path.segmentId)}/paths`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(path),
+        });
+      }
+      return fetchJson<Segment['paths'][number]>(`/api/paths/${encodeURIComponent(path.pathId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(path),
+      });
+    },
+    removePath: async (pathId: string): Promise<void> => {
+      const response = await fetch(toBackendApiUrl(`/api/paths/${encodeURIComponent(pathId)}`), { method: 'DELETE' });
       if (response.status === 404 || response.status === 204) {
         return;
       }
