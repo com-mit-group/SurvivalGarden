@@ -65,9 +65,7 @@ internal static class CoreEndpoints
                 return Results.NotFound();
             }
 
-            var speciesById = (state["species"] as JsonArray ?? []).OfType<JsonObject>()
-                .Where(species => !string.IsNullOrWhiteSpace(species["id"]?.GetValue<string>()))
-                .ToDictionary(species => species["id"]!.GetValue<string>(), species => species);
+            var speciesById = BuildSpeciesLookup(state);
 
             var crops = (state["crops"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
             var cultivars = (state["cultivars"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
@@ -76,13 +74,12 @@ internal static class CoreEndpoints
             {
                 var cropId = crop["cropId"]?.GetValue<string>() ?? string.Empty;
                 var speciesId = crop["speciesId"]?.GetValue<string>() ?? string.Empty;
-                speciesById.TryGetValue(speciesId, out var species);
                 return new
                 {
                     cropId,
                     cropName = crop["name"]?.GetValue<string>() ?? cropId,
                     speciesId,
-                    speciesDisplay = species?["commonName"]?.GetValue<string>() ?? species?["scientificName"]?.GetValue<string>() ?? string.Empty
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
                 };
             });
 
@@ -91,14 +88,13 @@ internal static class CoreEndpoints
                 var cropTypeId = cultivar["cropTypeId"]?.GetValue<string>() ?? string.Empty;
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
                 var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
-                speciesById.TryGetValue(speciesId, out var species);
                 return new
                 {
                     cultivarId = cultivar["cultivarId"]?.GetValue<string>() ?? string.Empty,
                     cultivarName = cultivar["name"]?.GetValue<string>() ?? string.Empty,
                     cropTypeId,
                     cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
-                    speciesDisplay = species?["commonName"]?.GetValue<string>() ?? species?["scientificName"]?.GetValue<string>() ?? string.Empty,
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId),
                     archived = cultivar["isArchived"]?.GetValue<bool>() ?? false
                 };
             });
@@ -117,9 +113,7 @@ internal static class CoreEndpoints
             var items = (state["seedInventoryItems"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
             var crops = (state["crops"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
             var cultivars = (state["cultivars"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
-            var speciesById = (state["species"] as JsonArray ?? []).OfType<JsonObject>()
-                .Where(species => !string.IsNullOrWhiteSpace(species["id"]?.GetValue<string>()))
-                .ToDictionary(species => species["id"]!.GetValue<string>(), species => species);
+            var speciesById = BuildSpeciesLookup(state);
 
             var rows = items.Select(item =>
             {
@@ -128,14 +122,13 @@ internal static class CoreEndpoints
                 var cropTypeId = cultivar?["cropTypeId"]?.GetValue<string>() ?? item["cropId"]?.GetValue<string>() ?? string.Empty;
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
                 var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
-                speciesById.TryGetValue(speciesId, out var species);
                 return new
                 {
                     seedInventoryItemId = item["seedInventoryItemId"]?.GetValue<string>() ?? string.Empty,
                     cultivarId,
                     displayName = cultivar?["name"]?.GetValue<string>() ?? item["variety"]?.GetValue<string>() ?? cultivarId,
                     cropTypeName = crop?["name"]?.GetValue<string>() ?? cropTypeId,
-                    speciesDisplay = species?["commonName"]?.GetValue<string>() ?? species?["scientificName"]?.GetValue<string>() ?? string.Empty
+                    speciesDisplay = ResolveSpeciesDisplay(speciesById, speciesId)
                 };
             });
 
@@ -165,6 +158,22 @@ internal static class CoreEndpoints
                 issues = validation.Issues
             });
         });
+    }
+
+
+    private static Dictionary<string, JsonObject> BuildSpeciesLookup(JsonObject state) =>
+        (state["species"] as JsonArray ?? []).OfType<JsonObject>()
+            .Where(species => !string.IsNullOrWhiteSpace(species["id"]?.GetValue<string>()))
+            .ToDictionary(species => species["id"]!.GetValue<string>(), species => species);
+
+    private static string ResolveSpeciesDisplay(IReadOnlyDictionary<string, JsonObject> speciesById, string speciesId)
+    {
+        if (!speciesById.TryGetValue(speciesId, out var species))
+        {
+            return string.Empty;
+        }
+
+        return species["commonName"]?.GetValue<string>() ?? species["scientificName"]?.GetValue<string>() ?? string.Empty;
     }
 
     private static void MapEntityCrud(WebApplication app, string collectionName, string idProperty)

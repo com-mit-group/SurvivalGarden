@@ -2134,6 +2134,11 @@ function CultivarAdminPage() {
 }
 
 
+type TaxonomyPickerQueryResponse = {
+  crops: Array<{ cropId: string; cropName: string; speciesId: string; speciesDisplay: string }>;
+  cultivars: Array<{ cultivarId: string; cultivarName: string; cropTypeId: string; cropTypeName: string; speciesDisplay: string; archived: boolean }>;
+};
+
 type SeedInventoryQueryRow = {
   seedInventoryItemId: string;
   cultivarId: string;
@@ -2188,6 +2193,18 @@ function SeedInventoryPage() {
       ),
     );
     setCultivarIds(cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
+
+    try {
+      const taxonomyResponse = await fetch('/api/query/taxonomy-picker');
+      if (taxonomyResponse.ok) {
+        const taxonomy = await taxonomyResponse.json() as TaxonomyPickerQueryResponse;
+        setCropNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.cropName])));
+        setSpeciesNames(Object.fromEntries(taxonomy.crops.map((crop) => [crop.cropId, crop.speciesDisplay])));
+        setCultivarIds(taxonomy.cultivars.map((cultivar) => cultivar.cultivarId).sort((left, right) => left.localeCompare(right)));
+      }
+    } catch {
+      // keep local fallback state from app state
+    }
 
     try {
       const response = await fetch('/api/query/seed-inventory');
