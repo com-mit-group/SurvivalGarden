@@ -57,12 +57,12 @@ internal static class CoreEndpoints
         });
 
 
-        app.MapGet("/api/query/taxonomy-picker", async (IGardenApplicationService service, CancellationToken ct) =>
+        app.MapGet("/api/query/taxonomy-picker", async Task<Results<NotFound, Ok<TaxonomyPickerQueryResponseDto>>> (IGardenApplicationService service, CancellationToken ct) =>
         {
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
-                return Results.NotFound();
+                return TypedResults.NotFound();
             }
 
             var speciesById = BuildSpeciesLookup(state);
@@ -99,19 +99,19 @@ internal static class CoreEndpoints
                 };
             });
 
-            return Results.Ok(new TaxonomyPickerQueryResponseDto
+            return TypedResults.Ok(new TaxonomyPickerQueryResponseDto
             {
                 Crops = cropRows.ToArray(),
                 Cultivars = cultivarRows.ToArray()
             });
         });
 
-        app.MapGet("/api/query/seed-inventory", async (IGardenApplicationService service, CancellationToken ct) =>
+        app.MapGet("/api/query/seed-inventory", async Task<Results<NotFound, Ok<SeedInventoryQueryRowDto[]>>> (IGardenApplicationService service, CancellationToken ct) =>
         {
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
-                return Results.NotFound();
+                return TypedResults.NotFound();
             }
 
             var items = (state["seedInventoryItems"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
@@ -136,15 +136,15 @@ internal static class CoreEndpoints
                 };
             });
 
-            return Results.Ok(rows.ToArray());
+            return TypedResults.Ok(rows.ToArray());
         });
 
-        app.MapGet("/api/query/batch-list", async (IGardenApplicationService service, CancellationToken ct) =>
+        app.MapGet("/api/query/batch-list", async Task<Results<NotFound, Ok<BatchListQueryRowDto[]>>> (IGardenApplicationService service, CancellationToken ct) =>
         {
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
-                return Results.NotFound();
+                return TypedResults.NotFound();
             }
 
             var batches = (state["batches"] as JsonArray ?? []).OfType<JsonObject>().ToArray();
@@ -173,7 +173,7 @@ internal static class CoreEndpoints
                 };
             });
 
-            return Results.Ok(rows.ToArray());
+            return TypedResults.Ok(rows.ToArray());
         });
 
         MapEntityCrud(app, "species", "id");
@@ -215,50 +215,6 @@ internal static class CoreEndpoints
         }
 
         return species["commonName"]?.GetValue<string>() ?? species["scientificName"]?.GetValue<string>() ?? string.Empty;
-    }
-
-    private sealed class TaxonomyPickerQueryResponseDto
-    {
-        public required TaxonomyPickerCropDto[] Crops { get; init; }
-        public required TaxonomyPickerCultivarDto[] Cultivars { get; init; }
-    }
-
-    private sealed class TaxonomyPickerCropDto
-    {
-        public required string CropId { get; init; }
-        public required string CropName { get; init; }
-        public required string SpeciesId { get; init; }
-        public required string SpeciesDisplay { get; init; }
-    }
-
-    private sealed class TaxonomyPickerCultivarDto
-    {
-        public required string CultivarId { get; init; }
-        public required string CultivarName { get; init; }
-        public required string CropTypeId { get; init; }
-        public required string CropTypeName { get; init; }
-        public required string SpeciesDisplay { get; init; }
-        public required bool Archived { get; init; }
-    }
-
-    private sealed class SeedInventoryQueryRowDto
-    {
-        public required string SeedInventoryItemId { get; init; }
-        public required string CultivarId { get; init; }
-        public required string DisplayName { get; init; }
-        public required string CropTypeName { get; init; }
-        public required string SpeciesDisplay { get; init; }
-    }
-
-    private sealed class BatchListQueryRowDto
-    {
-        public required string BatchId { get; init; }
-        public required string IdentityId { get; init; }
-        public required string CapabilityCropId { get; init; }
-        public required string DisplayName { get; init; }
-        public required string CropTypeId { get; init; }
-        public required string CropTypeName { get; init; }
-        public required string SpeciesDisplay { get; init; }
     }
 
     private static void MapEntityCrud(WebApplication app, string collectionName, string idProperty)
