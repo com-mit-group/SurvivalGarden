@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { AppState, Batch, BatchConfidence, Bed, Crop, CropPlan, SeedInventoryItem, Segment, Species, Task } from './contracts';
+import type { BatchListQueryRow, TaxonomyPickerCrop, TaxonomyPickerCultivar, TaxonomyPickerQueryResponse } from './contracts/queryDtos';
 
 import {
   SchemaValidationError,
@@ -2134,28 +2135,10 @@ function CultivarAdminPage() {
 }
 
 
-type TaxonomyPickerCrop = { cropId: string; cropName: string; speciesId: string; speciesDisplay: string };
-type TaxonomyPickerCultivar = { cultivarId: string; cultivarName: string; cropTypeId: string; cropTypeName: string; speciesDisplay: string; archived: boolean };
-
-type TaxonomyPickerQueryResponse = {
-  crops: TaxonomyPickerCrop[];
-  cultivars: TaxonomyPickerCultivar[];
-};
-
 type SeedInventoryQueryRow = {
   seedInventoryItemId: string;
   cultivarId: string;
   displayName: string;
-  cropTypeName: string;
-  speciesDisplay: string;
-};
-
-type BatchListQueryRow = {
-  batchId: string;
-  identityId: string;
-  capabilityCropId: string;
-  displayName: string;
-  cropTypeId: string;
   cropTypeName: string;
   speciesDisplay: string;
 };
@@ -3044,14 +3027,8 @@ function BatchesPage({
 
       return Array.from(
         new Set(
-          batches
-            .map((batch) => getBatchCultivarDisplay({
-              batch,
-              cultivarsById,
-              cropNames,
-              cropScientificNames,
-              projectedRowsByBatchId: projectedBatchRowsById,
-            }).cropTypeId)
+          Object.values(projectedBatchRowsById)
+            .map((row) => row.cropTypeId)
             .filter((cropTypeId): cropTypeId is string => Boolean(cropTypeId)),
         ),
       )
@@ -3098,20 +3075,12 @@ function BatchesPage({
 
       const optionsById = new Map<string, string>();
 
-      for (const batch of batches) {
-        const display = getBatchCultivarDisplay({
-          batch,
-          cultivarsById,
-          cropNames,
-          cropScientificNames,
-          projectedRowsByBatchId: projectedBatchRowsById,
-        });
-
-        if (!display.identityId) {
+      for (const row of Object.values(projectedBatchRowsById)) {
+        if (!row.identityId) {
           continue;
         }
 
-        optionsById.set(display.identityId, display.name ?? cultivarsById[display.identityId]?.name ?? display.identityId);
+        optionsById.set(row.identityId, row.displayName ?? row.identityId);
       }
 
       return Array.from(optionsById.entries())
@@ -3189,7 +3158,7 @@ function BatchesPage({
           projectedRowsByBatchId: projectedBatchRowsById,
         });
         const cultivarId = batchDisplay.identityId;
-        const cultivarName = cultivarsById[cultivarId]?.name ?? batchDisplay.name ?? '';
+        const cultivarName = batchDisplay.name ?? '';
 
         const batchCropTypeId = batchDisplay.cropTypeId;
         if (filters.crop && batchCropTypeId !== filters.crop) {
