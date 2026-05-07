@@ -1029,6 +1029,15 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": components["schemas"]["BatchListQueryRowDto"][];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
                 };
             };
@@ -1062,6 +1071,15 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": components["schemas"]["SeedInventoryQueryRowDto"][];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
                 };
             };
@@ -1092,6 +1110,15 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxonomyPickerQueryResponseDto"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1671,6 +1698,15 @@ export interface components {
             bedId?: null | string;
             operation?: null | string;
         };
+        BatchListQueryRowDto: {
+            batchId: string;
+            capabilityCropId: string;
+            cropTypeId: string;
+            cropTypeName: string;
+            displayName: string;
+            identityId: string;
+            speciesDisplay: string;
+        };
         CropUpsertRequest: {
             aliases?: null | components["schemas"]["JsonArray"];
             category?: null | string;
@@ -1716,9 +1752,34 @@ export interface components {
             updatedAt?: null | string;
             variety?: null | string;
         };
+        SeedInventoryQueryRowDto: {
+            cropTypeName: string;
+            cultivarId: string;
+            displayName: string;
+            seedInventoryItemId: string;
+            speciesDisplay: string;
+        };
         StageEventRequest: {
             occurredAt?: null | string;
             stage?: null | string;
+        };
+        TaxonomyPickerCropDto: {
+            cropId: string;
+            cropName: string;
+            speciesDisplay: string;
+            speciesId: string;
+        };
+        TaxonomyPickerCultivarDto: {
+            archived: boolean;
+            cropTypeId: string;
+            cropTypeName: string;
+            cultivarId: string;
+            cultivarName: string;
+            speciesDisplay: string;
+        };
+        TaxonomyPickerQueryResponseDto: {
+            crops: components["schemas"]["TaxonomyPickerCropDto"][];
+            cultivars: components["schemas"]["TaxonomyPickerCultivarDto"][];
         };
     };
     responses: never;
