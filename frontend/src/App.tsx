@@ -2158,6 +2158,10 @@ function SeedInventoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cultivarId: '',
+    cropTypeId: '',
+    speciesId: '',
+    propagationType: 'seed' as NonNullable<SeedInventoryItem['propagationType']>,
+    materialType: 'seed' as NonNullable<SeedInventoryItem['materialType']>,
     quantity: '0',
     unit: 'seeds' as SeedInventoryItem['unit'],
     notes: '',
@@ -2236,6 +2240,10 @@ function SeedInventoryPage() {
     setIsUnknownCultivar(false);
     setFormValues({
       cultivarId: '',
+      cropTypeId: '',
+      speciesId: '',
+      propagationType: 'seed',
+      materialType: 'seed',
       quantity: '0',
       unit: 'seeds',
       notes: '',
@@ -2245,7 +2253,12 @@ function SeedInventoryPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedCultivarId = formValues.cultivarId.trim();
-    if (!trimmedCultivarId) {
+    const trimmedCropTypeId = formValues.cropTypeId.trim();
+    const trimmedSpeciesId = formValues.speciesId.trim();
+    if (!isUnknownCultivar && !trimmedCultivarId) {
+      return;
+    }
+    if (isUnknownCultivar && (!trimmedCropTypeId || !trimmedSpeciesId)) {
       return;
     }
 
@@ -2269,7 +2282,11 @@ function SeedInventoryPage() {
 
       const nextItem: SeedInventoryItem = {
         seedInventoryItemId: existing?.seedInventoryItemId ?? `seed-item-${crypto.randomUUID()}`,
-        cultivarId: trimmedCultivarId,
+        ...(trimmedCultivarId ? { cultivarId: trimmedCultivarId } : {}),
+        ...(isUnknownCultivar && trimmedCropTypeId ? { cropTypeId: trimmedCropTypeId } : {}),
+        ...(isUnknownCultivar && trimmedSpeciesId ? { speciesId: trimmedSpeciesId } : {}),
+        propagationType: formValues.propagationType,
+        materialType: formValues.materialType,
         quantity: parsedQuantity,
         unit: formValues.unit,
         status: parsedQuantity === 0 ? 'depleted' : parsedQuantity <= 10 ? 'low' : 'available',
@@ -2345,7 +2362,53 @@ function SeedInventoryPage() {
           />
           Unknown cultivar (legacy cropId/variety fallback is migration-only)
         </label>
-        {isUnknownCultivar ? <p className="batch-form-note">Fallback entry requires migration/import tooling; create or select a cultivar for canonical inventory saves.</p> : null}
+        {isUnknownCultivar ? <p className="batch-form-note">Fallback identity uses crop type + species only when cultivar is unknown.</p> : null}
+        {isUnknownCultivar ? (
+          <>
+            <input
+              type="text"
+              value={formValues.cropTypeId}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropTypeId: event.target.value }))}
+              placeholder="Fallback cropTypeId"
+              required
+            />
+            <input
+              type="text"
+              value={formValues.speciesId}
+              onChange={(event) => setFormValues((current) => ({ ...current, speciesId: event.target.value }))}
+              placeholder="Fallback speciesId"
+              required
+            />
+          </>
+        ) : null}
+        <select
+          value={formValues.propagationType}
+          onChange={(event) => setFormValues((current) => ({ ...current, propagationType: event.target.value as NonNullable<SeedInventoryItem['propagationType']> }))}
+        >
+          <option value="seed">seed</option>
+          <option value="clove">clove</option>
+          <option value="tuber">tuber</option>
+          <option value="cutting">cutting</option>
+          <option value="runner">runner</option>
+          <option value="bulb">bulb</option>
+          <option value="slip">slip</option>
+          <option value="division">division</option>
+          <option value="graft">graft</option>
+        </select>
+        <select
+          value={formValues.materialType}
+          onChange={(event) => setFormValues((current) => ({ ...current, materialType: event.target.value as NonNullable<SeedInventoryItem['materialType']> }))}
+        >
+          <option value="seed">seed</option>
+          <option value="clove">clove</option>
+          <option value="tuber">tuber</option>
+          <option value="cutting">cutting</option>
+          <option value="runner">runner</option>
+          <option value="bulb">bulb</option>
+          <option value="slip">slip</option>
+          <option value="division">division</option>
+          <option value="graft">graft</option>
+        </select>
         <input
           type="text"
           value={formValues.notes}
@@ -2368,6 +2431,18 @@ function SeedInventoryPage() {
           <option value="seeds">seeds</option>
           <option value="g">g</option>
           <option value="packets">packets</option>
+          <option value="cloves">cloves</option>
+          <option value="tubers">tubers</option>
+          <option value="cuttings">cuttings</option>
+          <option value="runners">runners</option>
+          <option value="bulbs">bulbs</option>
+          <option value="slips">slips</option>
+          <option value="divisions">divisions</option>
+          <option value="grafts">grafts</option>
+          <option value="kg">kg</option>
+          <option value="oz">oz</option>
+          <option value="lb">lb</option>
+          <option value="items">items</option>
         </select>
         <button type="submit" disabled={savingId !== null}>
           {editingId ? 'Save item' : 'Add item'}
@@ -2417,11 +2492,16 @@ function SeedInventoryPage() {
                     onClick={() => {
                       setEditingId(item.seedInventoryItemId);
                       setFormValues({
-                        cultivarId: item.cultivarId,
+                        cultivarId: item.cultivarId ?? '',
+                        cropTypeId: item.cropTypeId ?? item.cropId ?? '',
+                        speciesId: item.speciesId ?? '',
+                        propagationType: item.propagationType ?? 'seed',
+                        materialType: item.materialType ?? 'seed',
                         quantity: String(item.quantity),
                         unit: item.unit,
                         notes: item.notes ?? '',
                       });
+                      setIsUnknownCultivar(!item.cultivarId);
                     }}
                     disabled={savingId !== null}
                   >
