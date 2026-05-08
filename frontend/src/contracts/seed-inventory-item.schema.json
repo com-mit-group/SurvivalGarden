@@ -24,6 +24,17 @@
       ]
     },
     {
+      "title": "Fallback unknown-cultivar identity",
+      "properties": {
+        "cropTypeId": {},
+        "speciesId": {}
+      },
+      "required": [
+        "cropTypeId",
+        "speciesId"
+      ]
+    },
+    {
       "title": "Legacy migration identity",
       "properties": {
         "cropId": {},
@@ -70,7 +81,19 @@
       "enum": [
         "seeds",
         "g",
-        "packets"
+        "packets",
+        "cloves",
+        "tubers",
+        "cuttings",
+        "runners",
+        "bulbs",
+        "slips",
+        "divisions",
+        "grafts",
+        "kg",
+        "oz",
+        "lb",
+        "items"
       ]
     },
     "purchaseDate": {
@@ -100,6 +123,44 @@
     },
     "updatedAt": {
       "$ref": "#/$defs/isoDate"
+    },
+    "cropTypeId": {
+      "description": "Fallback crop type when cultivar is unknown; canonical flow should use cultivarId.",
+      "$ref": "#/$defs/id"
+    },
+    "speciesId": {
+      "description": "Fallback species when cultivar is unknown; canonical flow should use cultivarId.",
+      "$ref": "#/$defs/id"
+    },
+    "propagationType": {
+      "description": "Plant propagation pathway for this inventory material.",
+      "type": "string",
+      "enum": [
+        "seed",
+        "clove",
+        "tuber",
+        "cutting",
+        "runner",
+        "bulb",
+        "slip",
+        "division",
+        "graft"
+      ]
+    },
+    "materialType": {
+      "description": "Inventory material form kept alongside propagation semantics.",
+      "type": "string",
+      "enum": [
+        "seed",
+        "clove",
+        "tuber",
+        "cutting",
+        "runner",
+        "bulb",
+        "slip",
+        "division",
+        "graft"
+      ]
     }
   },
   "$defs": {
