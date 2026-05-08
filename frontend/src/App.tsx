@@ -2162,6 +2162,7 @@ function SeedInventoryPage() {
     unit: 'seeds' as SeedInventoryItem['unit'],
     notes: '',
   });
+  const [isUnknownCultivar, setIsUnknownCultivar] = useState(false);
 
   const loadInventory = useCallback(async () => {
     const appState = await loadAppStateFromIndexedDb();
@@ -2232,6 +2233,7 @@ function SeedInventoryPage() {
 
   const resetForm = () => {
     setEditingId(null);
+    setIsUnknownCultivar(false);
     setFormValues({
       cultivarId: '',
       quantity: '0',
@@ -2306,16 +2308,19 @@ function SeedInventoryPage() {
   return (
     <section className="seed-inventory-page">
       <h2>Seed Inventory</h2>
-      <p className="batch-form-note">Track physical seed stock here. Use Cultivar Admin for reusable cultivar records, then record packets or saved seed lots separately in inventory.</p>
+      <p className="batch-form-note">Track physical seed stock here using cultivar-first identity. Use Cultivar Admin for reusable cultivar records, then record packets or saved seed lots separately in inventory.</p>
       <nav className="batch-form-actions" aria-label="Seed inventory entry points">
         <Link to="/taxonomy/cultivars#create-cultivar">Open cultivar admin</Link>
         <Link to="/taxonomy/crop-types">Crop types</Link>
       </nav>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
-        <select
+        <label>
+          Cultivar (canonical identity)
+          <select
           value={formValues.cultivarId}
           onChange={(event) => setFormValues((current) => ({ ...current, cultivarId: event.target.value }))}
-          required
+          required={!isUnknownCultivar}
+          disabled={isUnknownCultivar}
         >
           <option value="">Select cultivar</option>
           {cultivarIds.map((cultivarId) => {
@@ -2331,6 +2336,16 @@ function SeedInventoryPage() {
             );
           })}
         </select>
+        </label>
+        <label className="seed-inventory-legacy-toggle">
+          <input
+            type="checkbox"
+            checked={isUnknownCultivar}
+            onChange={(event) => setIsUnknownCultivar(event.target.checked)}
+          />
+          Unknown cultivar (legacy cropId/variety fallback is migration-only)
+        </label>
+        {isUnknownCultivar ? <p className="batch-form-note">Fallback entry requires migration/import tooling; create or select a cultivar for canonical inventory saves.</p> : null}
         <input
           type="text"
           value={formValues.notes}
