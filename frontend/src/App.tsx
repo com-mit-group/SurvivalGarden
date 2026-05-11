@@ -2158,10 +2158,15 @@ function SeedInventoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     cultivarId: '',
+    cropTypeId: '',
+    speciesId: '',
+    propagationType: 'seed' as NonNullable<SeedInventoryItem['propagationType']>,
+    materialType: 'seed' as NonNullable<SeedInventoryItem['materialType']>,
     quantity: '0',
     unit: 'seeds' as SeedInventoryItem['unit'],
     notes: '',
   });
+  const [isUnknownCultivar, setIsUnknownCultivar] = useState(false);
 
   const loadInventory = useCallback(async () => {
     const appState = await loadAppStateFromIndexedDb();
@@ -2183,9 +2188,15 @@ function SeedInventoryPage() {
     const nextCultivarsById = Object.fromEntries(cultivars.map((cultivar) => [cultivar.cultivarId, cultivar]));
     const speciesById = Object.fromEntries((appState.species ?? []).map((species) => [species.id, species]));
     const getInventoryLabel = (item: SeedInventoryItem): string =>
-      nextCultivarsById[item.cultivarId]?.name ?? item.variety ?? item.cultivarId;
+      (item.cultivarId ? nextCultivarsById[item.cultivarId]?.name : undefined) ?? item.variety ?? item.cultivarId ?? '';
 
-    setItems(listSeedInventoryItemsFromAppState(appState).sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
+    const normalizedItems = listSeedInventoryItemsFromAppState(appState).map((item) => {
+      const legacyCropId = (item as SeedInventoryItem & { cropId?: string }).cropId;
+      return legacyCropId && !item.cropTypeId
+        ? { ...item, cropTypeId: legacyCropId }
+        : item;
+    });
+    setItems(normalizedItems.sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
     setCultivarsById(nextCultivarsById);
     setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
     setSpeciesNames(
@@ -2232,8 +2243,13 @@ function SeedInventoryPage() {
 
   const resetForm = () => {
     setEditingId(null);
+    setIsUnknownCultivar(false);
     setFormValues({
       cultivarId: '',
+      cropTypeId: '',
+      speciesId: '',
+      propagationType: 'seed',
+      materialType: 'seed',
       quantity: '0',
       unit: 'seeds',
       notes: '',
@@ -2243,7 +2259,12 @@ function SeedInventoryPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedCultivarId = formValues.cultivarId.trim();
-    if (!trimmedCultivarId) {
+    const trimmedCropTypeId = formValues.cropTypeId.trim();
+    const trimmedSpeciesId = formValues.speciesId.trim();
+    if (!isUnknownCultivar && !trimmedCultivarId) {
+      return;
+    }
+    if (isUnknownCultivar && (!trimmedCropTypeId || !trimmedSpeciesId)) {
       return;
     }
 
@@ -2267,7 +2288,11 @@ function SeedInventoryPage() {
 
       const nextItem: SeedInventoryItem = {
         seedInventoryItemId: existing?.seedInventoryItemId ?? `seed-item-${crypto.randomUUID()}`,
-        cultivarId: trimmedCultivarId,
+        ...(trimmedCultivarId ? { cultivarId: trimmedCultivarId } : {}),
+        ...(isUnknownCultivar && trimmedCropTypeId ? { cropTypeId: trimmedCropTypeId } : {}),
+        ...(isUnknownCultivar && trimmedSpeciesId ? { speciesId: trimmedSpeciesId } : {}),
+        propagationType: formValues.propagationType,
+        materialType: formValues.materialType,
         quantity: parsedQuantity,
         unit: formValues.unit,
         status: parsedQuantity === 0 ? 'depleted' : parsedQuantity <= 10 ? 'low' : 'available',
@@ -2306,16 +2331,19 @@ function SeedInventoryPage() {
   return (
     <section className="seed-inventory-page">
       <h2>Seed Inventory</h2>
-      <p className="batch-form-note">Track physical seed stock here. Use Cultivar Admin for reusable cultivar records, then record packets or saved seed lots separately in inventory.</p>
+      <p className="batch-form-note">Track physical seed stock here using cultivar-first identity. Use Cultivar Admin for reusable cultivar records, then record packets or saved seed lots separately in inventory.</p>
       <nav className="batch-form-actions" aria-label="Seed inventory entry points">
         <Link to="/taxonomy/cultivars#create-cultivar">Open cultivar admin</Link>
         <Link to="/taxonomy/crop-types">Crop types</Link>
       </nav>
       <form className="seed-inventory-form" onSubmit={(event) => void handleSubmit(event)}>
-        <select
+        <label>
+          Cultivar (canonical identity)
+          <select
           value={formValues.cultivarId}
           onChange={(event) => setFormValues((current) => ({ ...current, cultivarId: event.target.value }))}
-          required
+          required={!isUnknownCultivar}
+          disabled={isUnknownCultivar}
         >
           <option value="">Select cultivar</option>
           {cultivarIds.map((cultivarId) => {
@@ -2330,6 +2358,62 @@ function SeedInventoryPage() {
               </option>
             );
           })}
+        </select>
+        </label>
+        <label className="seed-inventory-legacy-toggle">
+          <input
+            type="checkbox"
+            checked={isUnknownCultivar}
+            onChange={(event) => setIsUnknownCultivar(event.target.checked)}
+          />
+          Unknown cultivar (legacy cropId/variety fallback is migration-only)
+        </label>
+        {isUnknownCultivar ? <p className="batch-form-note">Fallback identity uses crop type + species only when cultivar is unknown.</p> : null}
+        {isUnknownCultivar ? (
+          <>
+            <input
+              type="text"
+              value={formValues.cropTypeId}
+              onChange={(event) => setFormValues((current) => ({ ...current, cropTypeId: event.target.value }))}
+              placeholder="Fallback cropTypeId"
+              required
+            />
+            <input
+              type="text"
+              value={formValues.speciesId}
+              onChange={(event) => setFormValues((current) => ({ ...current, speciesId: event.target.value }))}
+              placeholder="Fallback speciesId"
+              required
+            />
+          </>
+        ) : null}
+        <select
+          value={formValues.propagationType}
+          onChange={(event) => setFormValues((current) => ({ ...current, propagationType: event.target.value as NonNullable<SeedInventoryItem['propagationType']> }))}
+        >
+          <option value="seed">seed</option>
+          <option value="clove">clove</option>
+          <option value="tuber">tuber</option>
+          <option value="cutting">cutting</option>
+          <option value="runner">runner</option>
+          <option value="bulb">bulb</option>
+          <option value="slip">slip</option>
+          <option value="division">division</option>
+          <option value="graft">graft</option>
+        </select>
+        <select
+          value={formValues.materialType}
+          onChange={(event) => setFormValues((current) => ({ ...current, materialType: event.target.value as NonNullable<SeedInventoryItem['materialType']> }))}
+        >
+          <option value="seed">seed</option>
+          <option value="clove">clove</option>
+          <option value="tuber">tuber</option>
+          <option value="cutting">cutting</option>
+          <option value="runner">runner</option>
+          <option value="bulb">bulb</option>
+          <option value="slip">slip</option>
+          <option value="division">division</option>
+          <option value="graft">graft</option>
         </select>
         <input
           type="text"
@@ -2353,6 +2437,18 @@ function SeedInventoryPage() {
           <option value="seeds">seeds</option>
           <option value="g">g</option>
           <option value="packets">packets</option>
+          <option value="cloves">cloves</option>
+          <option value="tubers">tubers</option>
+          <option value="cuttings">cuttings</option>
+          <option value="runners">runners</option>
+          <option value="bulbs">bulbs</option>
+          <option value="slips">slips</option>
+          <option value="divisions">divisions</option>
+          <option value="grafts">grafts</option>
+          <option value="kg">kg</option>
+          <option value="oz">oz</option>
+          <option value="lb">lb</option>
+          <option value="items">items</option>
         </select>
         <button type="submit" disabled={savingId !== null}>
           {editingId ? 'Save item' : 'Add item'}
@@ -2368,9 +2464,9 @@ function SeedInventoryPage() {
       {!isLoading ? (
         <ul className="seed-inventory-list">
           {items.map((item) => {
-            const cultivar = cultivarsById[item.cultivarId];
+            const cultivar = item.cultivarId ? cultivarsById[item.cultivarId] : undefined;
             const projected = projectedRowsById[item.seedInventoryItemId];
-            const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
+            const cropTypeId = cultivar?.cropTypeId ?? item.cropTypeId ?? '';
             const cropTypeName = isProjectedInventoryAuthoritative
               ? (projected?.cropTypeName ?? 'Unknown crop type')
               : (cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type');
@@ -2402,11 +2498,16 @@ function SeedInventoryPage() {
                     onClick={() => {
                       setEditingId(item.seedInventoryItemId);
                       setFormValues({
-                        cultivarId: item.cultivarId,
+                        cultivarId: item.cultivarId ?? '',
+                        cropTypeId: item.cropTypeId ?? '',
+                        speciesId: item.speciesId ?? '',
+                        propagationType: item.propagationType ?? 'seed',
+                        materialType: item.materialType ?? 'seed',
                         quantity: String(item.quantity),
                         unit: item.unit,
                         notes: item.notes ?? '',
                       });
+                      setIsUnknownCultivar(!item.cultivarId);
                     }}
                     disabled={savingId !== null}
                   >
@@ -2461,7 +2562,7 @@ const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string; mess
   const issueErrors: Record<string, string> = {};
 
   for (const issue of issues) {
-    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropTypeId')) {
       issueErrors.cropInput = 'Choose a valid cultivar record.';
     }
 

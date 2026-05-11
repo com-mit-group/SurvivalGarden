@@ -319,13 +319,17 @@ export interface CropPlan {
 
 export interface SeedInventoryItem {
   seedInventoryItemId: string;
-  cultivarId: string;
+  cultivarId?: string;
   cropId?: string;
+  cropTypeId?: string;
+  speciesId?: string;
   variety?: string;
+  propagationType?: 'seed' | 'clove' | 'tuber' | 'cutting' | 'runner' | 'bulb' | 'slip' | 'division' | 'graft';
+  materialType?: 'seed' | 'clove' | 'tuber' | 'cutting' | 'runner' | 'bulb' | 'slip' | 'division' | 'graft';
   supplier?: string;
   lotNumber?: string;
   quantity: number;
-  unit: 'seeds' | 'g' | 'packets';
+  unit: 'seeds' | 'g' | 'packets' | 'cloves' | 'tubers' | 'cuttings' | 'runners' | 'bulbs' | 'slips' | 'divisions' | 'grafts' | 'kg' | 'oz' | 'lb' | 'items';
   purchaseDate?: string;
   expiryDate?: string;
   status: 'available' | 'low' | 'depleted';
