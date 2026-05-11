@@ -751,7 +751,7 @@
   "seedInventoryItems": [
     {
       "createdAt": "2026-01-05T00:00:00Z",
-      "cropId": "crop_type_potato",
+      "cultivarId": "cultivar_potato_bintje",
       "notes": "Seed tubers represented as grams for MVP fixture simplicity.",
       "quantity": 2000,
       "seedInventoryItemId": "seed_001",

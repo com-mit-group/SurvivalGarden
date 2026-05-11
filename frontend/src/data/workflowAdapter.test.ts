@@ -90,7 +90,7 @@ const validCropPlan = {
 const validSeedInventoryItem = {
   seedInventoryItemId: 'seed-item-1',
   cultivarId: 'cultivar-1',
-  cropId: 'crop-1',
+  cropTypeId: 'crop-1',
   variety: 'Nantes',
   quantity: 120,
   unit: 'seeds',
