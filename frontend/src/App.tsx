@@ -2190,7 +2190,13 @@ function SeedInventoryPage() {
     const getInventoryLabel = (item: SeedInventoryItem): string =>
       (item.cultivarId ? nextCultivarsById[item.cultivarId]?.name : undefined) ?? item.variety ?? item.cultivarId ?? '';
 
-    setItems(listSeedInventoryItemsFromAppState(appState).sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
+    const normalizedItems = listSeedInventoryItemsFromAppState(appState).map((item) => {
+      const legacyCropId = (item as SeedInventoryItem & { cropId?: string }).cropId;
+      return legacyCropId && !item.cropTypeId
+        ? { ...item, cropTypeId: legacyCropId }
+        : item;
+    });
+    setItems(normalizedItems.sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
     setCultivarsById(nextCultivarsById);
     setCropNames(Object.fromEntries(appState.crops.map((crop) => [crop.cropId, crop.name])));
     setSpeciesNames(
@@ -2460,7 +2466,7 @@ function SeedInventoryPage() {
           {items.map((item) => {
             const cultivar = item.cultivarId ? cultivarsById[item.cultivarId] : undefined;
             const projected = projectedRowsById[item.seedInventoryItemId];
-            const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
+            const cropTypeId = cultivar?.cropTypeId ?? item.cropTypeId ?? '';
             const cropTypeName = isProjectedInventoryAuthoritative
               ? (projected?.cropTypeName ?? 'Unknown crop type')
               : (cropTypeId ? (cropNames[cropTypeId] ?? cropTypeId) : 'Unknown crop type');
@@ -2493,7 +2499,7 @@ function SeedInventoryPage() {
                       setEditingId(item.seedInventoryItemId);
                       setFormValues({
                         cultivarId: item.cultivarId ?? '',
-                        cropTypeId: item.cropTypeId ?? item.cropId ?? '',
+                        cropTypeId: item.cropTypeId ?? '',
                         speciesId: item.speciesId ?? '',
                         propagationType: item.propagationType ?? 'seed',
                         materialType: item.materialType ?? 'seed',
@@ -2556,7 +2562,7 @@ const mapBatchValidationIssuesToFormErrors = (issues: Array<{ path: string; mess
   const issueErrors: Record<string, string> = {};
 
   for (const issue of issues) {
-    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropId')) {
+    if (issue.path.includes('/cultivarId') || issue.path.includes('/cropTypeId')) {
       issueErrors.cropInput = 'Choose a valid cultivar record.';
     }
 

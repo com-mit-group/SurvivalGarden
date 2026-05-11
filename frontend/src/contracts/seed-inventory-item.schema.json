@@ -12,7 +12,7 @@
     "createdAt",
     "updatedAt"
   ],
-  "description": "Canonical records identify seed inventory using cultivarId. Legacy cropId+variety is accepted only for migration/import compatibility.",
+  "description": "Canonical records identify seed inventory using cultivarId, with cropTypeId+speciesId fallback when cultivar is unknown.",
   "oneOf": [
     {
       "title": "Canonical cultivar identity",
@@ -45,57 +45,10 @@
           },
           {
             "properties": {
-              "cropId": {}
-            },
-            "required": [
-              "cropId"
-            ]
-          },
-          {
-            "properties": {
               "variety": {}
             },
             "required": [
               "variety"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "title": "Legacy migration identity",
-      "properties": {
-        "cropId": {},
-        "variety": {}
-      },
-      "required": [
-        "cropId",
-        "variety"
-      ],
-      "not": {
-        "anyOf": [
-          {
-            "properties": {
-              "cultivarId": {}
-            },
-            "required": [
-              "cultivarId"
-            ]
-          },
-          {
-            "properties": {
-              "cropTypeId": {}
-            },
-            "required": [
-              "cropTypeId"
-            ]
-          },
-          {
-            "properties": {
-              "speciesId": {}
-            },
-            "required": [
-              "speciesId"
             ]
           }
         ]
@@ -108,10 +61,6 @@
     },
     "cultivarId": {
       "description": "Canonical identity for seed inventory items; points to a reusable cultivar record.",
-      "$ref": "#/$defs/id"
-    },
-    "cropId": {
-      "description": "Legacy migration-only field for imported records that do not yet resolve to cultivarId.",
       "$ref": "#/$defs/id"
     },
     "variety": {

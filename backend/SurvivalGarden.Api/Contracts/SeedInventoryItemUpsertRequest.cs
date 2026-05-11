@@ -6,8 +6,6 @@ internal sealed class SeedInventoryItemUpsertRequest
 
     public string? CultivarId { get; init; }
 
-    public string? CropId { get; init; }
-
     public string? Variety { get; init; }
 
     public string? CropTypeId { get; init; }
