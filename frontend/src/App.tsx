@@ -2188,7 +2188,7 @@ function SeedInventoryPage() {
     const nextCultivarsById = Object.fromEntries(cultivars.map((cultivar) => [cultivar.cultivarId, cultivar]));
     const speciesById = Object.fromEntries((appState.species ?? []).map((species) => [species.id, species]));
     const getInventoryLabel = (item: SeedInventoryItem): string =>
-      nextCultivarsById[item.cultivarId]?.name ?? item.variety ?? item.cultivarId;
+      (item.cultivarId ? nextCultivarsById[item.cultivarId]?.name : undefined) ?? item.variety ?? item.cultivarId ?? '';
 
     setItems(listSeedInventoryItemsFromAppState(appState).sort((left, right) => getInventoryLabel(left).localeCompare(getInventoryLabel(right))));
     setCultivarsById(nextCultivarsById);
@@ -2458,7 +2458,7 @@ function SeedInventoryPage() {
       {!isLoading ? (
         <ul className="seed-inventory-list">
           {items.map((item) => {
-            const cultivar = cultivarsById[item.cultivarId];
+            const cultivar = item.cultivarId ? cultivarsById[item.cultivarId] : undefined;
             const projected = projectedRowsById[item.seedInventoryItemId];
             const cropTypeId = cultivar?.cropTypeId ?? item.cropId ?? '';
             const cropTypeName = isProjectedInventoryAuthoritative
