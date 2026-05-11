@@ -22,7 +22,51 @@
       },
       "required": [
         "cultivarId"
-      ]
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cropId"
+            ]
+          },
+          {
+            "required": [
+              "variety"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Fallback unknown-cultivar identity",
+      "properties": {
+        "cropTypeId": {},
+        "speciesId": {}
+      },
+      "required": [
+        "cropTypeId",
+        "speciesId"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cultivarId"
+            ]
+          },
+          {
+            "required": [
+              "cropId"
+            ]
+          },
+          {
+            "required": [
+              "variety"
+            ]
+          }
+        ]
+      }
     },
     {
       "title": "Fallback unknown-cultivar identity",
@@ -44,7 +88,26 @@
       "required": [
         "cropId",
         "variety"
-      ]
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cultivarId"
+            ]
+          },
+          {
+            "required": [
+              "cropTypeId"
+            ]
+          },
+          {
+            "required": [
+              "speciesId"
+            ]
+          }
+        ]
+      }
     }
   ],
   "properties": {
