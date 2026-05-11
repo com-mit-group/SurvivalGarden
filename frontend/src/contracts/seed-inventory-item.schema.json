@@ -21,21 +21,7 @@
       },
       "required": [
         "cultivarId"
-      ],
-      "not": {
-        "anyOf": [
-          {
-            "required": [
-              "cropId"
-            ]
-          },
-          {
-            "required": [
-              "variety"
-            ]
-          }
-        ]
-      }
+      ]
     },
     {
       "title": "Fallback unknown-cultivar identity",
@@ -50,16 +36,25 @@
       "not": {
         "anyOf": [
           {
+            "properties": {
+              "cultivarId": {}
+            },
             "required": [
               "cultivarId"
             ]
           },
           {
+            "properties": {
+              "cropId": {}
+            },
             "required": [
               "cropId"
             ]
           },
           {
+            "properties": {
+              "variety": {}
+            },
             "required": [
               "variety"
             ]
@@ -80,16 +75,25 @@
       "not": {
         "anyOf": [
           {
+            "properties": {
+              "cultivarId": {}
+            },
             "required": [
               "cultivarId"
             ]
           },
           {
+            "properties": {
+              "cropTypeId": {}
+            },
             "required": [
               "cropTypeId"
             ]
           },
           {
+            "properties": {
+              "speciesId": {}
+            },
             "required": [
               "speciesId"
             ]
