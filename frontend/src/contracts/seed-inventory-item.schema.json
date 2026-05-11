@@ -12,8 +12,11 @@
     "createdAt",
     "updatedAt"
   ],
+  "description": "Canonical records identify seed inventory using cultivarId. Legacy cropId+variety is accepted only for migration/import compatibility.",
+  "$comment": "Use anyOf identity branches to preserve AJV strict-mode compatibility with existing migrated records.",
   "anyOf": [
     {
+      "title": "Canonical cultivar identity",
       "properties": {
         "cultivarId": {}
       },
@@ -22,6 +25,18 @@
       ]
     },
     {
+      "title": "Fallback unknown-cultivar identity",
+      "properties": {
+        "cropTypeId": {},
+        "speciesId": {}
+      },
+      "required": [
+        "cropTypeId",
+        "speciesId"
+      ]
+    },
+    {
+      "title": "Legacy migration identity",
       "properties": {
         "cropId": {},
         "variety": {}
@@ -37,14 +52,15 @@
       "$ref": "#/$defs/id"
     },
     "cultivarId": {
+      "description": "Canonical identity for seed inventory items; points to a reusable cultivar record.",
       "$ref": "#/$defs/id"
     },
     "cropId": {
-      "description": "Legacy compatibility field for migrated/imported records.",
+      "description": "Legacy migration-only field for imported records that do not yet resolve to cultivarId.",
       "$ref": "#/$defs/id"
     },
     "variety": {
-      "description": "Legacy compatibility field for migrated/imported records.",
+      "description": "Legacy migration-only variety label retained for imported records without cultivarId.",
       "type": "string",
       "minLength": 1,
       "maxLength": 120
@@ -66,7 +82,19 @@
       "enum": [
         "seeds",
         "g",
-        "packets"
+        "packets",
+        "cloves",
+        "tubers",
+        "cuttings",
+        "runners",
+        "bulbs",
+        "slips",
+        "divisions",
+        "grafts",
+        "kg",
+        "oz",
+        "lb",
+        "items"
       ]
     },
     "purchaseDate": {
@@ -96,6 +124,44 @@
     },
     "updatedAt": {
       "$ref": "#/$defs/isoDate"
+    },
+    "cropTypeId": {
+      "description": "Fallback crop type when cultivar is unknown; canonical flow should use cultivarId.",
+      "$ref": "#/$defs/id"
+    },
+    "speciesId": {
+      "description": "Fallback species when cultivar is unknown; canonical flow should use cultivarId.",
+      "$ref": "#/$defs/id"
+    },
+    "propagationType": {
+      "description": "Plant propagation pathway for this inventory material.",
+      "type": "string",
+      "enum": [
+        "seed",
+        "clove",
+        "tuber",
+        "cutting",
+        "runner",
+        "bulb",
+        "slip",
+        "division",
+        "graft"
+      ]
+    },
+    "materialType": {
+      "description": "Inventory material form kept alongside propagation semantics.",
+      "type": "string",
+      "enum": [
+        "seed",
+        "clove",
+        "tuber",
+        "cutting",
+        "runner",
+        "bulb",
+        "slip",
+        "division",
+        "graft"
+      ]
     }
   },
   "$defs": {
