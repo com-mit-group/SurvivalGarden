@@ -13,7 +13,7 @@
     "updatedAt"
   ],
   "description": "Canonical records identify seed inventory using cultivarId. Legacy cropId+variety is accepted only for migration/import compatibility.",
-  "anyOf": [
+  "oneOf": [
     {
       "title": "Canonical cultivar identity",
       "properties": {
@@ -21,7 +21,21 @@
       },
       "required": [
         "cultivarId"
-      ]
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cropId"
+            ]
+          },
+          {
+            "required": [
+              "variety"
+            ]
+          }
+        ]
+      }
     },
     {
       "title": "Fallback unknown-cultivar identity",
@@ -32,7 +46,26 @@
       "required": [
         "cropTypeId",
         "speciesId"
-      ]
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cultivarId"
+            ]
+          },
+          {
+            "required": [
+              "cropId"
+            ]
+          },
+          {
+            "required": [
+              "variety"
+            ]
+          }
+        ]
+      }
     },
     {
       "title": "Legacy migration identity",
@@ -43,7 +76,26 @@
       "required": [
         "cropId",
         "variety"
-      ]
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "cultivarId"
+            ]
+          },
+          {
+            "required": [
+              "cropTypeId"
+            ]
+          },
+          {
+            "required": [
+              "speciesId"
+            ]
+          }
+        ]
+      }
     }
   ],
   "properties": {
