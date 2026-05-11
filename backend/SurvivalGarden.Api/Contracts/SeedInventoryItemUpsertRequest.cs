@@ -10,6 +10,14 @@ internal sealed class SeedInventoryItemUpsertRequest
 
     public string? Variety { get; init; }
 
+    public string? CropTypeId { get; init; }
+
+    public string? SpeciesId { get; init; }
+
+    public string? PropagationType { get; init; }
+
+    public string? MaterialType { get; init; }
+
     public string? Supplier { get; init; }
 
     public string? LotNumber { get; init; }

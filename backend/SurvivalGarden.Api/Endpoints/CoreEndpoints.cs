@@ -124,9 +124,14 @@ internal static class CoreEndpoints
             {
                 var cultivarId = item["cultivarId"]?.GetValue<string>() ?? string.Empty;
                 var cultivar = cultivars.FirstOrDefault(candidate => string.Equals(candidate["cultivarId"]?.GetValue<string>(), cultivarId, StringComparison.Ordinal));
-                var cropTypeId = cultivar?["cropTypeId"]?.GetValue<string>() ?? item["cropId"]?.GetValue<string>() ?? string.Empty;
+                var cropTypeId = cultivar?["cropTypeId"]?.GetValue<string>()
+                    ?? item["cropTypeId"]?.GetValue<string>()
+                    ?? item["cropId"]?.GetValue<string>()
+                    ?? string.Empty;
                 var crop = crops.FirstOrDefault(candidate => string.Equals(candidate["cropId"]?.GetValue<string>(), cropTypeId, StringComparison.Ordinal));
-                var speciesId = crop?["speciesId"]?.GetValue<string>() ?? string.Empty;
+                var speciesId = crop?["speciesId"]?.GetValue<string>()
+                    ?? item["speciesId"]?.GetValue<string>()
+                    ?? string.Empty;
                 return new SeedInventoryQueryRowDto
                 {
                     SeedInventoryItemId = item["seedInventoryItemId"]?.GetValue<string>() ?? string.Empty,
