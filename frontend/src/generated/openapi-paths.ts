@@ -1736,7 +1736,6 @@ export interface components {
         RegenerateCalendarRequest: Record<string, never>;
         SeedInventoryItemUpsertRequest: {
             createdAt?: null | string;
-            cropId?: null | string;
             cropTypeId?: null | string;
             cultivarId?: null | string;
             expiryDate?: null | string;
