@@ -206,6 +206,7 @@ jobs:
 
       - name: Verify generated contract types
         run: |
+          set -euo pipefail
           python3 -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
           OPENAPI_PID=$!
 
@@ -219,7 +220,10 @@ jobs:
           export EXPECTED_CONTRACT_VERSION="1.0.0"
 
           pnpm --dir frontend gen:types
-          git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts
+          if ! git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts; then
+            echo "::error title=Contract drift detected::Generated frontend API contract artifacts changed after regeneration. Run 'pnpm --dir frontend gen:types', review updates in frontend/src/generated/*, and commit the regenerated files."
+            exit 1
+          fi
 
       - name: Test
         run: pnpm --dir frontend test
@@ -277,6 +281,18 @@ jobs:
             /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
             /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }} `
             "${{ steps.target.outputs.target }}"
+
+      - name: Verify API route ownership tests
+        shell: pwsh
+        run: |
+          dotnet test --logger "trx" --no-build -c Debug `
+            --filter "FullyQualifiedName~ApiContractRouteOwnershipTests" `
+            "${{ steps.target.outputs.target }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error title=Route ownership violation::ApiContractRouteOwnershipTests failed. Update endpoint ownership mappings or route declarations so each API route is owned by exactly one feature boundary, then rerun dotnet test."
+            exit 1
+          }
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action/windows@v2
