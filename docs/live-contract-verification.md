@@ -144,3 +144,36 @@ Any of these indicates payload/runtime mismatch despite compile-time generation:
 - Backend-mode operations fail with contract validation errors (for example, "Backend contract mismatch ...").
 - Browser Network responses show missing required fields or incompatible types for entities used by the UI.
 - Manual smoke CRUD operations fail (`4xx/5xx`) due to schema/shape incompatibility.
+
+## Troubleshooting common CI failures
+
+### Route ownership violations (`ApiContractRouteOwnershipTests`)
+
+Typical CI signal:
+- Backend `dotnet test` fails in `backend/SurvivalGarden.Api.Tests/ApiContractRouteOwnershipTests.cs`.
+- CI emits a route ownership violation error.
+
+How to fix:
+1. Read the failing test output to identify the conflicting route/feature ownership expectation.
+2. Update the endpoint mapping/ownership metadata so the route is owned by exactly one boundary.
+3. Re-run:
+   ```bash
+   dotnet test backend/SurvivalGarden.Backend.sln --filter "FullyQualifiedName~ApiContractRouteOwnershipTests"
+   ```
+
+### Contract drift (generated frontend types changed)
+
+Typical CI signal:
+- Contract regeneration succeeds, then `git diff --exit-code` fails on:
+  - `frontend/src/generated/contracts.ts`
+  - `frontend/src/generated/openapi-paths.ts`
+  - `frontend/src/generated/api-client.ts`
+- CI emits a contract drift detected error.
+
+How to fix:
+1. Regenerate contracts locally:
+   ```bash
+   pnpm --dir frontend gen:types
+   ```
+2. Review generated diffs for expected API changes.
+3. Commit the regenerated files with the backend/API change (or revert unintended backend changes).
