@@ -339,6 +339,48 @@ export interface SeedInventoryItem {
   updatedAt: string;
 }
 
+
+export interface CropUpsertInput {
+  cropId?: string;
+  id?: string;
+  name?: string;
+  commonName?: string;
+  cultivar?: string;
+  cultivarGroup?: string;
+  speciesId?: string;
+  scientificName?: string;
+  taxonomy?: Record<string, unknown>;
+  aliases?: unknown[];
+  isUserDefined?: boolean;
+  category?: string;
+  companionsGood?: unknown[];
+  companionsAvoid?: unknown[];
+  rules?: Record<string, unknown>;
+  taskRules?: unknown[];
+  nutritionProfile?: unknown[];
+  defaults?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
+}
+
+export interface SeedInventoryItemUpsertInput {
+  seedInventoryItemId?: string;
+  cultivarId?: string;
+  variety?: string;
+  cropTypeId?: string;
+  speciesId?: string;
+  propagationType?: string;
+  materialType?: string;
+  supplier?: string;
+  lotNumber?: string;
+  quantity?: number;
+  unit?: string;
+  purchaseDate?: string;
+  expiryDate?: string;
+  status?: string;
+  storageLocation?: string;
+  notes?: string;
+}
+
 export interface Settings {
   settingsId: string;
   locale: string;

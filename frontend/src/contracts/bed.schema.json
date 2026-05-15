@@ -54,10 +54,12 @@
       "maxLength": 2000
     },
     "createdAt": {
-      "$ref": "#/$defs/isoDate"
+      "$ref": "#/$defs/isoDate",
+      "readOnly": true
     },
     "updatedAt": {
-      "$ref": "#/$defs/isoDate"
+      "$ref": "#/$defs/isoDate",
+      "readOnly": true
     }
   },
   "$defs": {

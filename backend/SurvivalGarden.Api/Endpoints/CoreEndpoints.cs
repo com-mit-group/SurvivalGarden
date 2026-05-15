@@ -183,17 +183,9 @@ internal static class CoreEndpoints
         });
 
         MapEntityCrud(app, "species", "id");
-        MapTypedEntityCrud<CropUpsertRequest>(app, "crops", "cropId", (payload, id) =>
-        {
-            payload.CropId = id;
-            return DtoJsonMapper.ToJsonObject(payload);
-        });
+        MapTypedEntityCrud<CropUpsertRequest>(app, "crops", "cropId", DtoJsonMapper.ToCanonicalCropUpsert);
         MapEntityCrud(app, "cultivars", "id");
-        MapTypedEntityCrud<SeedInventoryItemUpsertRequest>(app, "seedInventoryItems", "seedInventoryItemId", (payload, id) =>
-        {
-            payload.SeedInventoryItemId = id;
-            return DtoJsonMapper.ToJsonObject(payload);
-        });
+        MapTypedEntityCrud<SeedInventoryItemUpsertRequest>(app, "seedInventoryItems", "seedInventoryItemId", DtoJsonMapper.ToCanonicalSeedInventoryItemUpsert);
         MapEntityCrud(app, "cropPlans", "planId");
 
         app.MapPost("/api/validate/{collection}", (IGardenApplicationService service, string collection, JsonObject payload) =>

@@ -101,7 +101,8 @@
             }
           }
         }
-      }
+      },
+      "readOnly": true
     },
     "scientificName": {
       "type": "string",
@@ -194,10 +195,12 @@
       }
     },
     "createdAt": {
-      "$ref": "#/$defs/isoDate"
+      "$ref": "#/$defs/isoDate",
+      "readOnly": true
     },
     "updatedAt": {
-      "$ref": "#/$defs/isoDate"
+      "$ref": "#/$defs/isoDate",
+      "readOnly": true
     },
     "id": {
       "$ref": "#/$defs/id",
