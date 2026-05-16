@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SurvivalGarden.Application;
+using Yaref92.Events;
+using Yaref92.Events.Abstractions;
 
 namespace SurvivalGarden.Persistence;
 
@@ -18,6 +20,7 @@ public static class DependencyInjection
         services.AddSingleton<IGardenStateStore>(_ => new JsonFileGardenStateStore(resolvedPath));
         if (useExternalAdapter)
         {
+            services.AddScoped<IEventAggregator, EventAggregator>();
             services.AddScoped<IStageEventBus, StageEventBusAdapter>();
         }
         else
