@@ -4,6 +4,7 @@ namespace SurvivalGarden.Application;
 
 public interface IStageTransitionAuditSink
 {
+    // Lightweight best-effort sink for side-effects only; not durable across process restarts.
     void Record(IApplicationEvent applicationEvent);
 }
 

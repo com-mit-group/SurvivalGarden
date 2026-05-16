@@ -153,17 +153,17 @@ internal static class BatchEndpoints
             var transition = await service.ApplyBatchStageTransitionAsync(id, "ended", occurredAt, ct);
             if (!transition.Ok)
             {
+                if (transition.Error == "batch_not_found")
+                {
+                    return Results.NotFound(new { error = "batch_not_found", workflow = "complete_batch", batchId = id });
+                }
+
                 return Results.BadRequest(new
                 {
                     error = "validation_failed",
                     workflow = "complete_batch",
                     errors = new[] { new { path = "/occurredAt", message = transition.Error ?? "invalid_stage_transition" } }
                 });
-            }
-
-            if (transition.Error == "batch_not_found")
-            {
-                return Results.NotFound(new { error = "batch_not_found", workflow = "complete_batch", batchId = id });
             }
 
             return Results.Ok(transition.Batch);
@@ -174,58 +174,6 @@ internal static class BatchEndpoints
             var removed = await service.RemoveAsync("batches", "batchId", id, ct);
             return removed ? Results.NoContent() : Results.NotFound();
         });
-    }
-
-    private static string NormalizeStage(string stage) => stage switch
-    {
-        "pre_sown" => "sowing",
-        _ => stage
-    };
-
-    private static bool CanTransition(string currentStage, string nextStage)
-    {
-        var current = NormalizeStage(currentStage);
-        var next = NormalizeStage(nextStage);
-        if (next == "failed")
-        {
-            return true;
-        }
-
-        if (next == "ended")
-        {
-            return current is "harvest" or "failed";
-        }
-
-        return current switch
-        {
-            "sowing" => next is "transplant" or "harvest" or "failed",
-            "started" => next is "transplant" or "harvest" or "failed",
-            "transplant" => next is "harvest" or "failed",
-            "harvest" => next is "ended" or "failed",
-            "failed" => next is "ended",
-            "ended" => next is "failed",
-            _ => false
-        };
-    }
-
-    private static (bool Ok, string? Error, JsonObject Batch) ApplyStageEvent(JsonObject batch, string nextStage, string occurredAt)
-    {
-        var currentStage = NormalizeStage(batch["currentStage"]?.GetValue<string>() ?? batch["stage"]?.GetValue<string>() ?? "unknown");
-        var normalizedNextStage = NormalizeStage(nextStage);
-        if (normalizedNextStage != currentStage && !CanTransition(currentStage, normalizedNextStage))
-        {
-            return (false, "invalid_stage_transition", batch);
-        }
-
-        batch["currentStage"] = normalizedNextStage;
-        var stageEvents = batch["stageEvents"] as JsonArray ?? new JsonArray();
-        stageEvents.Add(new JsonObject
-        {
-            ["stage"] = normalizedNextStage,
-            ["occurredAt"] = occurredAt
-        });
-        batch["stageEvents"] = stageEvents;
-        return (true, null, batch);
     }
 
     private static bool IsWithinWindow(JsonObject assignment, string at)

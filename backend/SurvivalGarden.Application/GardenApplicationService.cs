@@ -5,6 +5,9 @@ namespace SurvivalGarden.Application;
 
 public sealed class GardenApplicationService(IGardenStateStore store, IApplicationEventPublisher eventPublisher) : IGardenApplicationService
 {
+    private const string BatchNotFoundError = "batch_not_found";
+    private const string InvalidStageTransitionError = "invalid_stage_transition";
+
     private static readonly string[] RootCollections =
     [
         "species",
@@ -161,14 +164,14 @@ public sealed class GardenApplicationService(IGardenStateStore store, IApplicati
             .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), batchId, StringComparison.Ordinal));
         if (batch is null)
         {
-            return (false, "batch_not_found", null);
+            return (false, BatchNotFoundError, null);
         }
 
         var currentStage = NormalizeStage(batch["currentStage"]?.GetValue<string>() ?? batch["stage"]?.GetValue<string>() ?? "unknown");
         var normalizedNextStage = NormalizeStage(nextStage);
         if (normalizedNextStage != currentStage && !CanTransition(currentStage, normalizedNextStage))
         {
-            return (false, "invalid_stage_transition", batch);
+            return (false, InvalidStageTransitionError, batch);
         }
 
         var stageEvents = batch["stageEvents"] as JsonArray ?? new JsonArray();
@@ -314,8 +317,8 @@ public sealed class GardenApplicationService(IGardenStateStore store, IApplicati
         {
             "sowing" => nextStage is "transplant" or "harvest" or "failed",
             "started" => nextStage is "transplant" or "harvest" or "failed",
-            "transplant" => nextStage is "harvest" or "failed",
-            "harvest" => nextStage is "ended" or "failed",
+            "transplant" => nextStage is "transplant" or "harvest" or "failed",
+            "harvest" => nextStage is "harvest" or "ended" or "failed",
             "failed" => nextStage is "ended",
             "ended" => nextStage is "failed",
             _ => false

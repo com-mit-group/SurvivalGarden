@@ -1,5 +1,6 @@
 namespace SurvivalGarden.Application;
 
+// NOTE: thin local contracts to keep transition side-effects decoupled; can be swapped to shared events package later.
 public interface IApplicationEvent;
 
 public interface IApplicationEventPublisher
