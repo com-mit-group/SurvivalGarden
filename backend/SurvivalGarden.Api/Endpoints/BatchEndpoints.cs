@@ -6,6 +6,15 @@ namespace SurvivalGarden.Api.Endpoints;
 
 internal static class BatchEndpoints
 {
+    private const string ErrorValidationFailed = "validation_failed";
+    private const string ErrorAppStateNotFound = "app_state_not_found";
+    private const string ErrorBatchNotFound = "batch_not_found";
+    private const string ErrorInvalidStageTransition = "invalid_stage_transition";
+
+    private const string WorkflowCreateBatch = "create_batch";
+    private const string WorkflowStageEvent = "stage_event";
+    private const string WorkflowCompleteBatch = "complete_batch";
+
     internal static void MapBatchEndpoints(this WebApplication app)
     {
         app.MapGet("/api/batches", async (
@@ -34,8 +43,8 @@ internal static class BatchEndpoints
             {
                 return Results.BadRequest(new
                 {
-                    error = "validation_failed",
-                    workflow = "create_batch",
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowCreateBatch,
                     errors = validation.Issues
                 });
             }
@@ -46,8 +55,8 @@ internal static class BatchEndpoints
             {
                 return Results.Conflict(new
                 {
-                    error = "validation_failed",
-                    workflow = "create_batch",
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowCreateBatch,
                     errors = new[] { new { path = "/batchId", message = "batch_already_exists" } }
                 });
             }
@@ -62,18 +71,11 @@ internal static class BatchEndpoints
             StageEventRequest request,
             CancellationToken ct) =>
         {
+
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
-                return Results.NotFound(new { error = "app_state_not_found", workflow = "stage_event" });
-            }
-
-            var batch = GetCollection(state, "batches")
-                .OfType<JsonObject>()
-                .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
-            if (batch is null)
-            {
-                return Results.NotFound(new { error = "batch_not_found", workflow = "stage_event", batchId = id });
+                return Results.NotFound(new { error = ErrorAppStateNotFound, workflow = WorkflowStageEvent });
             }
 
             var nextStage = request.Stage ?? string.Empty;
@@ -82,24 +84,28 @@ internal static class BatchEndpoints
             {
                 return Results.BadRequest(new
                 {
-                    error = "validation_failed",
-                    workflow = "stage_event",
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowStageEvent,
                     errors = new[] { new { path = "/stage|/occurredAt", message = "stage_and_occurredAt_required" } }
                 });
             }
 
-            var transition = ApplyStageEvent(batch, nextStage, occurredAt);
+            var transition = await service.ApplyBatchStageTransitionAsync(id, nextStage, occurredAt, ct);
             if (!transition.Ok)
             {
+                if (transition.Error == ErrorBatchNotFound)
+                {
+                    return Results.NotFound(new { error = ErrorBatchNotFound, workflow = WorkflowStageEvent, batchId = id });
+                }
+
                 return Results.BadRequest(new
                 {
-                    error = "validation_failed",
-                    workflow = "stage_event",
-                    errors = new[] { new { path = "/stage", message = transition.Error ?? "invalid_stage_transition" } }
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowStageEvent,
+                    errors = new[] { new { path = "/stage", message = transition.Error ?? ErrorInvalidStageTransition } }
                 });
             }
 
-            await service.SaveAppStateAsync(state, ct);
             return Results.Ok(transition.Batch);
         });
 
@@ -141,8 +147,8 @@ internal static class BatchEndpoints
             {
                 return Results.BadRequest(new
                 {
-                    error = "validation_failed",
-                    workflow = "complete_batch",
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowCompleteBatch,
                     errors = new[] { new { path = "/occurredAt", message = "occurredAt_required" } }
                 });
             }
@@ -150,29 +156,25 @@ internal static class BatchEndpoints
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
-                return Results.NotFound(new { error = "app_state_not_found", workflow = "complete_batch" });
+                return Results.NotFound(new { error = ErrorAppStateNotFound, workflow = WorkflowCompleteBatch });
             }
 
-            var batch = GetCollection(state, "batches")
-                .OfType<JsonObject>()
-                .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
-            if (batch is null)
-            {
-                return Results.NotFound(new { error = "batch_not_found", workflow = "complete_batch", batchId = id });
-            }
-
-            var transition = ApplyStageEvent(batch, "ended", occurredAt);
+            var transition = await service.ApplyBatchStageTransitionAsync(id, "ended", occurredAt, ct);
             if (!transition.Ok)
             {
+                if (transition.Error == ErrorBatchNotFound)
+                {
+                    return Results.NotFound(new { error = ErrorBatchNotFound, workflow = WorkflowCompleteBatch, batchId = id });
+                }
+
                 return Results.BadRequest(new
                 {
-                    error = "validation_failed",
-                    workflow = "complete_batch",
-                    errors = new[] { new { path = "/occurredAt", message = transition.Error ?? "invalid_stage_transition" } }
+                    error = ErrorValidationFailed,
+                    workflow = WorkflowCompleteBatch,
+                    errors = new[] { new { path = "/occurredAt", message = transition.Error ?? ErrorInvalidStageTransition } }
                 });
             }
 
-            await service.SaveAppStateAsync(state, ct);
             return Results.Ok(transition.Batch);
         });
 
@@ -181,58 +183,6 @@ internal static class BatchEndpoints
             var removed = await service.RemoveAsync("batches", "batchId", id, ct);
             return removed ? Results.NoContent() : Results.NotFound();
         });
-    }
-
-    private static string NormalizeStage(string stage) => stage switch
-    {
-        "pre_sown" => "sowing",
-        _ => stage
-    };
-
-    private static bool CanTransition(string currentStage, string nextStage)
-    {
-        var current = NormalizeStage(currentStage);
-        var next = NormalizeStage(nextStage);
-        if (next == "failed")
-        {
-            return true;
-        }
-
-        if (next == "ended")
-        {
-            return current is "harvest" or "failed";
-        }
-
-        return current switch
-        {
-            "sowing" => next is "transplant" or "harvest" or "failed",
-            "started" => next is "transplant" or "harvest" or "failed",
-            "transplant" => next is "harvest" or "failed",
-            "harvest" => next is "ended" or "failed",
-            "failed" => next is "ended",
-            "ended" => next is "failed",
-            _ => false
-        };
-    }
-
-    private static (bool Ok, string? Error, JsonObject Batch) ApplyStageEvent(JsonObject batch, string nextStage, string occurredAt)
-    {
-        var currentStage = NormalizeStage(batch["currentStage"]?.GetValue<string>() ?? batch["stage"]?.GetValue<string>() ?? "unknown");
-        var normalizedNextStage = NormalizeStage(nextStage);
-        if (normalizedNextStage != currentStage && !CanTransition(currentStage, normalizedNextStage))
-        {
-            return (false, "invalid_stage_transition", batch);
-        }
-
-        batch["currentStage"] = normalizedNextStage;
-        var stageEvents = batch["stageEvents"] as JsonArray ?? new JsonArray();
-        stageEvents.Add(new JsonObject
-        {
-            ["stage"] = normalizedNextStage,
-            ["occurredAt"] = occurredAt
-        });
-        batch["stageEvents"] = stageEvents;
-        return (true, null, batch);
     }
 
     private static bool IsWithinWindow(JsonObject assignment, string at)
@@ -376,7 +326,7 @@ internal static class BatchEndpoints
         {
             return Results.BadRequest(new
             {
-                error = "validation_failed",
+                error = ErrorValidationFailed,
                 workflow = operation switch
                 {
                     "assign" => "assign_bed",
@@ -390,7 +340,7 @@ internal static class BatchEndpoints
         var state = await service.LoadAppStateAsync(ct);
         if (state is null)
         {
-            return Results.NotFound(new { error = "app_state_not_found" });
+            return Results.NotFound(new { error = ErrorAppStateNotFound });
         }
 
         var batch = GetCollection(state, "batches")
@@ -398,7 +348,7 @@ internal static class BatchEndpoints
             .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
         if (batch is null)
         {
-            return Results.NotFound(new { error = "batch_not_found", batchId = id });
+            return Results.NotFound(new { error = ErrorBatchNotFound, batchId = id });
         }
 
         var mutation = MutateAssignment(batch, operation, bedId, at);
@@ -406,7 +356,7 @@ internal static class BatchEndpoints
         {
             return Results.BadRequest(new
             {
-                error = "validation_failed",
+                error = ErrorValidationFailed,
                 workflow = operation switch
                 {
                     "assign" => "assign_bed",
