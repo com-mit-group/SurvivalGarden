@@ -8,14 +8,14 @@
 
 ## Adapter Modes
 
-- `External` (default): stage transition events are routed through `Yaref92.Events` via a strongly typed adapter (no reflection).
+- `External` (default): stage transition events are routed through `Yaref92.Events` `IEventAggregator` using `PublishEventAsync`.
 - `InProcess`: wraps the existing in-process subscriber dispatch behavior.
 
 ## Pilot Rollout
 
 1. Deploy with `Events:StageEventBusAdapter=External` as the default path.
 2. Verify parity in environments where `Events:StageEventBusAdapter=InProcess`.
-   - Ensure `Yaref92.Events` services (including `IEventPublisher`) are registered in DI for that environment.
+   - Ensure `Yaref92.Events` services (including `IEventAggregator`) are registered in DI for that environment.
 3. Limit pilot verification to stage transitions (`StageAdvanced`, `StageRegressed`, `StageCompleted`).
 4. Keep all other event flows on baseline `IApplicationEventPublisher` behavior.
 

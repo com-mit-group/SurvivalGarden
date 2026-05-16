@@ -1,28 +1,30 @@
 using Microsoft.Extensions.DependencyInjection;
 using SurvivalGarden.Application;
-using Yaref92.Events;
 
 namespace SurvivalGarden.Persistence;
 
 public static class DependencyInjection
 {
+    private const string ExternalAdapter = "External";
+
     public static IServiceCollection AddPersistence(this IServiceCollection services, string? appStatePath = null, string? stageEventBusAdapter = null)
     {
         var resolvedPath = appStatePath ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "data", "app-state.json"));
-        var adapter = (stageEventBusAdapter ?? "External").Trim();
+        var adapter = (stageEventBusAdapter ?? ExternalAdapter).Trim();
+        var useExternalAdapter = string.Equals(adapter, ExternalAdapter, StringComparison.OrdinalIgnoreCase);
 
         // Current default adapter is file-backed JSON persistence.
         // The IGardenStateStore abstraction remains the seam for swapping to a database-backed adapter later.
         services.AddSingleton<IGardenStateStore>(_ => new JsonFileGardenStateStore(resolvedPath));
-        if (!string.Equals(adapter, "External", StringComparison.OrdinalIgnoreCase))
+        if (useExternalAdapter)
+        {
+            services.AddScoped<IStageEventBus, StageEventBusAdapter>();
+        }
+        else
         {
             services.AddScoped<IApplicationEventPublisher, InProcessApplicationEventPublisher>();
+            services.AddScoped<IStageEventBus, LocalStageEventBusAdapter>();
         }
-
-        services.AddScoped<IStageEventBus>(serviceProvider =>
-            string.Equals(adapter, "External", StringComparison.OrdinalIgnoreCase)
-                ? new StageEventBusAdapter(serviceProvider.GetRequiredService<IEventPublisher>())
-                : new LocalStageEventBusAdapter(serviceProvider.GetRequiredService<IApplicationEventPublisher>()));
 
         return services;
     }

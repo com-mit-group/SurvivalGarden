@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SurvivalGarden.Application;
 using Yaref92.Events;
+using Yaref92.Events.Abstractions;
 
 namespace SurvivalGarden.Persistence;
 
@@ -10,10 +11,18 @@ internal sealed class LocalStageEventBusAdapter(IApplicationEventPublisher publi
         publisher.PublishAsync(stageEvent, cancellationToken);
 }
 
-internal sealed class StageEventBusAdapter(IEventPublisher publisher) : IStageEventBus
+internal sealed class StageEventBusAdapter(IEventAggregator aggregator) : IStageEventBus
 {
-    public Task PublishAsync(IApplicationEvent stageEvent, CancellationToken cancellationToken = default) =>
-        publisher.PublishAsync(stageEvent, cancellationToken);
+    public Task PublishAsync(IApplicationEvent stageEvent, CancellationToken cancellationToken = default)
+    {
+        aggregator.RegisterEventType<StageTransitionEnvelopeEvent>();
+        return aggregator.PublishEventAsync(new StageTransitionEnvelopeEvent(stageEvent), cancellationToken);
+    }
+}
+
+internal sealed class StageTransitionEnvelopeEvent(IApplicationEvent payload) : DomainEventBase
+{
+    public IApplicationEvent Payload { get; } = payload;
 }
 
 internal sealed class InProcessApplicationEventPublisher(IServiceProvider serviceProvider) : IApplicationEventPublisher
