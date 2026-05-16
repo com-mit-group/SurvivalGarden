@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace SurvivalGarden.Application;
 
-public sealed class GardenApplicationService(IGardenStateStore store) : IGardenApplicationService
+public sealed class GardenApplicationService(IGardenStateStore store, IApplicationEventPublisher eventPublisher) : IGardenApplicationService
 {
     private static readonly string[] RootCollections =
     [
@@ -153,6 +153,48 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         return new JsonArray(filtered);
     }
 
+    public async Task<(bool Ok, string? Error, JsonObject? Batch)> ApplyBatchStageTransitionAsync(string batchId, string nextStage, string occurredAt, CancellationToken cancellationToken = default)
+    {
+        var state = await EnsureStateAsync(cancellationToken);
+        var batch = GardenJsonCollectionHelpers.GetCollection(state, "batches")
+            .OfType<JsonObject>()
+            .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), batchId, StringComparison.Ordinal));
+        if (batch is null)
+        {
+            return (false, "batch_not_found", null);
+        }
+
+        var currentStage = NormalizeStage(batch["currentStage"]?.GetValue<string>() ?? batch["stage"]?.GetValue<string>() ?? "unknown");
+        var normalizedNextStage = NormalizeStage(nextStage);
+        if (normalizedNextStage != currentStage && !CanTransition(currentStage, normalizedNextStage))
+        {
+            return (false, "invalid_stage_transition", batch);
+        }
+
+        var stageEvents = batch["stageEvents"] as JsonArray ?? new JsonArray();
+        var transitionChanged = normalizedNextStage != currentStage;
+        batch["currentStage"] = normalizedNextStage;
+        stageEvents.Add(new JsonObject
+        {
+            ["stage"] = normalizedNextStage,
+            ["occurredAt"] = occurredAt
+        });
+        batch["stageEvents"] = stageEvents;
+
+        await store.SaveAsync(state, cancellationToken);
+
+        if (transitionChanged)
+        {
+            var emittedEvent = BuildStageTransitionEvent(batchId, currentStage, normalizedNextStage, occurredAt, stageEvents.Count);
+            if (emittedEvent is not null)
+            {
+                await eventPublisher.PublishAsync(emittedEvent, cancellationToken);
+            }
+        }
+
+        return (true, null, (JsonObject)batch.DeepClone());
+    }
+
     public ValidationResult Validate(string collectionName, JsonObject entity)
     {
         return collectionName switch
@@ -254,6 +296,54 @@ public sealed class GardenApplicationService(IGardenStateStore store) : IGardenA
         {
             GardenJsonCollectionHelpers.NormalizeBatchForPersistence(batch);
         }
+    }
+
+
+    private static string NormalizeStage(string stage) => stage switch
+    {
+        "pre_sown" => "sowing",
+        _ => stage
+    };
+
+    private static bool CanTransition(string currentStage, string nextStage)
+    {
+        if (nextStage == "failed") return true;
+        if (nextStage == "ended") return currentStage is "harvest" or "failed";
+
+        return currentStage switch
+        {
+            "sowing" => nextStage is "transplant" or "harvest" or "failed",
+            "started" => nextStage is "transplant" or "harvest" or "failed",
+            "transplant" => nextStage is "harvest" or "failed",
+            "harvest" => nextStage is "ended" or "failed",
+            "failed" => nextStage is "ended",
+            "ended" => nextStage is "failed",
+            _ => false
+        };
+    }
+
+    private static IApplicationEvent? BuildStageTransitionEvent(string batchId, string previousStage, string currentStage, string occurredAt, int stageEventCount)
+    {
+        if (currentStage == "ended") return new StageCompleted(batchId, previousStage, currentStage, occurredAt, stageEventCount);
+
+        var rank = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["sowing"] = 1,
+            ["started"] = 1,
+            ["transplant"] = 2,
+            ["harvest"] = 3,
+            ["ended"] = 4,
+            ["failed"] = 99
+        };
+
+        if (!rank.TryGetValue(previousStage, out var oldRank) || !rank.TryGetValue(currentStage, out var newRank))
+        {
+            return null;
+        }
+
+        return newRank >= oldRank
+            ? new StageAdvanced(batchId, previousStage, currentStage, occurredAt, stageEventCount)
+            : new StageRegressed(batchId, previousStage, currentStage, occurredAt, stageEventCount);
     }
 
     private static string UtcNowIso() =>

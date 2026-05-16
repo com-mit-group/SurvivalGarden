@@ -62,18 +62,11 @@ internal static class BatchEndpoints
             StageEventRequest request,
             CancellationToken ct) =>
         {
+
             var state = await service.LoadAppStateAsync(ct);
             if (state is null)
             {
                 return Results.NotFound(new { error = "app_state_not_found", workflow = "stage_event" });
-            }
-
-            var batch = GetCollection(state, "batches")
-                .OfType<JsonObject>()
-                .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
-            if (batch is null)
-            {
-                return Results.NotFound(new { error = "batch_not_found", workflow = "stage_event", batchId = id });
             }
 
             var nextStage = request.Stage ?? string.Empty;
@@ -88,9 +81,14 @@ internal static class BatchEndpoints
                 });
             }
 
-            var transition = ApplyStageEvent(batch, nextStage, occurredAt);
+            var transition = await service.ApplyBatchStageTransitionAsync(id, nextStage, occurredAt, ct);
             if (!transition.Ok)
             {
+                if (transition.Error == "batch_not_found")
+                {
+                    return Results.NotFound(new { error = "batch_not_found", workflow = "stage_event", batchId = id });
+                }
+
                 return Results.BadRequest(new
                 {
                     error = "validation_failed",
@@ -99,7 +97,6 @@ internal static class BatchEndpoints
                 });
             }
 
-            await service.SaveAppStateAsync(state, ct);
             return Results.Ok(transition.Batch);
         });
 
@@ -153,15 +150,7 @@ internal static class BatchEndpoints
                 return Results.NotFound(new { error = "app_state_not_found", workflow = "complete_batch" });
             }
 
-            var batch = GetCollection(state, "batches")
-                .OfType<JsonObject>()
-                .FirstOrDefault(candidate => string.Equals(candidate["batchId"]?.GetValue<string>(), id, StringComparison.Ordinal));
-            if (batch is null)
-            {
-                return Results.NotFound(new { error = "batch_not_found", workflow = "complete_batch", batchId = id });
-            }
-
-            var transition = ApplyStageEvent(batch, "ended", occurredAt);
+            var transition = await service.ApplyBatchStageTransitionAsync(id, "ended", occurredAt, ct);
             if (!transition.Ok)
             {
                 return Results.BadRequest(new
@@ -172,7 +161,11 @@ internal static class BatchEndpoints
                 });
             }
 
-            await service.SaveAppStateAsync(state, ct);
+            if (transition.Error == "batch_not_found")
+            {
+                return Results.NotFound(new { error = "batch_not_found", workflow = "complete_batch", batchId = id });
+            }
+
             return Results.Ok(transition.Batch);
         });
 
