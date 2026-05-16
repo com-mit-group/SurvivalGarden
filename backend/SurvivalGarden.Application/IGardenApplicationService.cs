@@ -14,6 +14,8 @@ public interface IGardenApplicationService
 
     Task<JsonArray> ListBatchesAsync(string? stage, string? cropId, string? bedId, string? startedAtFrom, string? startedAtTo, CancellationToken cancellationToken = default);
 
+    Task<(bool Ok, string? Error, JsonObject? Batch)> ApplyBatchStageTransitionAsync(string batchId, string nextStage, string occurredAt, CancellationToken cancellationToken = default);
+
     ValidationResult Validate(string collectionName, JsonObject entity);
     ValidationResult ValidateAppState(JsonObject appState);
 }
