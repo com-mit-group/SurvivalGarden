@@ -73,3 +73,9 @@ What this manual workflow does:
 This commit becomes the new expected baseline that CI compares against.
 
 Keep regular CI fail-fast for drift detection (`git diff --exit-code`/equivalent checks after generation) and **do not auto-commit from standard CI jobs**.
+
+
+## Related ADRs
+
+- `docs/adr/ADR-00X-backend-authority-and-boundaries.md`
+- `docs/adr/ADR-00Y-event-history-policy.md`

@@ -40,3 +40,9 @@
 
 - **Metric:** same transition validation and resulting batch `currentStage`/`stageEvents` content across adapters.
 - **Target:** identical API-observable transition outcomes between `InProcess` and `External` modes.
+
+
+## Related ADRs
+
+- `docs/adr/ADR-00X-backend-authority-and-boundaries.md`
+- `docs/adr/ADR-00Y-event-history-policy.md`
