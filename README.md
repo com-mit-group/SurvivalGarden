@@ -78,3 +78,9 @@ Migration mapping guidance:
 
 For non-seed propagation, use `propagationType` + `startQuantity` only; do not populate fake seed counts.
 
+
+
+## Architecture decision records
+
+- `docs/adr/ADR-00X-backend-authority-and-boundaries.md`
+- `docs/adr/ADR-00Y-event-history-policy.md`
