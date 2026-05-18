@@ -8,6 +8,11 @@ public interface IApplicationEventPublisher
     Task PublishAsync(IApplicationEvent applicationEvent, CancellationToken cancellationToken = default);
 }
 
+public interface IStageEventBus
+{
+    Task PublishAsync(IApplicationEvent stageEvent, CancellationToken cancellationToken = default);
+}
+
 public interface IApplicationEventSubscriber<in TEvent> where TEvent : IApplicationEvent
 {
     Task HandleAsync(TEvent applicationEvent, CancellationToken cancellationToken = default);

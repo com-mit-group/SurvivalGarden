@@ -40,7 +40,8 @@ if (corsOrigins.Length > 0)
 var appStatePath =
     builder.Configuration["APP_STATE_FILE_PATH"] ??
     builder.Configuration["Persistence:AppStatePath"];
-builder.Services.AddPersistence(appStatePath);
+var stageEventBusAdapter = builder.Configuration["Events:StageEventBusAdapter"] ?? "External";
+builder.Services.AddPersistence(appStatePath, stageEventBusAdapter);
 builder.Services.AddApplication();
 
 var app = builder.Build();

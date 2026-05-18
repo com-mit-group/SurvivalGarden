@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace SurvivalGarden.Application;
 
-public sealed class GardenApplicationService(IGardenStateStore store, IApplicationEventPublisher eventPublisher) : IGardenApplicationService
+public sealed class GardenApplicationService(IGardenStateStore store, IStageEventBus stageEventBus) : IGardenApplicationService
 {
     private const string BatchNotFoundError = "batch_not_found";
     private const string InvalidStageTransitionError = "invalid_stage_transition";
@@ -191,7 +191,7 @@ public sealed class GardenApplicationService(IGardenStateStore store, IApplicati
             var emittedEvent = BuildStageTransitionEvent(batchId, currentStage, normalizedNextStage, occurredAt, stageEvents.Count);
             if (emittedEvent is not null)
             {
-                await eventPublisher.PublishAsync(emittedEvent, cancellationToken);
+                await stageEventBus.PublishAsync(emittedEvent, cancellationToken);
             }
         }
 

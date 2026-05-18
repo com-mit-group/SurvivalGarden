@@ -4,6 +4,9 @@
     <RootNamespace>SurvivalGarden.Persistence</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Yaref92.Events" Version="2.1.0" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
     <ProjectReference Include="../SurvivalGarden.Domain/SurvivalGarden.Domain.csproj" />
   </ItemGroup>
