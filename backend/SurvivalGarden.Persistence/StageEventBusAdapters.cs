@@ -13,16 +13,22 @@ internal sealed class LocalStageEventBusAdapter(IApplicationEventPublisher publi
 
 internal sealed class StageEventBusAdapter(IEventAggregator aggregator) : IStageEventBus
 {
-    public Task PublishAsync(IApplicationEvent stageEvent, CancellationToken cancellationToken = default)
-    {
-        aggregator.RegisterEventType<StageTransitionEnvelopeEvent>();
-        return aggregator.PublishEventAsync(new StageTransitionEnvelopeEvent(stageEvent), cancellationToken);
-    }
+    public Task PublishAsync(IApplicationEvent stageEvent, CancellationToken cancellationToken = default) =>
+        aggregator.PublishEventAsync(new StageTransitionEnvelopeEvent(stageEvent), cancellationToken);
 }
 
 internal sealed class StageTransitionEnvelopeEvent(IApplicationEvent payload) : DomainEventBase
 {
     public IApplicationEvent Payload { get; } = payload;
+}
+
+internal sealed class StageTransitionEnvelopeHandler(IStageTransitionAuditSink sink) : IAsyncEventHandler<StageTransitionEnvelopeEvent>
+{
+    public Task OnNextAsync(StageTransitionEnvelopeEvent domainEvent, CancellationToken cancellationToken = default)
+    {
+        sink.Record(domainEvent.Payload);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class InProcessApplicationEventPublisher(IServiceProvider serviceProvider) : IApplicationEventPublisher

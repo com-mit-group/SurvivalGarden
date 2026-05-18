@@ -20,7 +20,14 @@ public static class DependencyInjection
         services.AddSingleton<IGardenStateStore>(_ => new JsonFileGardenStateStore(resolvedPath));
         if (useExternalAdapter)
         {
-            services.AddScoped<IEventAggregator, EventAggregator>();
+            services.AddScoped<IAsyncEventHandler<StageTransitionEnvelopeEvent>, StageTransitionEnvelopeHandler>();
+            services.AddScoped<IEventAggregator>(serviceProvider =>
+            {
+                var aggregator = new EventAggregator();
+                aggregator.RegisterEventType<StageTransitionEnvelopeEvent>();
+                aggregator.SubscribeToEventType(serviceProvider.GetRequiredService<IAsyncEventHandler<StageTransitionEnvelopeEvent>>());
+                return aggregator;
+            });
             services.AddScoped<IStageEventBus, StageEventBusAdapter>();
         }
         else

@@ -8,7 +8,7 @@
 
 ## Adapter Modes
 
-- `External` (default): stage transition events are routed through `Yaref92.Events` `IEventAggregator` using `PublishEventAsync`.
+- `External` (default): stage transition events are routed through `Yaref92.Events` `IEventAggregator` using `PublishEventAsync`, with event type registration and subscription configured in DI.
 - `InProcess`: wraps the existing in-process subscriber dispatch behavior.
 
 ## Pilot Rollout
