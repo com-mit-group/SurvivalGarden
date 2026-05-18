@@ -270,11 +270,11 @@ jobs:
       - name: Ensure GitHub NuGet Source
         env:
           NUGET_TOKEN: ${{ secrets.YARE92_NUGET_TOKEN_EXP_17JUN2026 }}
-        run: |
-          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json `
-            -n github `
-            -u Yaron-E92 `
-            -p $env:NUGET_TOKEN `
+        run: >-
+          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json
+            -n github
+            -u Yaron-E92
+            -p $env:NUGET_TOKEN
             --store-password-in-clear-text
 
       - name: Restore Dependencies
@@ -285,11 +285,11 @@ jobs:
         run: dotnet build -c Debug --no-restore "${{ steps.target.outputs.target }}"
 
       - name: Test
-        run: |
-          dotnet test --logger "trx" --no-build -c Debug --verbosity normal `
-            /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-            /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }} `
+        run: >-
+          dotnet test --logger "trx" --no-build -c Debug --verbosity normal
+            /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+            /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
             "${{ steps.target.outputs.target }}"
 
       - name: Verify API route ownership tests
