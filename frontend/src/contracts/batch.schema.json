@@ -28,7 +28,7 @@
   "properties": {
     "id": {
       "$ref": "#/$defs/id",
-      "description": "Migration alias for batchId."
+      "description": "Migration/compatibility alias for batchId; use batchId as canonical."
     },
     "batchId": {
       "$ref": "#/$defs/id"
@@ -39,7 +39,7 @@
     },
     "cropId": {
       "$ref": "#/$defs/id",
-      "description": "Legacy migration alias for cultivarId."
+      "description": "Migration/compatibility alias for cultivarId; use cultivarId as canonical."
     },
     "cropTypeId": {
       "$ref": "#/$defs/id",
@@ -52,7 +52,7 @@
     },
     "startedAt": {
       "$ref": "#/$defs/isoDate",
-      "description": "Canonical start anchor. Must match stageEvents[0].occurredAt."
+      "description": "Canonical start timestamp field for the batch contract shape. Timeline invariants are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57)."
     },
     "propagationType": {
       "$ref": "#/$defs/propagationType"
@@ -98,18 +98,18 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Legacy alias for currentStage during migration input only."
+      "description": "Migration/compatibility alias for currentStage during input bridging only."
     },
     "currentStage": {
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Canonical current stage. Derived from the latest stage event during migration/import when omitted."
+      "description": "Canonical current stage field in the contract. Derivation and workflow authority are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57)."
     },
     "stageEvents": {
       "type": "array",
       "minItems": 1,
-      "description": "Canonical timeline. The first event represents batch start and should align with startedAt.",
+      "description": "Canonical stage-event timeline array in the contract shape. Ordering/timeline invariants are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57).",
       "items": {
         "$ref": "#/$defs/stageEvent"
       }
@@ -125,7 +125,7 @@
       "items": {
         "$ref": "#/$defs/bedAssignment"
       },
-      "description": "Legacy alias for bedAssignments during migration input only."
+      "description": "Migration/compatibility alias for bedAssignments during input bridging only."
     },
     "notes": {
       "type": "string",
@@ -217,7 +217,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "description": "Migration alias for stage."
+          "description": "Migration/compatibility alias for stage; use stage as canonical."
         },
         "stage": {
           "type": "string",
@@ -226,7 +226,7 @@
         },
         "date": {
           "$ref": "#/$defs/isoDate",
-          "description": "Migration alias for occurredAt."
+          "description": "Migration/compatibility alias for occurredAt; use occurredAt as canonical."
         },
         "occurredAt": {
           "$ref": "#/$defs/isoDate"
