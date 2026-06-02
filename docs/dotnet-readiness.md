@@ -21,10 +21,10 @@ Revisit OpenAPI only when all are true:
 
 1. Backend endpoint surface is stable across at least one release cycle.
 2. Repository operations are consistently mapped to HTTP semantics (CRUD + list filters) and no major renames are expected.
-3. Contract ownership is explicit: either JSON Schema remains source-of-truth and OpenAPI is generated from it, or OpenAPI replaces it with a migration plan that preserves existing generated consumers.
+3. Contract ownership is explicit: backend contracts/OpenAPI are canonical, while JSON Schema remains a migration/compatibility shape artifact that preserves existing generated consumers.
 4. Cross-language parity checks (golden vectors + contract tests) are already green and enforced in CI.
 
-If any criterion is unmet, stay JSON Schema-first.
+If any criterion is unmet, keep JSON Schema as a migration compatibility baseline without making it the authority for business rules.
 
 ---
 
@@ -283,7 +283,7 @@ If either language fails parity, block release.
 
 ## Exit criteria for “ready to start .NET implementation”
 
-- Team alignment on JSON Schema-first governance.
+- Team alignment on backend-first contract and rule ownership, with JSON Schema limited to migration compatibility.
 - Agreed endpoint naming and filter semantics for repository parity.
 - Golden vector ownership/versioning documented and enforced.
 - Initial CI gate draft covers schema conformance + parity checks.

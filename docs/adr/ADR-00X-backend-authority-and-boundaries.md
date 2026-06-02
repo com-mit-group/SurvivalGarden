@@ -24,20 +24,31 @@ Relevant code locations:
 1. **Business rules + derived/computed logic authority**
    - `backend/SurvivalGarden.Domain` and `backend/SurvivalGarden.Application` are the only authoritative locations for business rules and derived/computed logic.
    - `backend/SurvivalGarden.Api` may orchestrate transport concerns and route handling, but must not become a second rules engine.
+   - Batch timeline invariants, bed-assignment validity, workflow transitions, normalization decisions, entity existence checks, and validation error semantics belong in backend domain/application code.
 
-2. **Frontend boundary**
+2. **Contract artifact boundary**
+   - JSON Schema and OpenAPI DTOs define contract shape: required fields, primitive types, simple structural constraints, enums, and migration compatibility aliases.
+   - JSON Schema and OpenAPI DTOs must not be treated as the durable source of truth for invariants, derived fields, workflow transitions, assignment validity, crop/task rule execution, normalization decisions, or validation error semantics.
+   - Backend-published OpenAPI remains the canonical machine-readable contract artifact while migration-only JSON Schema files are retained for transitional compatibility validation.
+
+3. **Frontend boundary**
    - `frontend/src` is presentation and transport-client behavior only.
    - Frontend logic may shape UX, input flow, and request/response handling, but must not define canonical domain rules.
+   - Frontend validation may provide form UX and optimistic hints, but backend responses decide authoritative business outcomes.
 
-3. **Persistence policy**
+4. **Migration compatibility boundary**
+   - Migration code owns legacy alias handling, canonicalization, and explicit compatibility bridges.
+   - Migration aliases in schemas exist only to describe accepted compatibility shape; they do not define normalization authority.
+
+5. **Persistence policy**
    - Persist canonical source state.
    - Do not persist denormalized derived fields unless explicitly justified (for example, performance-critical caching with invalidation strategy and ownership documented).
 
-4. **Canonical query source-of-truth**
+6. **Canonical query source-of-truth**
    - Current-state persistence remains the canonical query source-of-truth.
    - Emitted events are history/integration signals and audit trail inputs, not canonical state.
 
-5. **Exceptions policy**
+7. **Exceptions policy**
    - Any exception to these boundaries requires an ADR update in `docs/adr` that documents scope, rationale, mitigation, and rollback path.
 
 ## Consequences
@@ -46,6 +57,7 @@ Relevant code locations:
 - Frontend and API layers stay thinner and easier to evolve independently.
 - Data model evolution remains safer because derived values are recomputed from canonical persisted state.
 - Event consumers do not treat event logs as replacement canonical storage.
+- Schema descriptions stay limited to shape and compatibility intent; detailed batch timeline and bed-assignment invariants are implemented under issue #57.
 
 ## Enforcement
 The following checks are required in CI and must remain green:
@@ -71,3 +83,4 @@ The following checks are required in CI and must remain green:
 - `.github/workflows/ci.yml`
 - `docs/workflow-endpoint-ownership.md`
 - `docs/live-contract-verification.md`
+- `https://github.com/com-mit-group/SurvivalGarden/issues/57`
