@@ -1,14 +1,13 @@
 # Import/Export Contract (vNext)
 
-This document defines the canonical import/export contract for vNext and provides migration mappings from accepted legacy payload variants.
+This document describes the vNext import/export contract shape and provides migration mappings from accepted legacy payload variants.
 
 ## Source of truth
 
-- `frontend/src/contracts/app-state.schema.json`
-- `frontend/src/contracts/crop.schema.json`
-- `frontend/src/contracts/batch.schema.json`
-- `frontend/src/contracts/species.schema.json`
-- `frontend/src/contracts/task.schema.json`
+- Backend domain/application code owns business rules, invariants, derived fields, workflow transitions, entity existence checks, normalization decisions, and validation error semantics.
+- Backend OpenAPI publication (`/openapi/v1.json`) is the canonical machine-readable contract artifact.
+- `frontend/src/contracts/*.schema.json` files are migration/compatibility artifacts for shape validation only: required fields, primitive types, simple structural constraints, enums, and legacy aliases.
+- Batch timeline and bed-assignment invariants are implementation work for issue #57, not JSON Schema authority.
 
 Canonical samples:
 
@@ -23,7 +22,6 @@ Canonical samples:
 
 ## Contract publication + version policy
 
-- Backend OpenAPI publication (`/openapi/v1.json`) is the canonical machine-readable contract artifact.
 - OpenAPI must include:
   - `info.version` = semantic contract version (`MAJOR.MINOR.PATCH`)
   - `x-contracts = backend-canonical`
@@ -55,7 +53,7 @@ Canonical samples:
   - placement in `bedAssignments`
   - current state in `currentStage`
   - start amount in `startQuantity`
-- Legacy aliases still exist in schema where needed for migration input:
+- Legacy aliases still exist in schema where needed for migration/compatibility input:
   - `batch.stage` (legacy alias)
   - `batch.assignments` (legacy alias)
   - `batch.id` (alias of `batchId`)
@@ -208,16 +206,16 @@ Use `meta.confidence` / `stageEvents[].meta.confidence` when the value quality m
 
 ## Backend/C# mapping notes (contract-preserving)
 
-- Keep JSON Schema canonical while backend stabilizes; C# DTOs should map 1:1 to schema fields.
+- Keep DTOs aligned with the published backend contract while JSON Schema remains as migration/compatibility shape validation.
 - Preserve legacy alias read-support during import (`id`, `commonName`, `stage`, `assignments`), but emit canonical names on export.
 - Recommended C# handling for crop identity/metadata:
   - `CropId = crop.cropId ?? crop.id`
   - `Name = crop.name ?? crop.commonName`
   - Map `ScientificName` and `Aliases` as optional values (nullable string + collection).
 - Recommended C# handling for batch timeline/state:
-  - Require persisted `StartedAt`, `StageEvents`, and legacy-required `Stage` + `Assignments` until schema requirement changes.
-  - Compute/validate `CurrentStage` from latest `StageEvents[*].Stage` when absent.
-  - Keep alias parity between `bedAssignments` and `assignments` in write paths until migration-only aliases are formally removed.
+   - Require persisted `StartedAt`, `StageEvents`, and legacy-required `Stage` + `Assignments` until schema requirement changes.
+   - Implement `CurrentStage` derivation and timeline validation in backend domain/application code, tracked by issue #57.
+   - Keep alias parity between `bedAssignments` and `assignments` in migration compatibility bridges until migration-only aliases are formally removed.
 
 ## Event import endpoint (incremental updates)
 
