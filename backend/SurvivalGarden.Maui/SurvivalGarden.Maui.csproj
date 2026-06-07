@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <MauiSdkPackPath>$([System.IO.Path]::GetFullPath('$(MSBuildSDKsPath)/../../packs/Microsoft.Maui.Sdk'))</MauiSdkPackPath>
+    <MauiSdkPackPath>$([System.IO.Path]::GetFullPath('$(NetCoreRoot)/packs/Microsoft.Maui.Sdk'))</MauiSdkPackPath>
     <EnableMauiTargets Condition="'$(EnableMauiTargets)' == '' and Exists('$(MauiSdkPackPath)')">true</EnableMauiTargets>
     <EnableMauiTargets Condition="'$(EnableMauiTargets)' == ''">false</EnableMauiTargets>
     <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true'">net10.0-android</TargetFrameworks>
@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(EnableMauiTargets)' == 'true'">
-    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.70" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(EnableMauiTargets)' != 'true'">
