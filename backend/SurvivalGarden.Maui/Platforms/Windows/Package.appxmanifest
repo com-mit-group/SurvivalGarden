@@ -2,8 +2,9 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  IgnorableNamespaces="uap mp">
+  IgnorableNamespaces="uap mp rescap">
   <Identity Name="maui-package-name-placeholder" Publisher="CN=User Name" Version="0.0.0.0" />
   <mp:PhoneIdentity PhoneProductId="2f06b150-38b7-4f7d-b3f4-27663ed79eba" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
@@ -32,6 +33,6 @@
     </Application>
   </Applications>
   <Capabilities>
-    <Capability Name="runFullTrust" />
+    <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 </Package>

@@ -3,7 +3,8 @@
     <MauiSdkPackPath>$([System.IO.Path]::GetFullPath('$(MSBuildSDKsPath)/../../packs/Microsoft.Maui.Sdk'))</MauiSdkPackPath>
     <EnableMauiTargets Condition="'$(EnableMauiTargets)' == '' and Exists('$(MauiSdkPackPath)')">true</EnableMauiTargets>
     <EnableMauiTargets Condition="'$(EnableMauiTargets)' == ''">false</EnableMauiTargets>
-    <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true'">net10.0-android;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true'">net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
     <TargetFramework Condition="'$(EnableMauiTargets)' != 'true'">net10.0</TargetFramework>
     <OutputType Condition="'$(EnableMauiTargets)' == 'true'">Exe</OutputType>
     <RootNamespace>SurvivalGarden.Maui</RootNamespace>
