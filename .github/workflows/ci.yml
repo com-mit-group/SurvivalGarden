@@ -171,71 +171,15 @@ jobs:
 
           echo "VersionPrefix=$new_version" >>"$GITHUB_ENV"
 
-  frontend:
-    needs: [gitVersion, backend]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Lint
-        run: pnpm --dir frontend lint
-
-      - name: Typecheck
-        run: pnpm --dir frontend typecheck
-
-      - name: Download backend OpenAPI artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-openapi
-          path: ./.artifacts/openapi
-
-      - name: Verify generated contract types
-        run: |
-          set -euo pipefail
-          python3 -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
-          OPENAPI_PID=$!
-
-          cleanup() {
-            kill "$OPENAPI_PID"
-          }
-          trap cleanup EXIT
-
-          export BACKEND_OPENAPI_URL="http://127.0.0.1:5178/openapi-v1.json"
-          export REQUIRE_BACKEND_OPENAPI=1
-          export EXPECTED_CONTRACT_VERSION="1.0.0"
-
-          pnpm --dir frontend gen:types
-          if ! git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts; then
-            echo "::error title=Contract drift detected::Generated frontend API contract artifacts changed after regeneration. Run 'pnpm --dir frontend gen:types', review updates in frontend/src/generated/*, and commit the regenerated files."
-            exit 1
-          fi
-
-      - name: Test
-        run: pnpm --dir frontend test
-
-  backend:
-    name: backend
+  nonMaui:
+    name: Build and Test Non-MAUI
     needs: [gitVersion]
     runs-on: windows-latest
     permissions:
       checks: write
       pull-requests: write
       contents: read
+      packages: read
 
     steps:
       - name: Checkout
@@ -248,24 +192,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Resolve solution or project target
-        id: target
-        shell: bash
-        run: |
-          set -euo pipefail
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-          target="$(git ls-files '**/*.sln' | head -n 1)"
-          if [ -z "$target" ]; then
-            target="$(git ls-files '**/*.csproj' | head -n 1)"
-          fi
-
-          if [ -z "$target" ]; then
-            echo "No .sln or .csproj found for backend CI." >&2
-            exit 1
-          fi
-
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-          echo "Using backend target: $target"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.x
 
       - name: Ensure GitHub NuGet Source
         shell: pwsh
@@ -278,37 +213,48 @@ jobs:
             -p $env:NUGET_TOKEN `
             --store-password-in-clear-text
 
-      - name: Restore Dependencies
-        run: dotnet restore "${{ steps.target.outputs.target }}"
+      - name: Restore backend test project
+        run: dotnet restore backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj
 
-      - name: Build
-        id: build
-        run: dotnet build -c Debug --no-restore "${{ steps.target.outputs.target }}"
+      - name: Build backend test project
+        id: backend-build
+        run: >-
+          dotnet build backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj
+          -c Debug
+          --no-restore
+          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
 
-      - name: Test
+      - name: Test backend
         shell: pwsh
         run: |
-          dotnet test --logger "trx" --no-build -c Debug --verbosity normal `
+          dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj `
+            --logger "trx" `
+            --no-build `
+            -c Debug `
+            --verbosity normal `
             /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
             /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }} `
-            "${{ steps.target.outputs.target }}"
+            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
 
       - name: Verify API route ownership tests
         shell: pwsh
         run: |
-          dotnet test --logger "trx" --no-build -c Debug `
-            --filter "FullyQualifiedName~ApiContractRouteOwnershipTests" `
-            "${{ steps.target.outputs.target }}"
+          dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj `
+            --logger "trx" `
+            --no-build `
+            -c Debug `
+            --filter "FullyQualifiedName~ApiContractRouteOwnershipTests"
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error title=Route ownership violation::ApiContractRouteOwnershipTests failed. Update endpoint ownership mappings or route declarations so each API route is owned by exactly one feature boundary, then rerun dotnet test."
             exit 1
           }
 
-      - name: Publish Test Results
+      - name: Publish backend test results
         uses: EnricoMi/publish-unit-test-result-action/windows@v2
-        if: ${{ steps.build.outcome == 'success' }}
+        if: ${{ steps.backend-build.outcome == 'success' }}
         with:
           files: |
             ./**/TestResults/*.trx
@@ -356,8 +302,184 @@ jobs:
             }
           }
 
-      - name: Upload backend OpenAPI artifact
-        uses: actions/upload-artifact@v4
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Lint frontend
+        run: pnpm --dir frontend lint
+
+      - name: Typecheck frontend
+        run: pnpm --dir frontend typecheck
+
+      - name: Verify generated contract types
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
+          OPENAPI_PID=$!
+
+          cleanup() {
+            kill "$OPENAPI_PID"
+          }
+          trap cleanup EXIT
+
+          export BACKEND_OPENAPI_URL="http://127.0.0.1:5178/openapi-v1.json"
+          export REQUIRE_BACKEND_OPENAPI=1
+          export EXPECTED_CONTRACT_VERSION="1.0.0"
+
+          pnpm --dir frontend gen:types
+          if ! git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts; then
+            echo "::error title=Contract drift detected::Generated frontend API contract artifacts changed after regeneration. Run 'pnpm --dir frontend gen:types', review updates in frontend/src/generated/*, and commit the regenerated files."
+            exit 1
+          fi
+
+      - name: Test frontend
+        run: pnpm --dir frontend test
+
+  maui:
+    name: Build and Test MAUI
+    needs: [gitVersion]
+    runs-on: windows-latest
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: backend-openapi
-          path: .artifacts/openapi/openapi-v1.json
+          fetch-depth: 0
+
+      - name: Setup .NET
+        id: setup-dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore cached .NET workloads
+        id: restore-dotnet-workloads
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            C:\Program Files\dotnet\packs
+            C:\Program Files\dotnet\sdk-manifests
+            C:\ProgramData\dotnet\workload*
+            C:\Program Files\dotnet\metadata
+          key: ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ hashFiles('**/global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-
+            ${{ runner.os }}-dotnet-
+
+      - name: Restore cached Android SDK
+        id: restore-android-sdk
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}
+            ${{ env.ANDROID_SDK_ROOT }}
+            C:\Users\runneradmin\.android
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Install MAUI workload
+        if: steps.restore-dotnet-workloads.outputs.cache-hit != 'true'
+        run: dotnet workload install maui --skip-manifest-update
+
+      - name: Install Android SDK components
+        if: steps.restore-android-sdk.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          & "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat" "tools"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to install Android SDK components"
+            exit 1
+          }
+
+      - name: Save .NET workloads cache
+        if: steps.restore-dotnet-workloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            C:\Program Files\dotnet\packs
+            C:\Program Files\dotnet\sdk-manifests
+            C:\ProgramData\dotnet\workload*
+            C:\Program Files\dotnet\metadata
+          key: ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ hashFiles('**/global.json') }}
+
+      - name: Save Android SDK cache
+        if: steps.restore-android-sdk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}
+            ${{ env.ANDROID_SDK_ROOT }}
+            C:\Users\runneradmin\.android
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/global.json') }}
+
+      - name: Ensure GitHub NuGet Source
+        shell: pwsh
+        env:
+          NUGET_TOKEN: ${{ secrets.YARE92_NUGET_TOKEN_EXP_17JUN2026 }}
+        run: |
+          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json `
+            -n github `
+            -u Yaron-E92 `
+            -p $env:NUGET_TOKEN `
+            --store-password-in-clear-text
+
+      - name: Restore MAUI project
+        run: >-
+          dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
+          /p:EnableMauiTargets=true
+          /p:WindowsPackageType=None
+
+      - name: Build MAUI Windows target
+        id: maui-build
+        run: >-
+          dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
+          -c Debug
+          --no-restore
+          -f net10.0-windows10.0.19041.0
+          /p:EnableMauiTargets=true
+          /p:WindowsPackageType=None
+          /p:UseMonoRuntime=false
+          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
+
+      - name: Build MAUI Android target
+        run: >-
+          dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
+          -c Debug
+          --no-restore
+          -f net10.0-android
+          /p:EnableMauiTargets=true
+          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
+          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
+
+      - name: Run MAUI tests if present
+        shell: pwsh
+        run: |
+          $testProjects = @(git ls-files 'backend/**/*Maui*.Tests.csproj')
+          if ($testProjects.Count -eq 0) {
+            Write-Host "No MAUI test project found. MAUI validation currently consists of Windows and Android target builds."
+            exit 0
+          }
+
+          foreach ($project in $testProjects) {
+            dotnet test $project `
+              --logger "trx" `
+              -c Debug `
+              --verbosity normal `
+              /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
+              /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
+              /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
+
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          }
