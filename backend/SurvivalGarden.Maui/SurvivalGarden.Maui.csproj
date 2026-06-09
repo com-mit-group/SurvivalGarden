@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <MauiSdkPackPath Condition="'$(MauiSdkPackPath)' == ''">$([System.IO.Path]::Combine('$(NetCoreRoot)', 'packs', 'Microsoft.Maui.Sdk'))</MauiSdkPackPath>
+    <EnableMauiTargets Condition="'$(EnableMauiTargets)' == '' and Exists('$(MauiSdkPackPath)')">true</EnableMauiTargets>
+    <EnableMauiTargets Condition="'$(EnableMauiTargets)' == ''">false</EnableMauiTargets>
+    <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true'">net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="'$(EnableMauiTargets)' == 'true' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFramework Condition="'$(EnableMauiTargets)' != 'true'">net10.0</TargetFramework>
+    <OutputType Condition="'$(EnableMauiTargets)' == 'true'">Exe</OutputType>
+    <RootNamespace>SurvivalGarden.Maui</RootNamespace>
+    <UseMaui Condition="'$(EnableMauiTargets)' == 'true'">true</UseMaui>
+    <SingleProject Condition="'$(EnableMauiTargets)' == 'true'">true</SingleProject>
+    <Nullable>enable</Nullable>
+    <ApplicationTitle>Survival Garden</ApplicationTitle>
+    <ApplicationId>group.commit.survivalgarden</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnableMauiTargets)' == 'true'">
+    <MauiIcon Include="Resources/AppIcon/appicon.svg" Color="#2F6B3B" />
+    <MauiSplashScreen Include="Resources/Splash/splash.svg" Color="#F4F1E8" BaseSize="128,128" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableMauiTargets)' == 'true'">
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableMauiTargets)' != 'true'">
+    <Compile Remove="App.cs;ILocalGardenBackend.cs;LocalGardenBackend.cs;MainPage.cs;MauiProgram.cs;Platforms/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableMauiTargets)' == 'true'">
+    <Compile Remove="MauiWorkloadPlaceholder.cs" />
+    <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
+    <ProjectReference Include="../SurvivalGarden.Persistence/SurvivalGarden.Persistence.csproj" />
+  </ItemGroup>
+
+  <Target Name="ValidateLocalBackendBoundary" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <MauiBoundarySource Include="**/*.cs"
+                          Exclude="bin/**/*.cs;obj/**/*.cs" />
+      <MauiBoundaryViolation Include="@(MauiBoundarySource)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch($([System.IO.File]::ReadAllText('%(MauiBoundarySource.FullPath)')), '(?i)(HttpClient|https?://|localhost|Kestrel|SurvivalGarden[.]Api)'))" />
+    </ItemGroup>
+    <Error Condition="'@(MauiBoundaryViolation)' != ''"
+           Text="MAUI must use the local backend gateway; forbidden transport/server dependency found in: @(MauiBoundaryViolation, ', ')" />
+  </Target>
+</Project>

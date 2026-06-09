@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SurvivalGarden.Persistence"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SurvivalGarden.Api", "SurvivalGarden.Api/SurvivalGarden.Api.csproj", "{A95E025C-3037-4D53-B766-D4C9600235B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SurvivalGarden.Maui", "SurvivalGarden.Maui/SurvivalGarden.Maui.csproj", "{F2D2B67F-36C9-45C6-B796-48256FC5C834}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{A95E025C-3037-4D53-B766-D4C9600235B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A95E025C-3037-4D53-B766-D4C9600235B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A95E025C-3037-4D53-B766-D4C9600235B5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2D2B67F-36C9-45C6-B796-48256FC5C834}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2D2B67F-36C9-45C6-B796-48256FC5C834}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2D2B67F-36C9-45C6-B796-48256FC5C834}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2D2B67F-36C9-45C6-B796-48256FC5C834}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
