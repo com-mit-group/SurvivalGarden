@@ -199,12 +199,6 @@ jobs:
           /p:WindowsPackageType=None
           /p:UseMonoRuntime=false
 
-      - name: Restore Android MAUI target
-        if: steps.check-artifacts.outputs.exists == 'false'
-        run: >-
-          dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
-          /p:EnableMauiTargets=true
-
       - name: Build Windows executable
         if: steps.check-artifacts.outputs.exists == 'false'
         run: >-
@@ -221,6 +215,12 @@ jobs:
           /p:AssemblyVersion=${{ steps.set-version.outputs.assembly_sem_file_ver }}
           /p:FileVersion=${{ steps.set-version.outputs.assembly_sem_file_ver }}
           /p:InformationalVersion=${{ steps.set-version.outputs.informational_version }}
+
+      - name: Restore Android MAUI target
+        if: steps.check-artifacts.outputs.exists == 'false'
+        run: >-
+          dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
+          /p:EnableMauiTargets=true
 
       - name: Build Android APK
         if: steps.check-artifacts.outputs.exists == 'false'
