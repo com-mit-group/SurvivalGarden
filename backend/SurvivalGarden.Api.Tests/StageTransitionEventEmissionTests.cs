@@ -70,7 +70,7 @@ public class StageTransitionEventEmissionTests
         }
     }
 
-    private sealed class RecordingPublisher(List<string> actions) : IApplicationEventPublisher
+    private sealed class RecordingPublisher(List<string> actions) : IStageEventBus
     {
         public List<IApplicationEvent> Published { get; } = [];
 

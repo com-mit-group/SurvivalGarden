@@ -1,0 +1,279 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version to release (for example, 1.0.0)."
+        type: string
+        required: true
+      notes:
+        description: "Release notes (optional)."
+        type: string
+        required: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ github.event.inputs.version }}
+      release-status: ${{ steps.release-status.outputs.status }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version input
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "Version is required. Please provide a semantic version (for example, 1.0.0)."
+            exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Semantic version '$VERSION' must contain numeric major, minor, and patch segments."
+            exit 1
+          fi
+          echo "Processing version: $VERSION"
+
+      - name: Check if release already exists
+        id: check-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Checking for existing release for version: $VERSION"
+
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release already exists for version $VERSION"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No existing release found"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if signed artifacts exist
+        if: steps.check-release.outputs.exists == 'false'
+        id: check-signed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $repo = "${{ github.repository }}"
+          $version = "${{ github.event.inputs.version }}"
+          $expected = @(
+            "signed-$version-windows",
+            "signed-$version-android",
+            "signed-$version-metadata"
+          )
+
+          $response = gh api "repos/$repo/actions/artifacts?per_page=100" | ConvertFrom-Json
+          $artifacts = @()
+          if ($null -ne $response.artifacts) { $artifacts = @($response.artifacts) }
+
+          $windowsArtifact = $artifacts | Where-Object { $_.name -eq $expected[0] -and $_.expired -eq $false } | Select-Object -First 1
+          $androidArtifact = $artifacts | Where-Object { $_.name -eq $expected[1] -and $_.expired -eq $false } | Select-Object -First 1
+          $metadataArtifact = $artifacts | Where-Object { $_.name -eq $expected[2] -and $_.expired -eq $false } | Select-Object -First 1
+
+          if (-not $windowsArtifact -or -not $androidArtifact -or -not $metadataArtifact) {
+            Write-Host "Signed artifacts not found for version $version"
+            Write-Host "Ensure the Sign Artifacts workflow has completed for this version."
+            throw "Signed artifacts missing."
+          }
+
+          echo "windows_url=$($windowsArtifact.archive_download_url)" >> $env:GITHUB_OUTPUT
+          echo "android_url=$($androidArtifact.archive_download_url)" >> $env:GITHUB_OUTPUT
+          echo "metadata_url=$($metadataArtifact.archive_download_url)" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Signed artifacts found for version $version"
+
+      - name: Download signed artifacts
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $downloadRoot = Join-Path (Get-Location) 'release-downloads'
+          if (Test-Path $downloadRoot) { Remove-Item $downloadRoot -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
+
+          $winZip = Join-Path $downloadRoot 'signed-windows.zip'
+          $androidZip = Join-Path $downloadRoot 'signed-android.zip'
+          $metadataZip = Join-Path $downloadRoot 'signed-metadata.zip'
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+            "User-Agent" = "SurvivalGarden-Release"
+          }
+
+          Invoke-WebRequest -Uri "${{ steps.check-signed.outputs.windows_url }}" -Headers $headers -OutFile $winZip
+          Invoke-WebRequest -Uri "${{ steps.check-signed.outputs.android_url }}" -Headers $headers -OutFile $androidZip
+          Invoke-WebRequest -Uri "${{ steps.check-signed.outputs.metadata_url }}" -Headers $headers -OutFile $metadataZip
+
+          $winExtract = Join-Path $downloadRoot 'windows'
+          $androidExtract = Join-Path $downloadRoot 'android'
+          $metadataExtract = Join-Path $downloadRoot 'metadata'
+          New-Item -ItemType Directory -Force -Path $winExtract | Out-Null
+          New-Item -ItemType Directory -Force -Path $androidExtract | Out-Null
+          New-Item -ItemType Directory -Force -Path $metadataExtract | Out-Null
+
+          Expand-Archive -Path $winZip -DestinationPath $winExtract -Force
+          Expand-Archive -Path $androidZip -DestinationPath $androidExtract -Force
+          Expand-Archive -Path $metadataZip -DestinationPath $metadataExtract -Force
+
+          $releaseRoot = Join-Path (Get-Location) 'release-artifacts'
+          if (Test-Path $releaseRoot) { Remove-Item $releaseRoot -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+
+          $windowsTarget = Join-Path $releaseRoot 'windows'
+          $androidTarget = Join-Path $releaseRoot 'android'
+          New-Item -ItemType Directory -Force -Path $windowsTarget | Out-Null
+          New-Item -ItemType Directory -Force -Path $androidTarget | Out-Null
+
+          $windowsSource = (Get-Item $winExtract).FullName
+          $androidSource = (Get-Item $androidExtract).FullName
+
+          Copy-Item -Path (Join-Path $windowsSource '*') -Destination $windowsTarget -Recurse -Force
+          Copy-Item -Path (Join-Path $androidSource '*') -Destination $androidTarget -Recurse -Force
+
+          $metadataFile = Get-ChildItem -Path $metadataExtract -Filter VERSION.txt -Recurse | Select-Object -First 1
+          if (-not $metadataFile) {
+            throw "VERSION.txt not found under $metadataExtract"
+          }
+          Copy-Item -Path $metadataFile.FullName -Destination (Join-Path $releaseRoot 'VERSION.txt') -Force
+
+          Remove-Item $winZip, $androidZip, $metadataZip -Force
+          Remove-Item $downloadRoot -Recurse -Force
+
+          Get-ChildItem -Path ./release-artifacts -Recurse
+
+      - name: Prepare packaged assets
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          $releaseRoot = Join-Path (Get-Location) 'release-artifacts'
+          $windowsDir = Join-Path $releaseRoot 'windows'
+          $androidDir = Join-Path $releaseRoot 'android'
+          $versionFile = Join-Path $releaseRoot 'VERSION.txt'
+
+          if (-not (Test-Path $windowsDir)) { throw "Windows payload directory missing at $windowsDir" }
+          if (-not (Test-Path $androidDir)) { throw "Android payload directory missing at $androidDir" }
+          if (-not (Test-Path $versionFile)) { throw "VERSION.txt missing at $versionFile" }
+
+          $winExe = Get-ChildItem $windowsDir -Filter *.exe -Recurse |
+            Where-Object { $_.Name -like 'SurvivalGarden*.exe' -and $_.Name -notlike 'createdump.exe' } |
+            Select-Object -First 1
+          if (-not $winExe) {
+            $winExe = Get-ChildItem $windowsDir -Filter *.exe -Recurse |
+              Where-Object { $_.Name -notlike 'createdump.exe' } |
+              Select-Object -First 1
+          }
+          if (-not $winExe) { throw "No Windows executable found under $windowsDir" }
+
+          $apkFile = Get-ChildItem $androidDir -Filter *.apk -Recurse | Select-Object -First 1
+          if (-not $apkFile) { throw "No Android APK found under $androidDir" }
+
+          $winZip = Join-Path $releaseRoot "SurvivalGarden-$version-windows.zip"
+          $apkTarget = Join-Path $releaseRoot "SurvivalGarden-$version.apk"
+          Remove-Item $winZip, $apkTarget -Force -ErrorAction SilentlyContinue
+
+          Compress-Archive -Path (Join-Path $windowsDir '*') -DestinationPath $winZip -Force
+          Copy-Item $apkFile.FullName $apkTarget -Force
+
+          Write-Host "Prepared packaged assets:"
+          Write-Host "  Windows ZIP: $([System.IO.Path]::GetRelativePath((Get-Location).Path, $winZip))"
+          Write-Host "  Android APK: $([System.IO.Path]::GetRelativePath((Get-Location).Path, $apkTarget))"
+          Write-Host "  VERSION.txt: $([System.IO.Path]::GetRelativePath((Get-Location).Path, $versionFile))"
+
+      - name: Create release notes
+        if: steps.check-release.outputs.exists == 'false'
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          USER_NOTES: ${{ github.event.inputs.notes }}
+        run: |
+          {
+            echo "# SurvivalGarden v$VERSION"
+            echo ""
+            if [ -n "$USER_NOTES" ]; then
+              printf '%s\n\n' "$USER_NOTES"
+            fi
+            echo "## Installation"
+            echo ""
+            echo "### Windows"
+            echo "Download \`SurvivalGarden-$VERSION-windows.zip\`, extract it, and run \`SurvivalGarden-$VERSION.exe\` from the extracted folder."
+            echo ""
+            echo "### Android"
+            echo "Download \`SurvivalGarden-$VERSION.apk\` and install it on an Android device. You may need to enable installation from unknown sources."
+            echo ""
+            echo "Built on $(date -u '+%Y-%m-%d %H:%M:%S UTC')."
+          } > release-notes.md
+
+          echo "Release notes created"
+
+      - name: Create GitHub Release
+        if: steps.check-release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Creating GitHub release for version: $VERSION"
+
+          gh release create "$VERSION" \
+            --title "SurvivalGarden v$VERSION" \
+            --notes-file release-notes.md \
+            ./release-artifacts/SurvivalGarden-$VERSION-windows.zip \
+            ./release-artifacts/SurvivalGarden-$VERSION.apk \
+            ./release-artifacts/VERSION.txt
+
+          echo "Release created successfully"
+
+      - name: Mark release status
+        id: release-status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" != "success" ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.check-release.outputs.exists }}" = "true" ]; then
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=success" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip message
+        if: steps.check-release.outputs.exists == 'true'
+        run: |
+          echo "Release already exists for version ${{ github.event.inputs.version }}."
+          echo "Skipping release creation. Use a different version number for a new release."
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: release
+    if: always()
+    steps:
+      - name: Release summary
+        run: |
+          echo "## Release Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** ${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ needs.release.outputs.release-status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ needs.release.outputs.release-status }}" = "success" ]; then
+            echo "Release created successfully." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.release.outputs.release-status }}" = "skipped" ]; then
+            echo "Release already exists for this version." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release failed or status is unknown." >> "$GITHUB_STEP_SUMMARY"
+          fi
