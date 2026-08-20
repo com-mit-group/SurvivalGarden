@@ -312,19 +312,21 @@ jobs:
     steps:
       - name: Build summary
         run: |
-          echo "## Build Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** ${{ needs.build.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** ${{ needs.build.outputs.build-status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ needs.build.outputs.build-status }}" = "skipped" ]; then
-            echo "Build artifacts already exist for this version." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.build.outputs.build-status }}" = "success" ]; then
-            echo "Build completed successfully." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Artifacts uploaded with names prefixed by \`build-${{ needs.build.outputs.version }}\`." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Build failed or status is unknown." >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Next step: run **Sign Artifacts** with version \`${{ needs.build.outputs.version }}\`." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Build Pipeline Summary"
+            echo ""
+            echo "**Version:** ${{ needs.build.outputs.version }}"
+            echo "**Status:** ${{ needs.build.outputs.build-status }}"
+            echo ""
+            if [[ "${{ needs.build.outputs.build-status }}" = "skipped" ]]; then
+              echo "Build artifacts already exist for this version."
+            elif [[ "${{ needs.build.outputs.build-status }}" = "success" ]]; then
+              echo "Build completed successfully."
+              echo ""
+              echo "Artifacts uploaded with names prefixed by \`build-${{ needs.build.outputs.version }}\`."
+            else
+              echo "Build failed or status is unknown."
+            fi
+            echo ""
+            echo "Next step: run **Sign Artifacts** with version \`${{ needs.build.outputs.version }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
