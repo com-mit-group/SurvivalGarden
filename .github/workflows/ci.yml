@@ -2,484 +2,274 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  gitVersion:
-    name: Determine Version
-    runs-on: ubuntu-latest
-    outputs:
-      branchName: ${{ steps.version.outputs.branchName }}
-      semVer: ${{ steps.version.outputs.semVer }}
-      sha: ${{ steps.version.outputs.sha }}
-      nugetVersion: ${{ steps.version.outputs.nugetVersion }}
-      assemblySemFileVer: ${{ steps.version.outputs.assemblySemFileVer }}
-      informationalVersion: ${{ steps.version.outputs.informationalVersion }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Ensure tags and main history are available
-        run: |
-          git fetch --force --tags origin main
-
-      - name: Determine semantic version
-        id: version
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          PR_TITLE: ${{ github.event.pull_request.title || '' }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
-          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message || '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          latest_tag=""
-          for ref in origin/main main HEAD; do
-            if tag=$(git describe --tags --abbrev=0 "$ref" 2>/dev/null); then
-              latest_tag="$tag"
-              break
-            fi
-          done
-
-          if [ -z "$latest_tag" ]; then
-            if tag=$(git describe --tags --abbrev=0 2>/dev/null); then
-              latest_tag="$tag"
-            fi
-          fi
-
-          clean_tag="$latest_tag"
-          clean_tag="${clean_tag%%-*}"
-          clean_tag="${clean_tag%%+*}"
-
-          parse_numbers() {
-            local version="$1"
-            if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              major="${BASH_REMATCH[1]}"
-              minor="${BASH_REMATCH[2]}"
-              patch="${BASH_REMATCH[3]}"
-              return
-            fi
-
-            mapfile -t numbers < <(grep -oE '[0-9]+' <<<"$version" || true)
-            case "${#numbers[@]}" in
-              0)
-                major=0 minor=1 patch=0 ;;
-              1)
-                major="${numbers[0]}" minor=0 patch=0 ;;
-              2)
-                major="${numbers[0]}" minor="${numbers[1]}" patch=0 ;;
-              *)
-                major="${numbers[0]}" minor="${numbers[1]}" patch="${numbers[2]}" ;;
-            esac
-          }
-
-          initial_release=false
-          if [ -n "$clean_tag" ]; then
-            parse_numbers "$clean_tag"
-          else
-            initial_release=true
-            major=0
-            minor=1
-            patch=0
-          fi
-
-          message=""
-          if [ "${EVENT_NAME}" = "pull_request" ]; then
-            number="${PR_NUMBER:-}"
-            title="${PR_TITLE:-}"
-            body="${PR_BODY:-}"
-            if [ -n "$number" ]; then
-              message="Merge pull request #$number"
-            fi
-            if [ -n "$title" ]; then
-              if [ -n "$message" ]; then message+=$'\n'; fi
-              message+="$title"
-            fi
-            if [ -n "$body" ]; then
-              if [ -n "$message" ]; then message+=$'\n'; fi
-              message+="$body"
-            fi
-          else
-            message="${HEAD_COMMIT_MSG:-}"
-            if [ -z "$message" ]; then
-              message="$(git log -1 --pretty=%B)"
-            fi
-          fi
-
-          bump=$(tr '[:upper:]' '[:lower:]' <<<"$message" \
-            | grep -oE '\+semver:[[:space:]]*(none|patch|minor|major)' \
-            | tail -n1 \
-            | cut -d: -f2 \
-            | sed 's/^[[:space:]]*//' \
-            || true)
-          bump=${bump:-patch}
-
-          case "$bump" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              if [ "$initial_release" = false ]; then
-                patch=$((patch + 1))
-              fi
-              ;;
-            none)
-              ;;
-          esac
-
-          new_version="$major.$minor.$patch"
-          nuget_version="$new_version"
-          assembly_sem_file="$major.$minor.$patch.0"
-          sha="${GITHUB_SHA:-}"
-          if [ -n "$sha" ]; then
-            informational="$new_version+${sha:0:7}"
-          else
-            informational="$new_version"
-          fi
-
-          ref="${GITHUB_REF:-}"
-          branch_name="$ref"
-          if [[ "$ref" == refs/heads/* ]]; then
-            branch_name="${ref#refs/heads/}"
-          elif [[ "$ref" == refs/pull/* ]]; then
-            branch_name="${ref#refs/}"
-          elif [ -z "$branch_name" ]; then
-            branch_name="${GITHUB_REF_NAME:-}"
-          fi
-
-          {
-            echo "branchName=$branch_name"
-            echo "semVer=$new_version"
-            echo "sha=$sha"
-            echo "nugetVersion=$nuget_version"
-            echo "assemblySemFileVer=$assembly_sem_file"
-            echo "informationalVersion=$informational"
-          } >>"$GITHUB_OUTPUT"
-
-          echo "VersionPrefix=$new_version" >>"$GITHUB_ENV"
-
-  nonMaui:
-    name: Build and Test Non-MAUI
-    needs: [gitVersion]
-    runs-on: windows-latest
+  baseline:
+    name: Shared workflow policy
+    uses: yaron-E92/AutoDev/.github/workflows/profile-baseline.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      ref: ${{ github.sha }}
+      require_concurrency: true
     permissions:
-      checks: write
-      pull-requests: write
+      contents: read
+
+  version-intent:
+    name: Version intent
+    if: github.event_name == 'pull_request'
+    uses: yaron-E92/AutoDev/.github/workflows/version-intent.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      pr_body: ${{ github.event.pull_request.body }}
+      head: ${{ github.sha }}
+    permissions:
+      contents: read
+
+  backend:
+    name: Backend .NET validation
+    needs: [baseline]
+    uses: yaron-E92/AutoDev/.github/workflows/profile-dotnet.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      ref: ${{ github.sha }}
+      runner: windows-latest
+      global_json_file: ''
+      dotnet_version: '10.0.x'
+      setup_command: bash scripts/ci-configure-nuget.sh
+      restore_command: dotnet restore backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj
+      build_command: dotnet build backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj --configuration Debug --no-restore
+      test_command: |
+        set -euo pipefail
+        mkdir -p artifacts/ci/backend
+        dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj \
+          --configuration Debug \
+          --no-build \
+          --no-restore \
+          --logger 'trx;LogFileName=backend.trx' \
+          --results-directory artifacts/ci/backend \
+          --verbosity normal
+        dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj \
+          --configuration Debug \
+          --no-build \
+          --no-restore \
+          --filter 'FullyQualifiedName~ApiContractRouteOwnershipTests' \
+          --logger 'trx;LogFileName=route-ownership.trx' \
+          --results-directory artifacts/ci/backend \
+          --verbosity normal
+      test_results_path: artifacts/ci/backend/*.trx
+      artifact_name: survivalgarden-backend-results
+    secrets:
+      nuget_token: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
       contents: read
       packages: read
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  frontend:
+    name: Frontend Node validation
+    needs: [baseline]
+    uses: yaron-E92/AutoDev/.github/workflows/profile-node-next.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      ref: ${{ github.sha }}
+      node_version: '20.19.x'
+      working_directory: frontend
+      cache: false
+      package_manager: pnpm
+      setup_command: corepack enable && corepack prepare pnpm@9 --activate
+      install_command: pnpm install
+      lint_command: pnpm lint
+      typecheck_command: pnpm typecheck
+      test_command: pnpm test
+      build_command: pnpm build
+      artifact_name: survivalgarden-frontend
+      artifact_path: frontend/dist
+    permissions:
+      contents: read
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+  contracts:
+    name: Backend ↔ frontend contract drift
+    needs: [baseline, backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NUGET_AUTH_TOKEN: ${{ github.token }}
+      CONTRACTS__VERSION: '1.0.0'
+      CONTRACTS__PERSISTEDSCHEMAVERSION: '2'
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 20.19.x
 
-      - name: Ensure GitHub NuGet Source
-        shell: pwsh
-        env:
-          NUGET_TOKEN: ${{ secrets.YARE92_NUGET_TOKEN_EXP_17JUN2026 }}
-        run: |
-          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json `
-            -n github `
-            -u Yaron-E92 `
-            -p $env:NUGET_TOKEN `
-            --store-password-in-clear-text
-
-      - name: Restore backend test project
-        run: dotnet restore backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj
-
-      - name: Build backend test project
-        id: backend-build
-        run: >-
-          dotnet build backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj
-          -c Debug
-          --no-restore
-          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
-
-      - name: Test backend
-        shell: pwsh
-        run: |
-          dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj `
-            --logger "trx" `
-            --no-build `
-            -c Debug `
-            --verbosity normal `
-            /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-            /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-            /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
-
-      - name: Verify API route ownership tests
-        shell: pwsh
-        run: |
-          dotnet test backend/SurvivalGarden.Api.Tests/SurvivalGarden.Api.Tests.csproj `
-            --logger "trx" `
-            --no-build `
-            -c Debug `
-            --filter "FullyQualifiedName~ApiContractRouteOwnershipTests"
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error title=Route ownership violation::ApiContractRouteOwnershipTests failed. Update endpoint ownership mappings or route declarations so each API route is owned by exactly one feature boundary, then rerun dotnet test."
-            exit 1
-          }
-
-      - name: Publish backend test results
-        uses: EnricoMi/publish-unit-test-result-action/windows@v2
-        if: ${{ steps.backend-build.outcome == 'success' }}
-        with:
-          files: |
-            ./**/TestResults/*.trx
-          check_name: "Backend Test Results"
-
-      - name: Export backend OpenAPI artifact
-        shell: pwsh
-        env:
-          CONTRACTS__VERSION: "1.0.0"
-          CONTRACTS__PERSISTEDSCHEMAVERSION: "2"
-        run: |
-          New-Item -ItemType Directory -Force -Path .artifacts/openapi | Out-Null
-
-          $process = Start-Process dotnet -ArgumentList @(
-            'run',
-            '--project', 'backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj',
-            '--no-build',
-            '--urls', 'http://127.0.0.1:5142'
-          ) -PassThru
-
-          try {
-            $ready = $false
-            for ($i = 0; $i -lt 30; $i++) {
-              Start-Sleep -Seconds 1
-              try {
-                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -UseBasicParsing
-                if ($response.StatusCode -eq 200) {
-                  $ready = $true
-                  break
-                }
-              }
-              catch {
-              }
-            }
-
-            if (-not $ready) {
-              throw 'Backend OpenAPI endpoint did not become ready in time.'
-            }
-
-            Invoke-WebRequest -Uri 'http://127.0.0.1:5142/openapi/v1.json' -OutFile '.artifacts/openapi/openapi-v1.json'
-          }
-          finally {
-            if ($process -and -not $process.HasExited) {
-              Stop-Process -Id $process.Id -Force
-            }
-          }
-
-      - name: Install frontend dependencies
-        run: pnpm install
-
-      - name: Lint frontend
-        run: pnpm --dir frontend lint
-
-      - name: Typecheck frontend
-        run: pnpm --dir frontend typecheck
-
-      - name: Verify generated contract types
+      - name: Configure package managers
         shell: bash
         run: |
           set -euo pipefail
-          python -m http.server 5178 --directory ./.artifacts/openapi >/tmp/openapi-server.log 2>&1 &
-          OPENAPI_PID=$!
+          bash scripts/ci-configure-nuget.sh
+          corepack enable
+          corepack prepare pnpm@9 --activate
+          pnpm --dir frontend install
 
+      - name: Build backend API
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj
+          dotnet build backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj --configuration Debug --no-restore
+
+      - name: Verify generated frontend contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci/contracts
+          dotnet run \
+            --project backend/SurvivalGarden.Api/SurvivalGarden.Api.csproj \
+            --configuration Debug \
+            --no-build \
+            --urls http://127.0.0.1:5142 \
+            >artifacts/ci/contracts/api.log 2>&1 &
+          api_pid=$!
           cleanup() {
-            kill "$OPENAPI_PID"
+            kill "$api_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
 
-          export BACKEND_OPENAPI_URL="http://127.0.0.1:5178/openapi-v1.json"
-          export REQUIRE_BACKEND_OPENAPI=1
-          export EXPECTED_CONTRACT_VERSION="1.0.0"
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:5142/openapi/v1.json \
+              --output artifacts/ci/contracts/openapi-v1.json; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
 
-          pnpm --dir frontend gen:types
-          if ! git diff --exit-code -- frontend/src/generated/contracts.ts frontend/src/generated/openapi-paths.ts frontend/src/generated/api-client.ts; then
-            echo "::error title=Contract drift detected::Generated frontend API contract artifacts changed after regeneration. Run 'pnpm --dir frontend gen:types', review updates in frontend/src/generated/*, and commit the regenerated files."
+          if [[ "$ready" != 'true' ]]; then
+            cat artifacts/ci/contracts/api.log >&2
+            echo 'Backend OpenAPI endpoint did not become ready in time.' >&2
             exit 1
           fi
 
-      - name: Test frontend
-        run: pnpm --dir frontend test
+          export BACKEND_OPENAPI_URL='http://127.0.0.1:5142/openapi/v1.json'
+          export REQUIRE_BACKEND_OPENAPI=1
+          export EXPECTED_CONTRACT_VERSION='1.0.0'
+          pnpm --dir frontend gen:types
+
+          if ! git diff --exit-code -- \
+            frontend/src/generated/contracts.ts \
+            frontend/src/generated/openapi-paths.ts \
+            frontend/src/generated/api-client.ts; then
+            echo 'Generated frontend API contracts are stale. Regenerate and commit frontend/src/generated/*.' >&2
+            exit 1
+          fi
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: survivalgarden-contract-evidence
+          path: artifacts/ci/contracts
+          if-no-files-found: error
+          retention-days: 14
 
   maui:
-    name: Build and Test MAUI
-    needs: [gitVersion]
-    runs-on: windows-latest
+    name: MAUI product validation
+    needs: [baseline]
+    uses: yaron-E92/AutoDev/.github/workflows/profile-maui.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      ref: ${{ github.sha }}
+      global_json_file: ''
+      dotnet_version: '10.0.x'
+      headless_enabled: false
+
+      android_enabled: true
+      android_runner: ubuntu-latest
+      android_setup_command: |
+        set -euo pipefail
+        bash scripts/ci-configure-nuget.sh
+        dotnet workload install maui-android --skip-manifest-update
+      android_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj /p:EnableMauiTargets=true
+      android_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-android --no-restore /p:EnableMauiTargets=true
+      android_test_command: find backend/SurvivalGarden.Maui/bin/Debug/net10.0-android -type f -name 'SurvivalGarden.Maui.dll' -print -quit | grep -q .
+
+      windows_enabled: true
+      windows_runner: windows-latest
+      windows_setup_command: |
+        set -euo pipefail
+        bash scripts/ci-configure-nuget.sh
+        dotnet workload install maui-windows --skip-manifest-update
+      windows_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj /p:EnableMauiTargets=true /p:WindowsPackageType=None
+      windows_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-windows10.0.19041.0 --no-restore /p:EnableMauiTargets=true /p:WindowsPackageType=None /p:UseMonoRuntime=false
+      windows_test_command: find backend/SurvivalGarden.Maui/bin/Debug/net10.0-windows10.0.19041.0 -type f -name 'SurvivalGarden.Maui.dll' -print -quit | grep -q .
+    secrets:
+      nuget_token: ${{ secrets.GITHUB_TOKEN }}
     permissions:
-      checks: write
-      pull-requests: write
       contents: read
       packages: read
 
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [baseline, version-intent, backend, frontend, contracts, maui]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup .NET
-        id: setup-dotnet
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore cached .NET workloads
-        id: restore-dotnet-workloads
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            C:\Program Files\dotnet\packs
-            C:\Program Files\dotnet\sdk-manifests
-            C:\ProgramData\dotnet\workload*
-            C:\Program Files\dotnet\metadata
-          key: ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ hashFiles('**/global.json') }}
-          restore-keys: |
-            ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-
-            ${{ runner.os }}-dotnet-
-
-      - name: Restore cached Android SDK
-        id: restore-android-sdk
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ${{ env.ANDROID_HOME }}
-            ${{ env.ANDROID_SDK_ROOT }}
-            C:\Users\runneradmin\.android
-          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/global.json') }}
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
-
-      - name: Install MAUI workload
-        if: steps.restore-dotnet-workloads.outputs.cache-hit != 'true'
-        run: dotnet workload install maui --skip-manifest-update
-
-      - name: Install Android SDK components
-        if: steps.restore-android-sdk.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          & "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat" "tools"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to install Android SDK components"
-            exit 1
-          }
-
-      - name: Save .NET workloads cache
-        if: steps.restore-dotnet-workloads.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            C:\Program Files\dotnet\packs
-            C:\Program Files\dotnet\sdk-manifests
-            C:\ProgramData\dotnet\workload*
-            C:\Program Files\dotnet\metadata
-          key: ${{ runner.os }}-dotnet-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ hashFiles('**/global.json') }}
-
-      - name: Save Android SDK cache
-        if: steps.restore-android-sdk.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.ANDROID_HOME }}
-            ${{ env.ANDROID_SDK_ROOT }}
-            C:\Users\runneradmin\.android
-          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/global.json') }}
-
-      - name: Ensure GitHub NuGet Source
-        shell: pwsh
+      - name: Require version policy and product validation
+        shell: bash
         env:
-          NUGET_TOKEN: ${{ secrets.YARE92_NUGET_TOKEN_EXP_17JUN2026 }}
+          BASELINE: ${{ needs.baseline.result }}
+          VERSION_INTENT: ${{ needs.version-intent.result }}
+          BACKEND: ${{ needs.backend.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          CONTRACTS: ${{ needs.contracts.result }}
+          MAUI: ${{ needs.maui.result }}
         run: |
-          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json `
-            -n github `
-            -u Yaron-E92 `
-            -p $env:NUGET_TOKEN `
-            --store-password-in-clear-text
+          set -euo pipefail
+          if [[ "$BASELINE" != 'success' ||
+                "$BACKEND" != 'success' ||
+                "$FRONTEND" != 'success' ||
+                "$CONTRACTS" != 'success' ||
+                "$MAUI" != 'success' ]]; then
+            echo "Required CI failed: baseline=$BASELINE backend=$BACKEND frontend=$FRONTEND contracts=$CONTRACTS maui=$MAUI" >&2
+            exit 1
+          fi
 
-      - name: Restore MAUI project
-        run: >-
-          dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
-          /p:EnableMauiTargets=true
-          /p:WindowsPackageType=None
+          if [[ "$VERSION_INTENT" != 'success' && "$VERSION_INTENT" != 'skipped' ]]; then
+            echo "Version intent validation failed: $VERSION_INTENT" >&2
+            exit 1
+          fi
 
-      - name: Build MAUI Windows target
-        id: maui-build
-        run: >-
-          dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
-          -c Debug
-          --no-restore
-          -f net10.0-windows10.0.19041.0
-          /p:EnableMauiTargets=true
-          /p:WindowsPackageType=None
-          /p:UseMonoRuntime=false
-          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
+          echo 'SurvivalGarden authoritative CI passed.'
 
-      - name: Build MAUI Android target
-        run: >-
-          dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj
-          -c Debug
-          --no-restore
-          -f net10.0-android
-          /p:EnableMauiTargets=true
-          /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }}
-          /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
-
-      - name: Run MAUI tests if present
-        shell: pwsh
-        run: |
-          $testProjects = @(git ls-files 'backend/**/*Maui*.Tests.csproj')
-          if ($testProjects.Count -eq 0) {
-            Write-Host "No MAUI test project found. MAUI validation currently consists of Windows and Android target builds."
-            exit 0
-          }
-
-          foreach ($project in $testProjects) {
-            dotnet test $project `
-              --logger "trx" `
-              -c Debug `
-              --verbosity normal `
-              /p:AssemblyVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-              /p:FileVersion=${{ needs.gitVersion.outputs.assemblySemFileVer }} `
-              /p:InformationalVersion=${{ needs.gitVersion.outputs.informationalVersion }}
-
-            if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-            }
-          }
+  version-tag:
+    name: Advance version tag
+    needs: [ci-gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-gate.result == 'success'
+    uses: yaron-E92/AutoDev/.github/workflows/version-tag.yml@7190410c74ab6674d1c8cc647b178bbc4b5cdd54
+    with:
+      head: ${{ github.sha }}
+      branch: main
+    permissions:
+      contents: write
+      pull-requests: read
