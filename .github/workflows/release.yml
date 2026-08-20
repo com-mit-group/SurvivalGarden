@@ -278,19 +278,21 @@ jobs:
     steps:
       - name: Release summary
         run: |
-          echo "## Release Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** ${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** ${{ needs.release.outputs.release-status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [[ "${{ needs.release.outputs.release-status }}" = "success" ]]; then
-            echo "Release created successfully." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          elif [[ "${{ needs.release.outputs.release-status }}" = "skipped" ]]; then
-            echo "Release already exists for this version." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Release failed or status is unknown." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "## Release Pipeline Summary"
+            echo ""
+            echo "**Version:** ${{ needs.release.outputs.version }}"
+            echo "**Status:** ${{ needs.release.outputs.release-status }}"
+            echo ""
+            if [[ "${{ needs.release.outputs.release-status }}" = "success" ]]; then
+              echo "Release created successfully."
+              echo ""
+              echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}"
+            elif [[ "${{ needs.release.outputs.release-status }}" = "skipped" ]]; then
+              echo "Release already exists for this version."
+              echo ""
+              echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}"
+            else
+              echo "Release failed or status is unknown."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
