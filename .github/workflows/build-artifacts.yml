@@ -13,6 +13,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: build-artifacts-${{ github.repository }}-${{ inputs.version || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: windows-latest
@@ -22,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -111,14 +115,14 @@ jobs:
       - name: Set up .NET 10 SDK
         if: steps.check-artifacts.outputs.exists == 'false'
         id: setup-dotnet
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
       - name: Restore cached .NET workloads
         if: steps.check-artifacts.outputs.exists == 'false'
         id: restore-dotnet-workloads
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             C:\Program Files\dotnet\packs
@@ -133,7 +137,7 @@ jobs:
       - name: Restore cached Android SDK
         if: steps.check-artifacts.outputs.exists == 'false'
         id: restore-android-sdk
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ${{ env.ANDROID_HOME }}
@@ -159,7 +163,7 @@ jobs:
 
       - name: Save .NET workloads cache
         if: steps.check-artifacts.outputs.exists == 'false' && steps.restore-dotnet-workloads.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             C:\Program Files\dotnet\packs
@@ -170,7 +174,7 @@ jobs:
 
       - name: Save Android SDK cache
         if: steps.check-artifacts.outputs.exists == 'false' && steps.restore-android-sdk.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ${{ env.ANDROID_HOME }}
@@ -180,15 +184,10 @@ jobs:
 
       - name: Ensure GitHub NuGet Source
         if: steps.check-artifacts.outputs.exists == 'false'
-        shell: pwsh
+        shell: bash
         env:
-          NUGET_TOKEN: ${{ secrets.YARE92_NUGET_TOKEN_EXP_17JUN2026 }}
-        run: |
-          dotnet nuget add source https://nuget.pkg.github.com/yaron-E92/index.json `
-            -n github `
-            -u Yaron-E92 `
-            -p $env:NUGET_TOKEN `
-            --store-password-in-clear-text
+          NUGET_AUTH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-configure-nuget.sh
 
       - name: Restore Windows MAUI target
         if: steps.check-artifacts.outputs.exists == 'false'
@@ -271,7 +270,7 @@ jobs:
 
       - name: Upload Windows artifact
         if: steps.check-artifacts.outputs.exists == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-${{ steps.set-version.outputs.version }}-windows-unsigned
           path: artifacts/win/**
@@ -279,7 +278,7 @@ jobs:
 
       - name: Upload Android artifact
         if: steps.check-artifacts.outputs.exists == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-${{ steps.set-version.outputs.version }}-android-unsigned
           path: artifacts/android/*.apk
@@ -287,7 +286,7 @@ jobs:
 
       - name: Upload metadata
         if: steps.check-artifacts.outputs.exists == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-${{ steps.set-version.outputs.version }}-metadata
           path: artifacts/VERSION.txt
