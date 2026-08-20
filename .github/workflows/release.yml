@@ -16,6 +16,10 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: release-${{ github.repository }}-${{ inputs.version }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -25,22 +29,32 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - name: Validate version input
+      - name: Validate trusted version tag
+        shell: bash
         run: |
+          set -euo pipefail
           VERSION="${{ github.event.inputs.version }}"
-          if [ -z "$VERSION" ]; then
-            echo "Version is required. Please provide a semantic version (for example, 1.0.0)."
+          if [[ -z "$VERSION" ]]; then
+            echo "Version is required. Please provide a semantic version (for example, 1.0.0)." >&2
             exit 1
           fi
           if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Semantic version '$VERSION' must contain numeric major, minor, and patch segments."
+            echo "Semantic version '$VERSION' must contain numeric major, minor, and patch segments." >&2
             exit 1
           fi
-          echo "Processing version: $VERSION"
+
+          TAG="v$VERSION"
+          git fetch --force --tags origin
+          if ! git rev-parse --verify --quiet "refs/tags/$TAG^{commit}" >/dev/null; then
+            echo "Trusted version tag '$TAG' does not exist. Version advancement must complete after successful main CI before release publication." >&2
+            exit 1
+          fi
+
+          echo "Validated trusted release tag: $TAG"
 
       - name: Check if release already exists
         id: check-release
@@ -48,10 +62,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          echo "Checking for existing release for version: $VERSION"
+          TAG="v$VERSION"
+          echo "Checking for existing release for tag: $TAG"
 
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "Release already exists for version $VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists for $TAG"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "No existing release found"
@@ -203,7 +218,7 @@ jobs:
           {
             echo "# SurvivalGarden v$VERSION"
             echo ""
-            if [ -n "$USER_NOTES" ]; then
+            if [[ -n "$USER_NOTES" ]]; then
               printf '%s\n\n' "$USER_NOTES"
             fi
             echo "## Installation"
@@ -224,10 +239,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           VERSION="${{ github.event.inputs.version }}"
-          echo "Creating GitHub release for version: $VERSION"
+          TAG="v$VERSION"
+          echo "Creating GitHub release for trusted tag: $TAG"
 
-          gh release create "$VERSION" \
+          gh release create "$TAG" \
             --title "SurvivalGarden v$VERSION" \
             --notes-file release-notes.md \
             ./release-artifacts/SurvivalGarden-$VERSION-windows.zip \
@@ -240,9 +257,9 @@ jobs:
         id: release-status
         if: always()
         run: |
-          if [ "${{ job.status }}" != "success" ]; then
+          if [[ "${{ job.status }}" != "success" ]]; then
             echo "status=failed" >> "$GITHUB_OUTPUT"
-          elif [ "${{ steps.check-release.outputs.exists }}" = "true" ]; then
+          elif [[ "${{ steps.check-release.outputs.exists }}" = "true" ]]; then
             echo "status=skipped" >> "$GITHUB_OUTPUT"
           else
             echo "status=success" >> "$GITHUB_OUTPUT"
@@ -251,8 +268,8 @@ jobs:
       - name: Skip message
         if: steps.check-release.outputs.exists == 'true'
         run: |
-          echo "Release already exists for version ${{ github.event.inputs.version }}."
-          echo "Skipping release creation. Use a different version number for a new release."
+          echo "Release already exists for v${{ github.event.inputs.version }}."
+          echo "Skipping release creation. Use a different trusted version tag for a new release."
 
   summary:
     runs-on: ubuntu-latest
@@ -261,19 +278,21 @@ jobs:
     steps:
       - name: Release summary
         run: |
-          echo "## Release Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** ${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** ${{ needs.release.outputs.release-status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ needs.release.outputs.release-status }}" = "success" ]; then
-            echo "Release created successfully." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.release.outputs.release-status }}" = "skipped" ]; then
-            echo "Release already exists for this version." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Release failed or status is unknown." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "## Release Pipeline Summary"
+            echo ""
+            echo "**Version:** ${{ needs.release.outputs.version }}"
+            echo "**Status:** ${{ needs.release.outputs.release-status }}"
+            echo ""
+            if [[ "${{ needs.release.outputs.release-status }}" = "success" ]]; then
+              echo "Release created successfully."
+              echo ""
+              echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}"
+            elif [[ "${{ needs.release.outputs.release-status }}" = "skipped" ]]; then
+              echo "Release already exists for this version."
+              echo ""
+              echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.version }}"
+            else
+              echo "Release failed or status is unknown."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
