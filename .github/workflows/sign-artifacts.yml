@@ -472,19 +472,21 @@ jobs:
     steps:
       - name: Sign summary
         run: |
-          echo "## Sign Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** ${{ needs.sign.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** ${{ needs.sign.outputs.sign-status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ needs.sign.outputs.sign-status }}" = "success" ]; then
-            echo "Signing completed successfully." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Artifacts uploaded with names prefixed by \`signed-${{ needs.sign.outputs.version }}\`." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Next step: run **Release** with version \`${{ needs.sign.outputs.version }}\`." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.sign.outputs.sign-status }}" = "skipped" ]; then
-            echo "Signed artifacts already exist for this version." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Signing failed or status is unknown." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "## Sign Pipeline Summary"
+            echo ""
+            echo "**Version:** ${{ needs.sign.outputs.version }}"
+            echo "**Status:** ${{ needs.sign.outputs.sign-status }}"
+            echo ""
+            if [[ "${{ needs.sign.outputs.sign-status }}" = "success" ]]; then
+              echo "Signing completed successfully."
+              echo ""
+              echo "Artifacts uploaded with names prefixed by \`signed-${{ needs.sign.outputs.version }}\`."
+              echo ""
+              echo "Next step: run **Release** with version \`${{ needs.sign.outputs.version }}\`."
+            elif [[ "${{ needs.sign.outputs.sign-status }}" = "skipped" ]]; then
+              echo "Signed artifacts already exist for this version."
+            else
+              echo "Signing failed or status is unknown."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
