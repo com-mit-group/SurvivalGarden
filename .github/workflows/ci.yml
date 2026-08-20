@@ -148,8 +148,12 @@ jobs:
             --urls http://127.0.0.1:5142 \
             >artifacts/ci/contracts/api.log 2>&1 &
           api_pid=$!
+          openapi_pid=''
           cleanup() {
             kill "$api_pid" 2>/dev/null || true
+            if [[ -n "$openapi_pid" ]]; then
+              kill "$openapi_pid" 2>/dev/null || true
+            fi
           }
           trap cleanup EXIT
 
@@ -170,7 +174,29 @@ jobs:
             exit 1
           fi
 
-          export BACKEND_OPENAPI_URL='http://127.0.0.1:5142/openapi/v1.json'
+          python3 -m http.server 5178 \
+            --directory artifacts/ci/contracts \
+            >artifacts/ci/contracts/openapi-server.log 2>&1 &
+          openapi_pid=$!
+
+          canonical_ready=false
+          for _ in $(seq 1 10); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:5178/openapi-v1.json \
+              --output /dev/null; then
+              canonical_ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ "$canonical_ready" != 'true' ]]; then
+            cat artifacts/ci/contracts/openapi-server.log >&2
+            echo 'Canonical OpenAPI artifact server did not become ready in time.' >&2
+            exit 1
+          fi
+
+          export BACKEND_OPENAPI_URL='http://127.0.0.1:5178/openapi-v1.json'
           export REQUIRE_BACKEND_OPENAPI=1
           export EXPECTED_CONTRACT_VERSION='1.0.0'
           pnpm --dir frontend gen:types
@@ -208,8 +234,8 @@ jobs:
         set -euo pipefail
         bash scripts/ci-configure-nuget.sh
         dotnet workload install maui-android --skip-manifest-update
-      android_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj /p:EnableMauiTargets=true
-      android_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-android --no-restore /p:EnableMauiTargets=true
+      android_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj -p:EnableMauiTargets=true
+      android_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-android --no-restore -p:EnableMauiTargets=true
       android_test_command: find backend/SurvivalGarden.Maui/bin/Debug/net10.0-android -type f -name 'SurvivalGarden.Maui.dll' -print -quit | grep -q .
 
       windows_enabled: true
@@ -218,8 +244,8 @@ jobs:
         set -euo pipefail
         bash scripts/ci-configure-nuget.sh
         dotnet workload install maui-windows --skip-manifest-update
-      windows_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj /p:EnableMauiTargets=true /p:WindowsPackageType=None
-      windows_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-windows10.0.19041.0 --no-restore /p:EnableMauiTargets=true /p:WindowsPackageType=None /p:UseMonoRuntime=false
+      windows_restore_command: dotnet restore backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj -p:EnableMauiTargets=true -p:WindowsPackageType=None
+      windows_build_command: dotnet build backend/SurvivalGarden.Maui/SurvivalGarden.Maui.csproj --configuration Debug --framework net10.0-windows10.0.19041.0 --no-restore -p:EnableMauiTargets=true -p:WindowsPackageType=None -p:UseMonoRuntime=false
       windows_test_command: find backend/SurvivalGarden.Maui/bin/Debug/net10.0-windows10.0.19041.0 -type f -name 'SurvivalGarden.Maui.dll' -print -quit | grep -q .
     secrets:
       nuget_token: ${{ secrets.GITHUB_TOKEN }}
