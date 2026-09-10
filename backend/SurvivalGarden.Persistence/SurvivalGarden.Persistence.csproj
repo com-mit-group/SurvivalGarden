@@ -4,7 +4,7 @@
     <RootNamespace>SurvivalGarden.Persistence</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Yaref92.Events" Version="2.1.0" />
+    <PackageReference Include="Yaref92.Events" Version="2.2.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../SurvivalGarden.Application/SurvivalGarden.Application.csproj" />
