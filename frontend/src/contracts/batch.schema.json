@@ -28,7 +28,7 @@
   "properties": {
     "id": {
       "$ref": "#/$defs/id",
-      "description": "Migration/compatibility alias for batchId."
+      "description": "Migration/compatibility alias for batchId; use batchId as canonical."
     },
     "batchId": {
       "$ref": "#/$defs/id"
@@ -39,7 +39,7 @@
     },
     "cropId": {
       "$ref": "#/$defs/id",
-      "description": "Legacy migration/compatibility alias for cultivarId."
+      "description": "Migration/compatibility alias for cultivarId; use cultivarId as canonical."
     },
     "cropTypeId": {
       "$ref": "#/$defs/id",
@@ -52,7 +52,7 @@
     },
     "startedAt": {
       "$ref": "#/$defs/isoDate",
-      "description": "Batch start anchor field; backend domain/application code owns timeline consistency rules."
+      "description": "Canonical start timestamp field for the batch contract shape. Timeline invariants are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57)."
     },
     "propagationType": {
       "$ref": "#/$defs/propagationType"
@@ -71,13 +71,13 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Optional batch-level start method metadata; backend/export code owns any timeline propagation."
+      "description": "Optional batch-level default for start method. When present, exporters should also set stageEvents[0].method."
     },
     "startLocation": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
-      "description": "Optional batch-level start location metadata; backend/export code owns any timeline propagation."
+      "description": "Optional batch-level default for start location. When present, exporters should also set stageEvents[0].location."
     },
     "startQuantity": {
       "$ref": "#/$defs/startQuantity"
@@ -98,18 +98,18 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Legacy migration/compatibility input alias for currentStage."
+      "description": "Migration/compatibility alias for currentStage during input bridging only."
     },
     "currentStage": {
       "type": "string",
       "minLength": 1,
       "maxLength": 80,
-      "description": "Current stage field in the contract shape; backend domain/application code owns derivation rules."
+      "description": "Canonical current stage field in the contract. Derivation and workflow authority are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57)."
     },
     "stageEvents": {
       "type": "array",
       "minItems": 1,
-      "description": "Timeline event array in the contract shape; backend domain/application code owns timeline invariants.",
+      "description": "Canonical stage-event timeline array in the contract shape. Ordering/timeline invariants are backend-owned (see docs/adr/ADR-00Z-contract-vs-domain-rule-ownership.md and Issue #57).",
       "items": {
         "$ref": "#/$defs/stageEvent"
       }
@@ -125,7 +125,7 @@
       "items": {
         "$ref": "#/$defs/bedAssignment"
       },
-      "description": "Legacy migration/compatibility input alias for bedAssignments."
+      "description": "Migration/compatibility alias for bedAssignments during input bridging only."
     },
     "notes": {
       "type": "string",
@@ -217,7 +217,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "description": "Migration/compatibility alias for stage."
+          "description": "Migration/compatibility alias for stage; use stage as canonical."
         },
         "stage": {
           "type": "string",
@@ -226,7 +226,7 @@
         },
         "date": {
           "$ref": "#/$defs/isoDate",
-          "description": "Migration/compatibility alias for occurredAt."
+          "description": "Migration/compatibility alias for occurredAt; use occurredAt as canonical."
         },
         "occurredAt": {
           "$ref": "#/$defs/isoDate"
